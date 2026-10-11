@@ -3,6 +3,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <limits>
 #include <vector>
 
 #include "bayests/arma.h"
@@ -37,6 +38,14 @@ struct CoefficientPanel
     arma::vec draws;
     arma::mat path;
     double value = 0.0;
+
+    /// Under variable selection, the posterior inclusion probability -- the
+    /// mean of the coefficient's indicator draws, bvartools' summary()$a$lambda
+    /// -- and whether selection reached the coefficient at all. One where it
+    /// did not (a VEC's cointegration matrix, a term excluded from it, A_0's
+    /// unit diagonal), zero above A_0's diagonal; NaN without selection.
+    double inclusion = std::numeric_limits<double>::quiet_NaN();
+    bool selected = false;
 };
 
 struct CoefficientBlock
@@ -55,6 +64,16 @@ struct CoefficientSummary
     double start = 1.0;                    ///< the time of period 1, R's tsp
     double frequency = 1.0;
     int draws = 0;
+
+    /// Variable selection: "bvs", "ssvs", or empty without it.
+    QString selection;
+    double priorInclusion = std::numeric_limits<double>::quiet_NaN();
+    /// The covariance block's Psi (k x k, unit lower triangular) under its own
+    /// selection: the inclusion probability of each element, as
+    /// summary()$sigma$lambda, and which of them were selected over. Empty
+    /// without it.
+    arma::mat psiInclusion;
+    arma::umat psiSelected;
 };
 
 /// The summary of `file`, paths summarised by the central `ci` interval

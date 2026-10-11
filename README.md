@@ -218,13 +218,28 @@ components it uses.
   the VEC, the VARX and the VECX, within 4e-13; and again from z alone, the
   only regressors a file of the builder carries, identically.
 
+- **Inclusion probabilities** (Posterior simulation › Inclusion
+  probabilities): for a model estimated with BVS or SSVS, the share of draws
+  in which each coefficient is in the model, as bvartools' `summary()`
+  reports it -- a table per block, a row per equation and a column per
+  regressor, shaded by the probability and in bold from one half on (the
+  median probability model of Barbieri and Berger 2004), and the covariance
+  block's Ψ where it was selected over too. What selection did not reach is
+  greyed out with the reason: a VEC's cointegration matrix (the loadings are
+  never selected), terms left out of it, A₀'s fixed entries.
+
+  Verified in `test/structural_test.cpp` against bvartools' `summary()`
+  (`test/inclusion_reference.R`): SSVS on the VAR(2), BVS with a selected
+  covariance block, BVS on a structural VAR and on a VEC, every probability
+  exactly.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted
    models, `VecKlgs2010`, factor models and FAVARs, unobserved components;
    seasonal dummies; Excel import; an R-side reader (`rclass`) so a studio
    file opens as a bvartools object.
-2. Analysis: inclusion probabilities, the Savage–Dickey test
+2. Analysis: the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
 3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the
    session.

@@ -410,6 +410,54 @@ void compareHd(const QString &dir, const QString &name, const QString &model, co
     failures += zOk ? 0 : 1;
 }
 
+/// Inclusion probabilities against bvartools' summary(): one per panel of
+/// every coefficient block, in summary()'s column order, and the covariance
+/// block's where it was selected over.
+void compareInclusion(const QString &dir, const QString &model)
+{
+    const QString csv = QStringLiteral("%1/inclusion_%2_a.csv").arg(dir, model);
+    if (!QFile::exists(csv))
+    {
+        std::printf("skip  inclusion %s: run test/inclusion_reference.R first\n", model.toStdString().c_str());
+        return;
+    }
+    const arma::mat reference = readCsv(csv);
+    const CoefficientSummary s = coefficientSummary(dir + "/" + model + ".h5");
+    std::vector<double> ours;
+    int selected = 0;
+    for (const CoefficientBlock &b : s.blocks)
+    {
+        if (b.title == QObject::tr("Covariance matrix of the error term"))
+        {
+            continue;
+        }
+        for (const CoefficientPanel &p : b.panels)
+        {
+            ours.push_back(p.inclusion);
+            selected += p.selected ? 1 : 0;
+        }
+    }
+    double worst = ours.size() == reference.n_rows ? 0.0 : 1.0;
+    for (std::size_t i = 0; i < ours.size() && i < reference.n_rows; ++i)
+    {
+        worst = std::max(worst, std::isfinite(ours[i]) ? std::abs(ours[i] - reference(i, 0)) : 1.0);
+    }
+    const QString psiCsv = QStringLiteral("%1/inclusion_%2_psi.csv").arg(dir, model);
+    double worstPsi = 0.0;
+    if (QFile::exists(psiCsv))
+    {
+        const arma::mat psi = readCsv(psiCsv);
+        worstPsi = s.psiInclusion.n_elem == psi.n_rows ? arma::abs(arma::vectorise(s.psiInclusion) - psi.col(0)).max()
+                                                       : 1.0;
+    }
+    const bool ok = worst < 1e-12 && worstPsi < 1e-12;
+    std::printf("%s  inclusion %s (%s): %zu coefficients, %d selected over, max difference %.2e%s\n",
+                ok ? "ok  " : "FAIL", model.toStdString().c_str(), s.selection.toStdString().c_str(), ours.size(),
+                selected, worst,
+                QFile::exists(psiCsv) ? QStringLiteral(", Psi %1").arg(worstPsi, 0, 'e', 2).toStdString().c_str() : "");
+    failures += ok ? 0 : 1;
+}
+
 /// The studio's own rotation search on the VAR bvartools estimated: every
 /// accepted rotation orthonormal and satisfying every restriction, and the
 /// identified responses distributed as bvartools' -- both draw uniformly on
@@ -706,6 +754,10 @@ int main(int argc, char *argv[])
         compareHd(dir, "vec_R", "vec", "R");
         compareHd(dir, "varx_income", "varx", "income");
         compareHd(dir, "vecx_Dp", "vecx", "Dp");
+        compareInclusion(dir, "ssvs");
+        compareInclusion(dir, "bvs_covar");
+        compareInclusion(dir, "bvs_structural");
+        compareInclusion(dir, "bvs_vec");
         ownIdentification(dir);
         signZeroChecks(dir);
         // The round trip: bvartools reading the studio's identification. The

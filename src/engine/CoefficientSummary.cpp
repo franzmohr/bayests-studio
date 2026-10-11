@@ -167,6 +167,82 @@ CoefficientSummary coefficientSummary(const QString &file, double ci)
     const std::size_t nparams = tvp ? a.rows / static_cast<std::size_t>(tt) : a.rows;
     const int periods = tvp ? tt : 1;
     const Draws coef(a, nparams, tvp);
+
+    // Variable selection: the indicator draws, one per coefficient of a
+    // period, and the positions selection reached (one-based in the file).
+    bool selecting = false;
+    QString selectionName;
+    double priorInclusion = std::numeric_limits<double>::quiet_NaN();
+    arma::vec inclusion;
+    std::vector<bool> selectedAt(nparams, false);
+    {
+        bool haveLambda = false;
+        {
+            const HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+            haveLambda = h5.exist("/posterior/a/lambda");
+        }
+        if (haveLambda)
+        {
+            const Matrix lambda = readMatrix(file, QStringLiteral("/posterior/a/lambda"));
+            if (lambda.rows == nparams && lambda.cols > 0)
+            {
+                selecting = true;
+                inclusion.zeros(nparams);
+                for (std::size_t q = 0; q < nparams; ++q)
+                {
+                    for (std::size_t d = 0; d < lambda.cols; ++d)
+                    {
+                        inclusion(q) += lambda.at(q, d);
+                    }
+                    inclusion(q) /= static_cast<double>(lambda.cols);
+                }
+                const auto optional = [&](const char *path) {
+                    try
+                    {
+                        return readMatrix(file, QString::fromLatin1(path));
+                    }
+                    catch (const std::exception &)
+                    {
+                        return Matrix();
+                    }
+                };
+                const Matrix include = optional("/priors/a/include");
+                for (const double v : include.values)
+                {
+                    const auto q = static_cast<std::size_t>(v) - 1;
+                    if (v >= 1 && q < nparams)
+                    {
+                        selectedAt[q] = true;
+                    }
+                }
+                const Matrix inprior = optional("/priors/a/inprior");
+                if (!inprior.values.empty())
+                {
+                    priorInclusion = inprior.values.front();
+                }
+                try
+                {
+                    const HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+                    const HighFive::Attribute attr = h5.getGroup("/model").getAttribute("varsel");
+                    selectionName = QString::fromStdString(attr.getSpace().getNumberDimensions() == 0
+                                                               ? attr.read<std::string>()
+                                                               : attr.read<std::vector<std::string>>().front());
+                }
+                catch (const std::exception &)
+                {
+                    selectionName = QStringLiteral("bvs");
+                }
+            }
+        }
+    }
+    // The inclusion of coefficient `pos`, on panel `pn`.
+    const auto mark = [&](CoefficientPanel &pn, std::size_t pos) {
+        if (selecting)
+        {
+            pn.inclusion = inclusion(pos);
+            pn.selected = selectedAt[pos];
+        }
+    };
     const std::size_t nd = a.cols;
 
     const QStringList xVariables =
@@ -175,6 +251,8 @@ CoefficientSummary coefficientSummary(const QString &file, double ci)
         readStringsAttribute(file, QStringLiteral("/data/train/z"), QStringLiteral("coefficients"));
 
     CoefficientSummary out;
+    out.selection = selectionName;
+    out.priorInclusion = priorInclusion;
     out.equations = levelNamesOf(file, k);
     out.draws = static_cast<int>(nd);
     {
@@ -281,6 +359,7 @@ CoefficientSummary coefficientSummary(const QString &file, double ci)
             {
                 const std::size_t pos = firstCoefficient + static_cast<std::size_t>(j * k + i);
                 b.panels.push_back(panel(periods, [&](int t, std::size_t d) { return coef.at(pos, t, d); }));
+                mark(b.panels.back(), pos);
             }
         }
         out.blocks.push_back(std::move(b));
@@ -376,6 +455,12 @@ CoefficientSummary coefficientSummary(const QString &file, double ci)
                         }
                         return v;
                     }));
+                    // The loadings are never selected over: the relation is
+                    // always in the model.
+                    if (selecting)
+                    {
+                        b.panels.back().inclusion = 1.0;
+                    }
                 }
             }
             out.blocks.push_back(std::move(b));
@@ -425,12 +510,17 @@ CoefficientSummary coefficientSummary(const QString &file, double ci)
                         static_cast<std::size_t>(j * k - j * (j + 1) / 2 + (i - j - 1));
                     const std::size_t pos = first + idx;
                     b.panels.push_back(panel(periods, [&](int t, std::size_t d) { return coef.at(pos, t, d); }));
+                    mark(b.panels.back(), pos);
                 }
                 else
                 {
                     CoefficientPanel fixed;
                     fixed.kind = CoefficientPanel::Kind::Fixed;
                     fixed.value = i == j ? 1.0 : 0.0;
+                    if (selecting)
+                    {
+                        fixed.inclusion = fixed.value;
+                    }
                     b.panels.push_back(fixed);
                 }
             }
@@ -477,6 +567,55 @@ CoefficientSummary coefficientSummary(const QString &file, double ci)
             }
         }
         out.blocks.push_back(std::move(b));
+    }
+    // The covariance block's own selection: /posterior/psi/lambda holds the
+    // whole of Psi per draw, vectorised; its free elements below the diagonal
+    // are numbered row by row in /priors/psi/include.
+    bool havePsiLambda = false;
+    {
+        const HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+        havePsiLambda = h5.exist("/posterior/psi/lambda");
+    }
+    if (havePsiLambda)
+    {
+        const Matrix lambda = readMatrix(file, QStringLiteral("/posterior/psi/lambda"));
+        const auto ku = static_cast<arma::uword>(k);
+        if (lambda.rows == static_cast<std::size_t>(k * k) && lambda.cols > 0)
+        {
+            out.psiInclusion.zeros(ku, ku);
+            out.psiSelected.zeros(ku, ku);
+            for (std::size_t e = 0; e < lambda.rows; ++e)
+            {
+                double sum = 0.0;
+                for (std::size_t d = 0; d < lambda.cols; ++d)
+                {
+                    sum += lambda.at(e, d);
+                }
+                out.psiInclusion(e % ku, e / ku) = sum / static_cast<double>(lambda.cols);
+            }
+            Matrix include;
+            try
+            {
+                include = readMatrix(file, QStringLiteral("/priors/psi/include"));
+            }
+            catch (const std::exception &)
+            {
+            }
+            for (const double v : include.values)
+            {
+                // Free element n (one-based), row by row: row r holds r of them.
+                int n = static_cast<int>(v) - 1;
+                for (arma::uword r = 1; r < ku && n >= 0; ++r)
+                {
+                    if (n < static_cast<int>(r))
+                    {
+                        out.psiSelected(r, static_cast<arma::uword>(n)) = 1;
+                        break;
+                    }
+                    n -= static_cast<int>(r);
+                }
+            }
+        }
     }
     return out;
 }

@@ -346,6 +346,7 @@ QWidget *BuilderDialog::buildSpecBox()
     form->addRow(QString(), structural_);
 
     selection_ = new QComboBox;
+    selection_->setObjectName(QStringLiteral("selection"));
     selection_->addItem(tr("None"));
     selection_->addItem(tr("BVS — Korobilis (2013)"));
     selection_->addItem(tr("SSVS — George, Sun and Ni (2008)"));

@@ -11,6 +11,7 @@
 #include "views/MultipliersView.h"
 #include "views/SpilloverView.h"
 #include "views/SummaryPlotView.h"
+#include "views/InclusionView.h"
 #include "views/StructuralView.h"
 
 #include <QComboBox>
@@ -316,6 +317,8 @@ PosteriorPage::PosteriorPage(QtReporter *reporter, QWidget *parent) : StagePage(
     tabs_->addTab(drawsPage, tr("Draws and convergence"));
     summary_ = new SummaryPlotView;
     tabs_->addTab(summary_, tr("Summary plot"));
+    inclusion_ = new InclusionView;
+    tabs_->addTab(inclusion_, tr("Inclusion probabilities"));
     tabs_->setObjectName(QStringLiteral("posteriorTabs"));
     layout->addWidget(tabs_, 1);
 }
@@ -360,6 +363,7 @@ void PosteriorPage::showModel(const ModelContext &context)
     }
     tabs_->setTabEnabled(0, have && r.timeVarying);
     summary_->setModel(have && r.hasPosterior ? context.file : QString());
+    inclusion_->setModel(have && r.hasPosterior ? context.file : QString());
     if (!(have && r.timeVarying))
     {
         tabs_->setCurrentIndex(1);

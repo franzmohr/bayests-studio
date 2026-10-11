@@ -126,6 +126,18 @@ int main(int argc, char *argv[])
                 }
                 window.showStage(studio::StageId::Application);
             }
+            // STUDIO_SMOKE_INCLUSION=1: the inclusion probabilities.
+            if (!qgetenv("STUDIO_SMOKE_INCLUSION").isEmpty())
+            {
+                window.showStage(studio::StageId::Posterior);
+                if (auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("posteriorTabs")))
+                {
+                    tabs->setCurrentIndex(3);
+                    settle(4000);
+                    window.grab().save(QStringLiteral("%1-inclusion.png").arg(QString::fromLocal8Bit(prefix)));
+                }
+                window.showStage(studio::StageId::Application);
+            }
             if (auto *app = window.findChild<QTabWidget *>(QStringLiteral("applicationTabs")))
             {
                 app->setCurrentIndex(1);
@@ -267,6 +279,14 @@ int main(int argc, char *argv[])
                     if (auto *b = dialog->findChild<QAbstractButton *>(QString::fromLatin1(name)))
                     {
                         b->setChecked(true);
+                    }
+                }
+                // STUDIO_SMOKE_SELECTION=1 (BVS) or 2 (SSVS) picks the selection scheme.
+                if (const QByteArray sel = qgetenv("STUDIO_SMOKE_SELECTION"); !sel.isEmpty())
+                {
+                    if (auto *combo = dialog->findChild<QComboBox *>(QStringLiteral("selection")))
+                    {
+                        combo->setCurrentIndex(sel.toInt());
                     }
                 }
                 // STUDIO_SMOKE_EXOGENOUS names a series to tick as weakly exogenous.
