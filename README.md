@@ -146,8 +146,9 @@ components it uses.
    for time variation, PSIS-LOO, expanding windows.
 3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the
    session.
-4. Packaging: signed installers per platform (Windows MSI, macOS notarised
-   DMG, Linux AppImage), licence activation.
+4. Packaging: signed installers per platform (Windows MSIX -- started, see
+   `packaging/msix/README.md`; macOS notarised DMG, Linux AppImage), offline
+   licence activation.
 
 ## Building
 

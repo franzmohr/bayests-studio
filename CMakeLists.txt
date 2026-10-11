@@ -56,5 +56,8 @@ find_package(Qwt REQUIRED)
 
 add_subdirectory(src)
 
+include(StudioInstall)
+add_subdirectory(packaging/msix)
+
 enable_testing()
 add_subdirectory(test)

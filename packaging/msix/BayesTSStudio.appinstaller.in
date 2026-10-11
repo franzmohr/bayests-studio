@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configured by packaging/msix/CMakeLists.txt when STUDIO_MSIX_UPDATE_URI is
+  set. Published next to the .msix, it lets Windows check that folder for a
+  newer version: the update comes from wherever IT puts it, and the
+  application itself never contacts anything.
+-->
+<AppInstaller
+  xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+  Version="@STUDIO_MSIX_VERSION@"
+  Uri="@STUDIO_MSIX_UPDATE_URI_TRIMMED@/BayesTSStudio.appinstaller">
+
+  <MainPackage
+    Name="@STUDIO_MSIX_IDENTITY_NAME@"
+    Publisher="@STUDIO_MSIX_PUBLISHER@"
+    Version="@STUDIO_MSIX_VERSION@"
+    ProcessorArchitecture="x64"
+    Uri="@STUDIO_MSIX_UPDATE_URI_TRIMMED@/@STUDIO_MSIX_PACKAGE_FILE@" />
+
+  <UpdateSettings>
+    <OnLaunch HoursBetweenUpdateChecks="24" ShowPrompt="true" UpdateBlocksActivation="false" />
+    <AutomaticBackgroundTask />
+  </UpdateSettings>
+</AppInstaller>

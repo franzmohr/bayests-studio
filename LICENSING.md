@@ -18,6 +18,12 @@ advice: have it reviewed before the first sale.
 | HDF5 | BSD-style (The HDF Group) | Yes | Ship the copyright notice |
 | HighFive | Boost 1.0 | Yes | None for binaries |
 | GCC runtime (libstdc++, libgomp, libgfortran) | GPL 3 + GCC Runtime Library Exception | Yes | None for binaries built with GCC |
+| Microsoft C runtime (`vcruntime140.dll`) | Visual Studio redistributable ("Distributable Code") | Yes, app-local | Comes in only because the HDF5 build on this machine is an MSVC one; a MinGW HDF5 removes it |
+
+The Windows package (`packaging/msix/`) installs `licenses/<component>/`
+from wherever each dependency came from (`cmake/StudioInstall.cmake`); a text
+that cannot be found is a configure-time warning, so read those before
+shipping.
 
 ## Qt
 
