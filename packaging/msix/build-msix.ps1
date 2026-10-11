@@ -84,7 +84,11 @@ $makeappx = Find-SdkTool 'makeappx.exe'
 $signtool = if ($NoSign) { $null } else { Find-SdkTool 'signtool.exe' }
 
 function Invoke-Native([string] $exe, [string[]] $arguments) {
-    & $exe @arguments
+    # Windows PowerShell turns a native tool's stderr into error records once
+    # output is redirected, and under 'Stop' the first warning (windeployqt
+    # prints several) would abort the build. The exit code is the verdict.
+    $ErrorActionPreference = 'Continue'
+    & $exe @arguments 2>&1 | ForEach-Object { "$_" }
     if ($LASTEXITCODE -ne 0) { throw "$(Split-Path -Leaf $exe) failed with exit code $LASTEXITCODE" }
 }
 
