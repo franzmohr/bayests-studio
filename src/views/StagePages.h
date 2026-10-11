@@ -1,0 +1,153 @@
+#pragma once
+
+#include <QWidget>
+
+#include <vector>
+
+#include "engine/ModelRunner.h"
+
+class QComboBox;
+class QLabel;
+class QPushButton;
+class QTableWidget;
+class QTabWidget;
+class QTreeView;
+
+namespace studio
+{
+
+class DiagnosticsView;
+class LiveBandsView;
+class ModelFileTree;
+class OverviewView;
+class SeriesPlot;
+
+/// The stages of the workflow in Mohr's bvartools article (Section 3,
+/// Figure 1): data, model set-up, posterior simulation, evaluation and
+/// application. The order of this enum is the order of the stage bar.
+enum class StageId
+{
+    Data,
+    Setup,
+    Posterior,
+    Evaluation,
+    Application,
+};
+
+/// What every page is told when the current model changes or a run ends.
+struct ModelContext
+{
+    QString file;              ///< empty when no model is selected
+    const ModelFileTree *tree = nullptr;
+    CheckReport report;
+    QStringList projectFiles;  ///< every model of the project, for comparisons
+};
+
+class StagePage : public QWidget
+{
+    Q_OBJECT
+
+public:
+    using QWidget::QWidget;
+    virtual void showModel(const ModelContext &context) = 0;
+
+signals:
+    void runRequested(const std::vector<studio::Stage> &stages);
+};
+
+/// 1. Data: the series the model is estimated on.
+class DataPage : public StagePage
+{
+    Q_OBJECT
+
+public:
+    explicit DataPage(QWidget *parent = nullptr);
+    void showModel(const ModelContext &context) override;
+
+private:
+    QLabel *summary_;
+    SeriesPlot *plot_;
+};
+
+/// 2. Model set-up: data matrices and specification, prior hyperparameters,
+/// initial values -- each as BayesTS reads it from the model file.
+class SetupPage : public StagePage
+{
+    Q_OBJECT
+
+public:
+    SetupPage(ModelFileTree *tree, QWidget *parent = nullptr);
+    void showModel(const ModelContext &context) override;
+
+private:
+    ModelFileTree *tree_;
+    QTabWidget *tabs_;
+    OverviewView *overview_;
+    QTreeView *priors_;
+    QTreeView *initial_;
+    QTreeView *file_;
+};
+
+/// 3. Posterior simulation: the chain's settings, the run, and the draws --
+/// live for a time-varying coefficient path, and per parameter afterwards.
+class PosteriorPage : public StagePage
+{
+    Q_OBJECT
+
+public:
+    PosteriorPage(QtReporter *reporter, QWidget *parent = nullptr);
+    void showModel(const ModelContext &context) override;
+
+    void runStarted();
+    void runFinished();
+
+private:
+    void showDataset(int index);
+
+    ModelContext context_;
+    QLabel *algorithm_;
+    QLabel *chain_;
+    QPushButton *simulate_;
+    QTabWidget *tabs_;
+    LiveBandsView *live_;
+    QComboBox *dataset_;
+    DiagnosticsView *draws_;
+};
+
+/// 4. Evaluation: information criteria and forecast performance, across all
+/// models of the project so that they can be compared.
+class EvaluationPage : public StagePage
+{
+    Q_OBJECT
+
+public:
+    explicit EvaluationPage(QWidget *parent = nullptr);
+    void showModel(const ModelContext &context) override;
+
+private:
+    QPushButton *loglik_;
+    QTableWidget *table_;
+    QLabel *explanation_;
+};
+
+/// 5. Application: forecasting and structural analysis.
+class ApplicationPage : public StagePage
+{
+    Q_OBJECT
+
+public:
+    explicit ApplicationPage(QWidget *parent = nullptr);
+    void showModel(const ModelContext &context) override;
+
+private:
+    void showVariable(int variable);
+
+    ModelContext context_;
+    QTabWidget *tabs_;
+    QPushButton *forecast_;
+    QComboBox *variable_;
+    QLabel *forecastNote_;
+    SeriesPlot *fan_;
+};
+
+} // namespace studio

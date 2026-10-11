@@ -1,0 +1,72 @@
+#pragma once
+
+#include <QAbstractItemModel>
+#include <QString>
+#include <QStringList>
+
+#include <memory>
+#include <vector>
+
+namespace studio
+{
+
+/// One node of an HDF5 file, read once and held in memory so the file is
+/// closed again before a run opens it read-write.
+struct H5Node
+{
+    enum class Kind { Group, Dataset };
+
+    Kind kind = Kind::Group;
+    QString name;
+    QString path;                         ///< absolute, "/posterior/a/coeffs"
+    std::vector<std::size_t> dims;        ///< datasets only, HDF5 order
+    QString type;                         ///< datasets only, "float64" etc.
+    QStringList attributes;               ///< "name = value"
+    H5Node *parent = nullptr;
+    std::vector<std::unique_ptr<H5Node>> children;
+};
+
+/// A dataset read into memory, row-major as HDF5 stores it: in a BayesTS
+/// posterior, one row per quantity and one column per draw.
+struct Matrix
+{
+    std::size_t rows = 0;
+    std::size_t cols = 0;
+    std::vector<double> values;
+
+    double at(std::size_t r, std::size_t c) const { return values[r * cols + c]; }
+};
+
+/// Reads a one- or two-dimensional numeric dataset. Throws on anything else.
+Matrix readMatrix(const QString &file, const QString &path);
+
+/// The tree of a model file, for the navigator.
+class ModelFileTree : public QAbstractItemModel
+{
+    Q_OBJECT
+
+public:
+    explicit ModelFileTree(QObject *parent = nullptr);
+    ~ModelFileTree() override;
+
+    /// Reloads the tree from disk. Throws if the file cannot be read.
+    void load(const QString &file);
+    void clear();
+
+    QString file() const { return file_; }
+    const H5Node *node(const QModelIndex &index) const;
+    const H5Node *find(const QString &path) const;
+
+    QModelIndex index(int row, int column, const QModelIndex &parent = {}) const override;
+    QModelIndex parent(const QModelIndex &child) const override;
+    int rowCount(const QModelIndex &parent = {}) const override;
+    int columnCount(const QModelIndex &parent = {}) const override;
+    QVariant data(const QModelIndex &index, int role) const override;
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
+
+private:
+    QString file_;
+    std::unique_ptr<H5Node> root_;
+};
+
+} // namespace studio
