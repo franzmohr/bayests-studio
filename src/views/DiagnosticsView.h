@@ -24,7 +24,7 @@ public:
 
     /// Shows the dataset at `path` of `file`; rows are quantities, columns
     /// draws, as BayesTS writes them.
-    void showDataset(const QString &file, const QString &path);
+    void showDataset(const QString &file, const QString &path, const QStringList &rowNames = {});
     void clear();
 
 private:

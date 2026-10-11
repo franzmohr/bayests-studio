@@ -5,7 +5,7 @@
 #include <vector>
 
 class QLabel;
-class QSpinBox;
+class QComboBox;
 class QTimer;
 class QwtPlot;
 class QwtPlotCurve;
@@ -30,7 +30,7 @@ public:
     /// Whether the open model has a time-varying path, its periods, and the
     /// coefficients per period when already known (0 when not: a run that has
     /// not made its first kept draw yet).
-    void setModel(bool timeVarying, int periods, int coefficients);
+    void setModel(bool timeVarying, int periods, int coefficients, const QStringList &names = {});
 
     void runStarted();
     void runFinished();
@@ -54,7 +54,10 @@ private:
     /// paths_[d][t]: kept draw d, period t, of the watched coefficient.
     std::vector<std::vector<double>> paths_;
 
-    QSpinBox *row_;
+    QComboBox *row_;
+    QStringList names_;
+    void fillRows(int count);
+    int currentRow() const;
     QLabel *status_;
     QTimer *timer_;
     QwtPlot *plot_;

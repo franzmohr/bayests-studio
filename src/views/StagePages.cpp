@@ -106,6 +106,13 @@ std::vector<std::vector<double>> seriesOf(const QString &file, int k)
     return series;
 }
 
+/// The names the model builder writes on /data/train/y; empty for a file
+/// written elsewhere.
+QStringList variableNames(const QString &file)
+{
+    return readStringsAttribute(file, QStringLiteral("/data/train/y"), QStringLiteral("variables"));
+}
+
 } // namespace
 
 // --------------------------------------------------------------------------
@@ -119,10 +126,15 @@ DataPage::DataPage(QWidget *parent) : StagePage(parent)
     layout->addWidget(summary_);
 
     auto *import = new QPushButton(tr("Import Data…"));
-    import->setEnabled(false);
-    import->setToolTip(tr("CSV and Excel import builds new models from a data set. Coming next."));
+    import->setToolTip(tr("A CSV or other delimited file: a header row of names, one row per "
+                          "period, optionally a first column of period labels."));
+    connect(import, &QPushButton::clicked, this, &StagePage::importRequested);
+    newModel_ = new QPushButton(tr("New Model from These Data…"));
+    newModel_->setEnabled(false);
+    connect(newModel_, &QPushButton::clicked, this, &StagePage::newModelRequested);
     auto *bar = new QHBoxLayout;
     bar->addWidget(import);
+    bar->addWidget(newModel_);
     bar->addStretch(1);
     layout->addLayout(bar);
 
@@ -132,21 +144,52 @@ DataPage::DataPage(QWidget *parent) : StagePage(parent)
 
 void DataPage::showModel(const ModelContext &context)
 {
+    context_ = context;
+    redraw();
+}
+
+void DataPage::showDataSet(const DataSet &data)
+{
+    data_ = data;
+    newModel_->setEnabled(!data_.empty());
+    redraw();
+}
+
+void DataPage::redraw()
+{
     plot_->clear();
-    if (context.file.isEmpty() || context.report.k <= 0)
+    if (!data_.empty())
     {
-        summary_->setText(tr("Select a model of the project to see its data."));
+        for (int c = 0; c < data_.series(); ++c)
+        {
+            const arma::vec col = data_.values.col(static_cast<arma::uword>(c));
+            plot_->addLine(data_.names[c], std::vector<double>(col.begin(), col.end()), c);
+        }
+        summary_->setText(tr("Imported from %1: %2 series over %3 periods, %4 to %5.")
+                              .arg(QFileInfo(data_.source).fileName())
+                              .arg(data_.series())
+                              .arg(data_.length())
+                              .arg(data_.periodLabel(0), data_.periodLabel(data_.length() - 1)));
+        plot_->replot();
+        return;
+    }
+    if (context_.file.isEmpty() || context_.report.k <= 0)
+    {
+        summary_->setText(tr("Import a data set to build a model from it, or select a model of the project."));
         return;
     }
     try
     {
-        const auto series = seriesOf(context.file, context.report.k);
+        const auto series = seriesOf(context_.file, context_.report.k);
+        const QStringList names = variableNames(context_.file);
         for (std::size_t i = 0; i < series.size(); ++i)
         {
-            plot_->addLine(tr("Variable %1").arg(i + 1), series[i], static_cast<int>(i));
+            const auto n = static_cast<qsizetype>(i);
+            plot_->addLine(n < names.size() ? names[n] : tr("Variable %1").arg(i + 1), series[i],
+                           static_cast<int>(i));
         }
-        summary_->setText(tr("Estimation sample (/data/train/y): %1 endogenous variables over %2 periods.")
-                              .arg(context.report.k)
+        summary_->setText(tr("Estimation sample of the selected model (/data/train/y): %1 variables over %2 periods.")
+                              .arg(context_.report.k)
                               .arg(series.empty() ? 0 : series.front().size()));
     }
     catch (const std::exception &e)
@@ -164,7 +207,15 @@ SetupPage::SetupPage(ModelFileTree *tree, QWidget *parent) : StagePage(parent), 
     auto *layout = pageLayout(this);
     layout->addWidget(pageTitle(tr("Model set-up")));
     layout->addWidget(subtle(tr("Data matrices, prior hyperparameters and initial values, as BayesTS "
-                                "reads them. Editing them here comes with the model builder.")));
+                                "reads them from the selected model file.")));
+    newModel_ = new QPushButton(tr("New Model…"));
+    newModel_->setEnabled(false);
+    newModel_->setToolTip(tr("Import a data set in the Data stage first."));
+    connect(newModel_, &QPushButton::clicked, this, &StagePage::newModelRequested);
+    auto *bar = new QHBoxLayout;
+    bar->addWidget(newModel_);
+    bar->addStretch(1);
+    layout->addLayout(bar);
 
     overview_ = new OverviewView;
     priors_ = treeView(tree);
@@ -178,6 +229,13 @@ SetupPage::SetupPage(ModelFileTree *tree, QWidget *parent) : StagePage(parent), 
     tabs_->addTab(initial_, tr("Initial values"));
     tabs_->addTab(file_, tr("Model file"));
     layout->addWidget(tabs_, 1);
+}
+
+void SetupPage::setDataAvailable(bool available)
+{
+    newModel_->setEnabled(available);
+    newModel_->setToolTip(available ? tr("Specify a model of the imported data with tick boxes.")
+                                    : tr("Import a data set in the Data stage first."));
 }
 
 void SetupPage::showModel(const ModelContext &context)
@@ -271,7 +329,11 @@ void PosteriorPage::showModel(const ModelContext &context)
     {
         coefficients = static_cast<int>(coeffs->dims[0]) / r.periods;
     }
-    live_->setModel(have && r.timeVarying, r.periods, coefficients);
+    const QStringList names =
+        have ? readStringsAttribute(context.file, QStringLiteral("/data/train/z"), QStringLiteral("coefficients"))
+             : QStringList();
+    names_ = names;
+    live_->setModel(have && r.timeVarying, r.periods, coefficients, names);
     if (have)
     {
         live_->showStored(context.file);
@@ -324,7 +386,15 @@ void PosteriorPage::showDataset(int index)
 {
     if (index >= 0)
     {
-        draws_->showDataset(context_.file, dataset_->itemData(index).toString());
+        const QString path = dataset_->itemData(index).toString();
+        // A constant model's a/coeffs has one row per coefficient, which the
+        // names describe; a time-varying one has one per coefficient and period.
+        QStringList rows;
+        if (path == QLatin1String("/posterior/a/coeffs") && !context_.report.timeVarying)
+        {
+            rows = names_;
+        }
+        draws_->showDataset(context_.file, path, rows);
     }
 }
 
@@ -495,9 +565,10 @@ void ApplicationPage::showModel(const ModelContext &context)
 
     const QSignalBlocker block(variable_);
     variable_->clear();
+    const QStringList names = context.file.isEmpty() ? QStringList() : variableNames(context.file);
     for (int i = 0; i < r.k; ++i)
     {
-        variable_->addItem(tr("Variable %1").arg(i + 1));
+        variable_->addItem(i < names.size() ? names[i] : tr("Variable %1").arg(i + 1));
     }
     showVariable(0);
 }

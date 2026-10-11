@@ -4,6 +4,7 @@
 
 #include <vector>
 
+#include "engine/DataSet.h"
 #include "engine/ModelRunner.h"
 
 class QComboBox;
@@ -53,6 +54,8 @@ public:
 
 signals:
     void runRequested(const std::vector<studio::Stage> &stages);
+    void importRequested();
+    void newModelRequested();
 };
 
 /// 1. Data: the series the model is estimated on.
@@ -64,8 +67,17 @@ public:
     explicit DataPage(QWidget *parent = nullptr);
     void showModel(const ModelContext &context) override;
 
+    /// An imported data set takes the page over from the model's sample
+    /// until another one is imported.
+    void showDataSet(const DataSet &data);
+
 private:
+    void redraw();
+
+    ModelContext context_;
+    DataSet data_;
     QLabel *summary_;
+    QPushButton *newModel_;
     SeriesPlot *plot_;
 };
 
@@ -78,8 +90,10 @@ class SetupPage : public StagePage
 public:
     SetupPage(ModelFileTree *tree, QWidget *parent = nullptr);
     void showModel(const ModelContext &context) override;
+    void setDataAvailable(bool available);
 
 private:
+    QPushButton *newModel_;
     ModelFileTree *tree_;
     QTabWidget *tabs_;
     OverviewView *overview_;
@@ -105,6 +119,7 @@ private:
     void showDataset(int index);
 
     ModelContext context_;
+    QStringList names_;
     QLabel *algorithm_;
     QLabel *chain_;
     QPushButton *simulate_;

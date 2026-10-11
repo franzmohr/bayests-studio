@@ -103,7 +103,7 @@ void DiagnosticsView::clear()
     density_->replot();
 }
 
-void DiagnosticsView::showDataset(const QString &file, const QString &path)
+void DiagnosticsView::showDataset(const QString &file, const QString &path, const QStringList &rowNames)
 {
     clear();
     try
@@ -122,7 +122,8 @@ void DiagnosticsView::showDataset(const QString &file, const QString &path)
     const QSignalBlocker block(row_);
     for (std::size_t r = 0; r < matrix_.rows; ++r)
     {
-        row_->addItem(tr("Row %1").arg(r + 1));
+        row_->addItem(r < static_cast<std::size_t>(rowNames.size()) ? rowNames[static_cast<qsizetype>(r)]
+                                                                     : tr("Row %1").arg(r + 1));
     }
     showRow(0);
 }

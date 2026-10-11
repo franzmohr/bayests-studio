@@ -40,8 +40,8 @@ QString attributeValue(const HighFive::Attribute &attr)
     case HighFive::DataTypeClass::Integer:
         return QString::number(attr.read<long long>());
     case HighFive::DataTypeClass::Enum:
-        // h5py writes Python booleans as an enum over int8.
-        return QString::number(attr.read<long long>());
+        // h5py, HighFive and R write booleans as an enumeration over int8.
+        return attr.read<bool>() ? QStringLiteral("true") : QStringLiteral("false");
     default:
         return QStringLiteral("?");
     }
@@ -108,6 +108,33 @@ QString shape(const H5Node &node)
 }
 
 } // namespace
+
+QStringList readStringsAttribute(const QString &file, const QString &path, const QString &name)
+{
+    QStringList out;
+    try
+    {
+        HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+        if (!h5.exist(path.toStdString()))
+        {
+            return out;
+        }
+        const HighFive::DataSet ds = h5.getDataSet(path.toStdString());
+        if (!ds.hasAttribute(name.toStdString()))
+        {
+            return out;
+        }
+        for (const std::string &s : ds.getAttribute(name.toStdString()).read<std::vector<std::string>>())
+        {
+            out << QString::fromStdString(s);
+        }
+    }
+    catch (const std::exception &)
+    {
+        out.clear();
+    }
+    return out;
+}
 
 Matrix readMatrix(const QString &file, const QString &path)
 {

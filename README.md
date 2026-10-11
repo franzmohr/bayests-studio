@@ -29,11 +29,33 @@ components it uses.
 - **Draws**: trace, marginal histogram and summary statistics for any row of
   any posterior dataset (double-click it in the navigator).
 
+- **Model builder** (Data › Import Data…, then New Model from These Data…):
+  a CSV or other delimited file becomes a model file without writing any
+  code. Endogenous variables are ticked and ordered; the sample range,
+  lags, constant and trend, constant or time-varying coefficients
+  (optionally non-centred, for the test for time variation), Wishart, gamma
+  or stochastic-volatility errors, the covariance block, a structural form,
+  BVS or SSVS, the coefficient prior (or the Minnesota prior of the article's
+  Appendix A), the random-walk and error priors, the chain, the seed, the
+  forecast horizon and a holdout for scoring are all form controls. The
+  defaults are those of the bvartools article's replication script.
+  Combinations BayesTS refuses are disabled, and every change is written to
+  a scratch file and run through `bayests check`, whose verdict the dialog
+  shows before anything is saved. Starting values are least squares, as
+  `add_initial_values(method = "ols")` sets them. Coefficient and variable
+  names travel in the file as attributes no reader looks at, so every view
+  says "income ← invest(-1)" rather than "row 4".
+
+  Covered so far: the six Gaussian VARs. `test/builder_test.cpp` writes all
+  46 combinations the form allows from a simulated VAR, checks each with
+  `bayests check` (no refusal, no warning), runs all three stages, and holds
+  a flat-prior VAR(1) to the simulated coefficients and to least squares.
+
 ## Roadmap
 
-1. Model specification without a file: data import (CSV, Excel), choice of
-   family, coefficients and error model with tick boxes, priors with
-   defaults, validated live against BayesTS before anything is written.
+1. The builder for the remaining families: VECs, the quantile and
+   discounted VARs, factor models and FAVARs, unobserved components;
+   exogenous variables and seasonal dummies; Excel import.
 2. Analysis: forecasts with fan charts, impulse responses, FEVD, inclusion
    probabilities, the Savage–Dickey test for time variation, model comparison
    by WAIC / PSIS-LOO across several files.

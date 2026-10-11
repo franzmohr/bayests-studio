@@ -5,6 +5,7 @@
 #include <array>
 #include <vector>
 
+#include "engine/DataSet.h"
 #include "engine/ModelRunner.h"
 #include "views/StagePages.h"
 
@@ -54,6 +55,17 @@ private:
     void log(const QString &text);
     void showAbout();
     void showLicences();
+    void importData();
+
+public:
+    /// Imports a delimited file as the working data set.
+    void importFrom(const QString &file);
+    /// Adds a model file the builder wrote to the project and selects it.
+    void addCreatedModel(const QString &file);
+    const DataSet &workingData() const { return data_; }
+
+private:
+    void newModel();
 
     QString projectDir_;
     QStringList projectFiles_;
@@ -61,6 +73,7 @@ private:
     ModelRunner *runner_;
     ModelFileTree *tree_;
     CheckReport report_;
+    DataSet data_;
 
     QListWidget *models_;
     QListWidget *stages_;

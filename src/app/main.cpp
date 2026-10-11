@@ -1,8 +1,13 @@
 #include "app/MainWindow.h"
 #include "app/Theme.h"
+#include "views/BuilderDialog.h"
+
+#include <QAbstractButton>
+#include <QDir>
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QElapsedTimer>
 #include <QTimer>
 
 #include <cstdlib>
@@ -76,7 +81,36 @@ int main(int argc, char *argv[])
             }
             QCoreApplication::exit(ok ? 0 : 1);
         });
-        QTimer::singleShot(300, &window, [&window, timer]() {
+        // STUDIO_SMOKE_BUILDER=<csv> builds the model first: imports the data,
+        // ticks a TVP-VAR with stochastic volatility and a covariance block in
+        // the builder, captures it, and creates the file in the current folder.
+        const QByteArray csv = qgetenv("STUDIO_SMOKE_BUILDER");
+        QTimer::singleShot(300, &window, [&window, timer, csv, prefix]() {
+            if (!csv.isEmpty())
+            {
+                window.importFrom(QString::fromLocal8Bit(csv));
+                auto *dialog = new studio::BuilderDialog(window.workingData(), QDir::currentPath(), &window);
+                dialog->show();
+                for (const char *name : {"coefTvp", "errSv", "covar"})
+                {
+                    if (auto *b = dialog->findChild<QAbstractButton *>(QString::fromLatin1(name)))
+                    {
+                        b->setChecked(true);
+                    }
+                }
+                QElapsedTimer wait;
+                wait.start();
+                while (wait.elapsed() < 1500)
+                {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+                }
+                dialog->grab().save(QStringLiteral("%1-builder.png").arg(QString::fromLocal8Bit(prefix)));
+                if (dialog->createAt(QDir::current().filePath(QStringLiteral("built-VarTvpStochvol.h5"))))
+                {
+                    window.addCreatedModel(dialog->createdFile());
+                }
+                dialog->deleteLater();
+            }
             window.runAll();
             timer->start(1500);
         });

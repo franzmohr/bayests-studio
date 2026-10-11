@@ -1,0 +1,658 @@
+#include "views/BuilderDialog.h"
+
+#include "engine/ModelRunner.h"
+
+#include <QButtonGroup>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDialogButtonBox>
+#include <QDir>
+#include <QDoubleSpinBox>
+#include <QDoubleValidator>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QRadioButton>
+#include <QRandomGenerator>
+#include <QRegularExpression>
+#include <QRegularExpressionValidator>
+#include <QStandardItemModel>
+#include <QScrollArea>
+#include <QSpinBox>
+#include <QTimer>
+#include <QToolButton>
+#include <QVBoxLayout>
+
+#include <limits>
+
+namespace studio
+{
+
+namespace
+{
+
+QDoubleSpinBox *number(double value, double min, double max, int decimals = 3)
+{
+    auto *box = new QDoubleSpinBox;
+    box->setRange(min, max);
+    box->setDecimals(decimals);
+    box->setValue(value);
+    box->setSingleStep(value > 0 ? value / 10.0 : 0.1);
+    return box;
+}
+
+/// Small rates (1e-4) are unreadable in a spin box; a validated line edit
+/// takes them in scientific notation.
+QLineEdit *small(double value)
+{
+    auto *edit = new QLineEdit(QString::number(value, 'g', 6));
+    auto *validator = new QDoubleValidator(0.0, std::numeric_limits<double>::max(), 12, edit);
+    validator->setNotation(QDoubleValidator::ScientificNotation);
+    edit->setValidator(validator);
+    edit->setMaximumWidth(120);
+    return edit;
+}
+
+double valueOf(const QLineEdit *edit)
+{
+    return edit->text().toDouble();
+}
+
+QLabel *hint(const QString &text)
+{
+    auto *label = new QLabel(text);
+    label->setObjectName(QStringLiteral("subtle"));
+    label->setWordWrap(true);
+    return label;
+}
+
+} // namespace
+
+BuilderDialog::BuilderDialog(const DataSet &data, const QString &projectDir, QWidget *parent)
+    : QDialog(parent), data_(data), projectDir_(projectDir)
+{
+    setWindowTitle(tr("New Model"));
+    resize(1120, 780);
+
+    auto *form = new QWidget;
+    auto *formLayout = new QVBoxLayout(form);
+    formLayout->addWidget(buildDataBox());
+    formLayout->addWidget(buildSpecBox());
+    formLayout->addWidget(buildPriorBox());
+    formLayout->addWidget(buildSamplerBox());
+    formLayout->addStretch(1);
+
+    auto *scroll = new QScrollArea;
+    scroll->setWidget(form);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+
+    auto *row = new QHBoxLayout;
+    row->addWidget(scroll, 3);
+    row->addWidget(buildSummary(), 2);
+
+    auto *buttons = new QDialogButtonBox;
+    createButton_ = buttons->addButton(tr("Create Model…"), QDialogButtonBox::AcceptRole);
+    buttons->addButton(QDialogButtonBox::Cancel);
+    connect(createButton_, &QPushButton::clicked, this, &BuilderDialog::create);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+    auto *layout = new QVBoxLayout(this);
+    layout->addLayout(row, 1);
+    layout->addWidget(buttons);
+
+    debounce_ = new QTimer(this);
+    debounce_->setSingleShot(true);
+    debounce_->setInterval(250);
+    connect(debounce_, &QTimer::timeout, this, &BuilderDialog::runCheck);
+
+    // Every input reschedules the check.
+    for (QSpinBox *w : findChildren<QSpinBox *>())
+    {
+        connect(w, &QSpinBox::valueChanged, this, &BuilderDialog::scheduleCheck);
+    }
+    for (QDoubleSpinBox *w : findChildren<QDoubleSpinBox *>())
+    {
+        connect(w, &QDoubleSpinBox::valueChanged, this, &BuilderDialog::scheduleCheck);
+    }
+    for (QCheckBox *w : findChildren<QCheckBox *>())
+    {
+        connect(w, &QCheckBox::toggled, this, &BuilderDialog::scheduleCheck);
+    }
+    for (QRadioButton *w : findChildren<QRadioButton *>())
+    {
+        connect(w, &QRadioButton::toggled, this, &BuilderDialog::scheduleCheck);
+    }
+    for (QComboBox *w : findChildren<QComboBox *>())
+    {
+        connect(w, &QComboBox::currentIndexChanged, this, &BuilderDialog::scheduleCheck);
+    }
+    for (QLineEdit *w : findChildren<QLineEdit *>())
+    {
+        connect(w, &QLineEdit::textChanged, this, &BuilderDialog::scheduleCheck);
+    }
+    connect(variables_, &QListWidget::itemChanged, this, &BuilderDialog::scheduleCheck);
+
+    updateEnabled();
+    runCheck();
+}
+
+QWidget *BuilderDialog::buildDataBox()
+{
+    auto *box = new QGroupBox(tr("Data"));
+    auto *layout = new QVBoxLayout(box);
+    layout->addWidget(hint(tr("Tick the endogenous variables and put them in order: the order is the "
+                              "recursive ordering of a structural form or a covariance block.")));
+
+    variables_ = new QListWidget;
+    variables_->setMaximumHeight(130);
+    for (int c = 0; c < data_.series(); ++c)
+    {
+        auto *item = new QListWidgetItem(data_.names[c]);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);
+        item->setData(Qt::UserRole, c);
+        variables_->addItem(item);
+    }
+    auto *up = new QToolButton;
+    up->setArrowType(Qt::UpArrow);
+    auto *down = new QToolButton;
+    down->setArrowType(Qt::DownArrow);
+    const auto move = [this](int by) {
+        const int row = variables_->currentRow();
+        const int to = row + by;
+        if (row < 0 || to < 0 || to >= variables_->count())
+        {
+            return;
+        }
+        QListWidgetItem *item = variables_->takeItem(row);
+        variables_->insertItem(to, item);
+        variables_->setCurrentRow(to);
+        scheduleCheck();
+    };
+    connect(up, &QToolButton::clicked, this, [move]() { move(-1); });
+    connect(down, &QToolButton::clicked, this, [move]() { move(1); });
+    auto *arrows = new QVBoxLayout;
+    arrows->addWidget(up);
+    arrows->addWidget(down);
+    arrows->addStretch(1);
+    auto *list = new QHBoxLayout;
+    list->addWidget(variables_, 1);
+    list->addLayout(arrows);
+    layout->addLayout(list);
+
+    first_ = new QComboBox;
+    last_ = new QComboBox;
+    for (int r = 0; r < data_.length(); ++r)
+    {
+        first_->addItem(data_.periodLabel(r));
+        last_->addItem(data_.periodLabel(r));
+    }
+    first_->setCurrentIndex(0);
+    last_->setCurrentIndex(data_.length() - 1);
+    auto *range = new QHBoxLayout;
+    range->addWidget(new QLabel(tr("Sample from")));
+    range->addWidget(first_);
+    range->addWidget(new QLabel(tr("to")));
+    range->addWidget(last_);
+    range->addStretch(1);
+    layout->addLayout(range);
+    return box;
+}
+
+QWidget *BuilderDialog::buildSpecBox()
+{
+    auto *box = new QGroupBox(tr("Specification"));
+    auto *form = new QFormLayout(box);
+
+    form->addRow(new QLabel(tr("Model")), new QLabel(tr("Vector autoregression (VAR)")));
+    form->addRow(QString(), hint(tr("VEC, factor, quantile, discounted and unobserved components "
+                                     "models follow.")));
+
+    p_ = new QSpinBox;
+    p_->setRange(1, 24);
+    p_->setValue(2);
+    form->addRow(tr("Lags (p)"), p_);
+
+    constant_ = new QCheckBox(tr("Constant"));
+    constant_->setChecked(true);
+    trend_ = new QCheckBox(tr("Linear trend"));
+    auto *det = new QHBoxLayout;
+    det->addWidget(constant_);
+    det->addWidget(trend_);
+    det->addStretch(1);
+    form->addRow(tr("Deterministic terms"), det);
+
+    coefConstant_ = new QRadioButton(tr("Constant"));
+    coefTvp_ = new QRadioButton(tr("Time-varying (random walk)"));
+    coefTvp_->setObjectName(QStringLiteral("coefTvp"));
+    coefConstant_->setChecked(true);
+    auto *coefGroup = new QButtonGroup(box);
+    coefGroup->addButton(coefConstant_);
+    coefGroup->addButton(coefTvp_);
+    auto *coef = new QHBoxLayout;
+    coef->addWidget(coefConstant_);
+    coef->addWidget(coefTvp_);
+    coef->addStretch(1);
+    form->addRow(tr("Coefficients"), coef);
+
+    nonCentred_ = new QCheckBox(tr("Non-centred random walks (test for time variation)"));
+    nonCentred_->setToolTip(tr("Frühwirth-Schnatter and Wagner (2010): writes the Savage–Dickey "
+                               "ordinates of Chan (2018) for whether each state moves at all."));
+    form->addRow(QString(), nonCentred_);
+
+    errWishart_ = new QRadioButton(tr("Wishart"));
+    errGamma_ = new QRadioButton(tr("Gamma"));
+    errSv_ = new QRadioButton(tr("Stochastic volatility"));
+    errSv_->setObjectName(QStringLiteral("errSv"));
+    errWishart_->setChecked(true);
+    auto *errGroup = new QButtonGroup(box);
+    errGroup->addButton(errWishart_);
+    errGroup->addButton(errGamma_);
+    errGroup->addButton(errSv_);
+    auto *err = new QHBoxLayout;
+    err->addWidget(errWishart_);
+    err->addWidget(errGamma_);
+    err->addWidget(errSv_);
+    err->addStretch(1);
+    form->addRow(tr("Error precision"), err);
+
+    covar_ = new QCheckBox(tr("Covariance block (Primiceri 2005)"));
+    covar_->setObjectName(QStringLiteral("covar"));
+    structural_ = new QCheckBox(tr("Structural form (contemporaneous coefficients)"));
+    form->addRow(QString(), covar_);
+    form->addRow(QString(), structural_);
+
+    selection_ = new QComboBox;
+    selection_->addItem(tr("None"));
+    selection_->addItem(tr("BVS — Korobilis (2013)"));
+    selection_->addItem(tr("SSVS — George, Sun and Ni (2008)"));
+    form->addRow(tr("Variable selection"), selection_);
+    inprior_ = number(0.5, 0.0, 1.0, 2);
+    inprior_->setSingleStep(0.05);
+    form->addRow(tr("Prior inclusion probability"), inprior_);
+    selectDet_ = new QCheckBox(tr("Also select deterministic terms"));
+    selectCovar_ = new QCheckBox(tr("Also select covariances"));
+    form->addRow(QString(), selectDet_);
+    form->addRow(QString(), selectCovar_);
+
+    for (QAbstractButton *b : {static_cast<QAbstractButton *>(coefConstant_), static_cast<QAbstractButton *>(coefTvp_),
+                               static_cast<QAbstractButton *>(errWishart_), static_cast<QAbstractButton *>(errGamma_),
+                               static_cast<QAbstractButton *>(errSv_), static_cast<QAbstractButton *>(covar_),
+                               static_cast<QAbstractButton *>(structural_)})
+    {
+        connect(b, &QAbstractButton::toggled, this, &BuilderDialog::updateEnabled);
+    }
+    connect(selection_, &QComboBox::currentIndexChanged, this, &BuilderDialog::updateEnabled);
+    return box;
+}
+
+QWidget *BuilderDialog::buildPriorBox()
+{
+    auto *box = new QGroupBox(tr("Priors"));
+    auto *layout = new QVBoxLayout(box);
+    layout->addWidget(hint(tr("Defaults are those of the bvartools article's replication script.")));
+
+    auto *coef = new QFormLayout;
+    minnesota_ = new QCheckBox(tr("Minnesota prior (Appendix A of the article)"));
+    coef->addRow(QString(), minnesota_);
+    coefPrecision_ = number(1.0, 1e-6, 1e6, 4);
+    detPrecision_ = number(0.1, 1e-6, 1e6, 4);
+    coef->addRow(tr("Coefficient precision"), coefPrecision_);
+    coef->addRow(tr("Deterministic precision"), detPrecision_);
+    kappa1_ = number(0.2, 1e-6, 1e6, 4);
+    kappa2_ = number(0.5, 1e-6, 1e6, 4);
+    kappa4_ = number(100.0, 1e-6, 1e9, 2);
+    coef->addRow(tr("κ₁ overall tightness"), kappa1_);
+    coef->addRow(tr("κ₂ other lags"), kappa2_);
+    coef->addRow(tr("κ₄ deterministic"), kappa4_);
+    layout->addLayout(coef);
+    connect(minnesota_, &QCheckBox::toggled, this, &BuilderDialog::updateEnabled);
+
+    stateBox_ = new QGroupBox(tr("Random walks of the coefficients"));
+    auto *state = new QFormLayout(stateBox_);
+    stateShape_ = number(3.0, 0.0, 1e6, 3);
+    stateRate_ = small(1e-4);
+    stateRateDet_ = small(0.01);
+    omegaV_ = small(0.001);
+    state->addRow(tr("Shape"), stateShape_);
+    state->addRow(tr("Rate"), stateRate_);
+    state->addRow(tr("Rate, deterministic terms"), stateRateDet_);
+    state->addRow(tr("Prior variance of ω (non-centred)"), omegaV_);
+    layout->addWidget(stateBox_);
+
+    wishartBox_ = new QGroupBox(tr("Inverse Wishart"));
+    auto *wishart = new QFormLayout(wishartBox_);
+    dfExtra_ = new QSpinBox;
+    dfExtra_->setRange(0, 1000);
+    dfExtra_->setPrefix(tr("k + "));
+    wishartScale_ = number(1.0, 1e-6, 1e6, 4);
+    wishart->addRow(tr("Degrees of freedom"), dfExtra_);
+    wishart->addRow(tr("Scale (× identity)"), wishartScale_);
+    layout->addWidget(wishartBox_);
+
+    gammaBox_ = new QGroupBox(tr("Gamma on the error precisions"));
+    auto *gamma = new QFormLayout(gammaBox_);
+    gammaShape_ = number(3.0, 0.0, 1e6, 3);
+    gammaRate_ = small(0.01);
+    gamma->addRow(tr("Shape"), gammaShape_);
+    gamma->addRow(tr("Rate"), gammaRate_);
+    layout->addWidget(gammaBox_);
+
+    svBox_ = new QGroupBox(tr("Stochastic volatility"));
+    auto *sv = new QFormLayout(svBox_);
+    svShape_ = number(3.0, 0.0, 1e6, 3);
+    svRate_ = small(0.03);
+    svState_ = small(0.05);
+    sv->addRow(tr("Shape of the volatility innovation"), svShape_);
+    sv->addRow(tr("Rate"), svRate_);
+    sv->addRow(tr("Initial innovation variance"), svState_);
+    layout->addWidget(svBox_);
+    return box;
+}
+
+QWidget *BuilderDialog::buildSamplerBox()
+{
+    auto *box = new QGroupBox(tr("Sampler and forecast"));
+    auto *form = new QFormLayout(box);
+    iterations_ = new QSpinBox;
+    iterations_->setRange(1, 10000000);
+    iterations_->setValue(20000);
+    iterations_->setSingleStep(1000);
+    burnin_ = new QSpinBox;
+    burnin_->setRange(0, 10000000);
+    burnin_->setValue(2000);
+    burnin_->setSingleStep(500);
+    thin_ = new QSpinBox;
+    thin_->setRange(1, 1000);
+    form->addRow(tr("Draws kept"), iterations_);
+    form->addRow(tr("Burn-in"), burnin_);
+    form->addRow(tr("Thinning"), thin_);
+
+    seed_ = new QLineEdit(QString::number(QRandomGenerator::global()->bounded(1, 2000000000)));
+    seed_->setValidator(new QRegularExpressionValidator(QRegularExpression(QStringLiteral("\\d{0,19}")), seed_));
+    seed_->setPlaceholderText(tr("none: not reproducible"));
+    form->addRow(tr("Seed"), seed_);
+
+    horizon_ = new QSpinBox;
+    horizon_->setRange(0, 200);
+    horizon_->setValue(8);
+    holdout_ = new QSpinBox;
+    holdout_->setRange(0, 200);
+    form->addRow(tr("Forecast horizon"), horizon_);
+    form->addRow(tr("Hold out for evaluation"), holdout_);
+    form->addRow(QString(), hint(tr("Held-out periods are left out of estimation and scored against the "
+                                     "forecast: the log predictive score of the Evaluation stage.")));
+    connect(horizon_, &QSpinBox::valueChanged, this, &BuilderDialog::updateEnabled);
+    return box;
+}
+
+QWidget *BuilderDialog::buildSummary()
+{
+    auto *panel = new QWidget;
+    panel->setObjectName(QStringLiteral("builderSummary"));
+    auto *layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(20, 8, 8, 8);
+    auto *title = new QLabel(tr("Algorithm"));
+    title->setObjectName(QStringLiteral("subtle"));
+    algorithm_ = new QLabel;
+    algorithm_->setObjectName(QStringLiteral("pageTitle"));
+    algorithm_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    dimensions_ = new QLabel;
+    dimensions_->setWordWrap(true);
+    status_ = new QLabel;
+    status_->setWordWrap(true);
+    status_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    notes_ = new QLabel;
+    notes_->setWordWrap(true);
+    notes_->setObjectName(QStringLiteral("subtle"));
+    notes_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    layout->addWidget(title);
+    layout->addWidget(algorithm_);
+    layout->addSpacing(8);
+    layout->addWidget(dimensions_);
+    layout->addSpacing(12);
+    auto *checkTitle = new QLabel(tr("What BayesTS says"));
+    checkTitle->setObjectName(QStringLiteral("sectionTitle"));
+    layout->addWidget(checkTitle);
+    layout->addWidget(status_);
+    layout->addWidget(notes_);
+    layout->addStretch(1);
+    return panel;
+}
+
+void BuilderDialog::updateEnabled()
+{
+    const bool tvp = coefTvp_->isChecked();
+    const bool wishart = errWishart_->isChecked();
+    const bool sv = errSv_->isChecked();
+    int k = 0;
+    for (int i = 0; i < variables_->count(); ++i)
+    {
+        k += variables_->item(i)->checkState() == Qt::Checked ? 1 : 0;
+    }
+
+    // The refusals of algorithms.md, as disabled controls.
+    nonCentred_->setEnabled(tvp);
+    covar_->setEnabled(!wishart && k > 1 && !structural_->isChecked());
+    if (!covar_->isEnabled())
+    {
+        covar_->setChecked(false);
+    }
+    structural_->setEnabled(!wishart && !covar_->isChecked() && k > 1);
+    if (!structural_->isEnabled())
+    {
+        structural_->setChecked(false);
+    }
+
+    auto *model = qobject_cast<QStandardItemModel *>(selection_->model());
+    const bool ssvsAllowed = !tvp && !sv;
+    if (model != nullptr)
+    {
+        model->item(2)->setEnabled(ssvsAllowed);
+    }
+    if (!ssvsAllowed && selection_->currentIndex() == 2)
+    {
+        selection_->setCurrentIndex(1);
+    }
+    const bool selecting = selection_->currentIndex() > 0;
+    inprior_->setEnabled(selecting);
+    selectDet_->setEnabled(selecting);
+    selectCovar_->setEnabled(selecting && covar_->isChecked());
+
+    const bool minn = minnesota_->isChecked();
+    coefPrecision_->setEnabled(!minn);
+    detPrecision_->setEnabled(!minn);
+    kappa1_->setEnabled(minn);
+    kappa2_->setEnabled(minn);
+    kappa4_->setEnabled(minn);
+
+    stateBox_->setVisible(tvp);
+    const bool nc = nonCentred_->isChecked();
+    stateShape_->setEnabled(!nc);
+    stateRate_->setEnabled(!nc);
+    stateRateDet_->setEnabled(!nc);
+    omegaV_->setEnabled(nc);
+    wishartBox_->setVisible(wishart);
+    gammaBox_->setVisible(errGamma_->isChecked());
+    svBox_->setVisible(sv);
+
+    // A structural model cannot be scored, so it has nothing to hold out for.
+    holdout_->setMaximum(structural_->isChecked() ? 0 : horizon_->value());
+}
+
+VarBuilderSpec BuilderDialog::readForm() const
+{
+    VarBuilderSpec s;
+    s.data = data_;
+    for (int i = 0; i < variables_->count(); ++i)
+    {
+        if (variables_->item(i)->checkState() == Qt::Checked)
+        {
+            s.columns.push_back(variables_->item(i)->data(Qt::UserRole).toInt());
+        }
+    }
+    s.firstRow = first_->currentIndex();
+    s.lastRow = last_->currentIndex();
+    s.p = p_->value();
+    s.constant = constant_->isChecked();
+    s.trend = trend_->isChecked();
+    s.timeVarying = coefTvp_->isChecked();
+    s.nonCentred = s.timeVarying && nonCentred_->isChecked();
+    s.errors = errWishart_->isChecked() ? VarBuilderSpec::Errors::Wishart
+               : errGamma_->isChecked() ? VarBuilderSpec::Errors::Gamma
+                                        : VarBuilderSpec::Errors::Stochvol;
+    s.covar = covar_->isChecked();
+    s.structural = structural_->isChecked();
+    s.selection = static_cast<VarBuilderSpec::Selection>(selection_->currentIndex());
+    s.inclusionPrior = inprior_->value();
+    s.selectDeterministic = selectDet_->isChecked();
+    s.selectCovariances = selectCovar_->isChecked();
+
+    s.minnesota = minnesota_->isChecked();
+    s.coefPrecision = coefPrecision_->value();
+    s.detPrecision = detPrecision_->value();
+    s.kappa1 = kappa1_->value();
+    s.kappa2 = kappa2_->value();
+    s.kappa4 = kappa4_->value();
+    s.stateShape = stateShape_->value();
+    s.stateRate = valueOf(stateRate_);
+    s.stateRateDet = valueOf(stateRateDet_);
+    s.omegaV = valueOf(omegaV_);
+    s.wishartDfExtra = dfExtra_->value();
+    s.wishartScale = wishartScale_->value();
+    s.gammaShape = gammaShape_->value();
+    s.gammaRate = valueOf(gammaRate_);
+    s.svShape = svShape_->value();
+    s.svRate = valueOf(svRate_);
+    s.svStateVariance = valueOf(svState_);
+
+    s.iterations = iterations_->value();
+    s.burnin = burnin_->value();
+    s.thin = thin_->value();
+    if (!seed_->text().isEmpty())
+    {
+        s.seed = seed_->text().toULongLong();
+    }
+    s.horizon = horizon_->value();
+    s.holdout = holdout_->value();
+    return s;
+}
+
+void BuilderDialog::scheduleCheck()
+{
+    debounce_->start();
+}
+
+void BuilderDialog::runCheck()
+{
+    updateEnabled();
+    const VarBuilderSpec spec = readForm();
+    const VarBuilderSummary summary = summarise(spec);
+    algorithm_->setText(spec.algorithm());
+    dimensions_->setText(tr("%1 variables · %2 periods · %3 regressors per equation · %4 coefficients%5")
+                             .arg(summary.k)
+                             .arg(summary.periods)
+                             .arg(summary.nx)
+                             .arg(summary.nparams)
+                             .arg(summary.npsi > 0 ? tr(" · %1 covariances").arg(summary.npsi) : QString()));
+
+    QString status;
+    bool ok = false;
+    if (!summary.refusal.isEmpty())
+    {
+        status = tr("✗  %1").arg(summary.refusal);
+    }
+    else
+    {
+        const QString file = scratch_.filePath(QStringLiteral("draft.h5"));
+        try
+        {
+            writeVarModel(spec, file);
+            const CheckReport report = ModelRunner::check(file, QString());
+            ok = report.ok;
+            status = ok ? tr("✓  BayesTS accepts this model.")
+                        : tr("✗  BayesTS refuses it: %1").arg(report.error);
+            QStringList notes = summary.notes;
+            notes << report.warnings;
+            notes_->setText(notes.join(QStringLiteral("\n\n")));
+        }
+        catch (const std::exception &e)
+        {
+            status = tr("✗  %1").arg(QString::fromUtf8(e.what()));
+        }
+    }
+    if (!summary.refusal.isEmpty())
+    {
+        notes_->clear();
+    }
+    status_->setText(status);
+    status_->setStyleSheet(ok ? QStringLiteral("color: #1E7B4A; font-weight: 600;")
+                              : QStringLiteral("color: #B3261E; font-weight: 600;"));
+    createButton_->setEnabled(ok);
+}
+
+QString BuilderDialog::suggestedName() const
+{
+    const VarBuilderSpec s = readForm();
+    QString name = QStringLiteral("%1-p%2").arg(s.algorithm()).arg(s.p);
+    if (s.covar)
+    {
+        name += QStringLiteral("-covar");
+    }
+    if (s.structural)
+    {
+        name += QStringLiteral("-structural");
+    }
+    if (s.selection == VarBuilderSpec::Selection::Bvs)
+    {
+        name += QStringLiteral("-bvs");
+    }
+    if (s.selection == VarBuilderSpec::Selection::Ssvs)
+    {
+        name += QStringLiteral("-ssvs");
+    }
+    if (s.nonCentred)
+    {
+        name += QStringLiteral("-noncentred");
+    }
+    return name + QStringLiteral(".h5");
+}
+
+void BuilderDialog::create()
+{
+    const QString dir = projectDir_.isEmpty() ? QFileInfo(data_.source).absolutePath() : projectDir_;
+    const QString path = QFileDialog::getSaveFileName(this, tr("Save Model File"),
+                                                      QDir(dir).filePath(suggestedName()),
+                                                      tr("BayesTS model files (*.h5)"));
+    if (!path.isEmpty())
+    {
+        createAt(path);
+    }
+}
+
+bool BuilderDialog::createAt(const QString &path)
+{
+    try
+    {
+        writeVarModel(readForm(), path);
+    }
+    catch (const std::exception &e)
+    {
+        QMessageBox::warning(this, tr("Cannot write the model"), QString::fromUtf8(e.what()));
+        return false;
+    }
+    created_ = path;
+    accept();
+    return true;
+}
+
+} // namespace studio

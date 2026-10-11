@@ -2,6 +2,7 @@
 
 #include "engine/ModelFileTree.h"
 #include "engine/QtReporter.h"
+#include "views/BuilderDialog.h"
 
 #include <QAction>
 #include <QApplication>
@@ -246,6 +247,8 @@ void MainWindow::buildLayout()
     {
         pagesStack_->addWidget(page);
         connect(page, &StagePage::runRequested, this, &MainWindow::run);
+        connect(page, &StagePage::importRequested, this, &MainWindow::importData);
+        connect(page, &StagePage::newModelRequested, this, &MainWindow::newModel);
     }
     connect(stages_, &QListWidget::currentRowChanged, pagesStack_, &QStackedWidget::setCurrentIndex);
 
@@ -473,6 +476,71 @@ void MainWindow::closeEvent(QCloseEvent *event)
     settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
     settings.setValue(QStringLiteral("window/state"), saveState());
     event->accept();
+}
+
+void MainWindow::importData()
+{
+    QSettings settings;
+    const QString file = QFileDialog::getOpenFileName(
+        this, tr("Import Data"), settings.value(QStringLiteral("files/lastDir")).toString(),
+        tr("Delimited text (*.csv *.tsv *.txt);;All files (*)"));
+    if (!file.isEmpty())
+    {
+        settings.setValue(QStringLiteral("files/lastDir"), QFileInfo(file).absolutePath());
+        importFrom(file);
+    }
+}
+
+void MainWindow::importFrom(const QString &file)
+{
+    try
+    {
+        data_ = readDelimited(file);
+    }
+    catch (const std::exception &e)
+    {
+        QMessageBox::warning(this, tr("Cannot import"), tr("%1:\n%2").arg(file, QString::fromUtf8(e.what())));
+        return;
+    }
+    log(tr("Imported %1: %2 series, %3 periods")
+            .arg(QDir::toNativeSeparators(file))
+            .arg(data_.series())
+            .arg(data_.length()));
+    static_cast<DataPage *>(pages_[static_cast<std::size_t>(StageId::Data)])->showDataSet(data_);
+    static_cast<SetupPage *>(pages_[static_cast<std::size_t>(StageId::Setup)])->setDataAvailable(true);
+    showStage(StageId::Data);
+}
+
+void MainWindow::newModel()
+{
+    if (data_.empty())
+    {
+        return;
+    }
+    BuilderDialog dialog(data_, projectDir_, this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+    addCreatedModel(dialog.createdFile());
+}
+
+void MainWindow::addCreatedModel(const QString &created)
+{
+    log(tr("Created %1").arg(QDir::toNativeSeparators(created)));
+    // The new model joins the project -- the folder it was saved in, when
+    // there was no project or it was saved outside it.
+    const QFileInfo info(created);
+    if (projectDir_.isEmpty() || !info.absoluteFilePath().startsWith(projectDir_))
+    {
+        openPath(info.absolutePath());
+    }
+    else
+    {
+        openPath(projectDir_);
+    }
+    selectModel(info.absoluteFilePath());
+    showStage(StageId::Posterior);
 }
 
 void MainWindow::showAbout()

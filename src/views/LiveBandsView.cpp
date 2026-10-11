@@ -7,7 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPen>
-#include <QSpinBox>
+#include <QComboBox>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -49,11 +49,11 @@ QwtPlotIntervalCurve *band(const QColor &color)
 LiveBandsView::LiveBandsView(QtReporter *reporter, QWidget *parent)
     : QWidget(parent), reporter_(reporter)
 {
-    row_ = new QSpinBox;
-    row_->setPrefix(tr("Coefficient "));
-    row_->setMinimum(1);
+    row_ = new QComboBox;
+    row_->setMinimumContentsLength(28);
+    row_->setMaxVisibleItems(24);
     row_->setEnabled(false);
-    connect(row_, &QSpinBox::valueChanged, this, [this](int v) { coefficientChanged(v - 1); });
+    connect(row_, &QComboBox::currentIndexChanged, this, [this](int i) { coefficientChanged(i); });
 
     status_ = new QLabel(tr("Open a model with time-varying coefficients."));
     status_->setObjectName(QStringLiteral("subtle"));
@@ -82,20 +82,38 @@ LiveBandsView::LiveBandsView(QtReporter *reporter, QWidget *parent)
     layout->addWidget(plot_, 1);
 }
 
-void LiveBandsView::setModel(bool timeVarying, int periods, int coefficients)
+void LiveBandsView::fillRows(int count)
+{
+    const QSignalBlocker block(row_);
+    const int keep = std::max(0, row_->currentIndex());
+    row_->clear();
+    for (int i = 0; i < count; ++i)
+    {
+        row_->addItem(i < names_.size() ? names_[i] : tr("Coefficient %1").arg(i + 1));
+    }
+    row_->setCurrentIndex(std::min(keep, count - 1));
+}
+
+int LiveBandsView::currentRow() const
+{
+    return std::max(0, row_->currentIndex());
+}
+
+void LiveBandsView::setModel(bool timeVarying, int periods, int coefficients, const QStringList &names)
 {
     timeVarying_ = timeVarying;
     periods_ = periods;
+    names_ = names;
+    if (coefficients == 0 && !names.isEmpty())
+    {
+        coefficients = static_cast<int>(names.size());
+    }
     coefficients_ = coefficients;
     paths_.clear();
     row_->setEnabled(timeVarying);
-    {
-        const QSignalBlocker block(row_);
-        // Until the coefficients per period are known the bound is loose; the
-        // first kept draw of a run tightens it (see poll()).
-        row_->setMaximum(coefficients > 0 ? coefficients : 9999);
-        row_->setValue(1);
-    }
+    // Until the coefficients per period are known there is one entry; the
+    // first kept draw of a run fills the rest in (see poll()).
+    fillRows(coefficients > 0 ? coefficients : 1);
     if (!timeVarying)
     {
         status_->setText(tr("This model has no time-varying coefficient path."));
@@ -124,7 +142,7 @@ void LiveBandsView::runStarted()
     paths_.clear();
     if (live_)
     {
-        reporter_->watch(row_->value() - 1);
+        reporter_->watch(currentRow());
         timer_->start();
     }
     redraw();
@@ -143,8 +161,7 @@ void LiveBandsView::poll()
     if (coefficients_ == 0 && reporter_->pathRows() > 0)
     {
         coefficients_ = reporter_->pathRows();
-        const QSignalBlocker block(row_);
-        row_->setMaximum(coefficients_);
+        fillRows(coefficients_);
     }
     std::vector<std::vector<double>> fresh = reporter_->takeDraws();
     if (fresh.empty())
@@ -174,7 +191,7 @@ void LiveBandsView::showStored(const QString &file)
         const Matrix m = readMatrix(file, QStringLiteral("/posterior/a/coeffs"));
         const auto k = static_cast<std::size_t>(coefficients_);
         const std::size_t periods = m.rows / k;
-        const auto row = static_cast<std::size_t>(row_->value() - 1);
+        const auto row = static_cast<std::size_t>(currentRow());
         paths_.assign(m.cols, std::vector<double>(periods));
         for (std::size_t d = 0; d < m.cols; ++d)
         {

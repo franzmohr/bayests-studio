@@ -37,6 +37,11 @@ struct Matrix
     double at(std::size_t r, std::size_t c) const { return values[r * cols + c]; }
 };
 
+/// The string-array attribute `name` of the dataset at `path`, or an empty
+/// list when either is absent: the coefficient names the model builder writes
+/// on /data/train/z, the variable names on /data/train/y.
+QStringList readStringsAttribute(const QString &file, const QString &path, const QString &name);
+
 /// Reads a one- or two-dimensional numeric dataset. Throws on anything else.
 Matrix readMatrix(const QString &file, const QString &path);
 

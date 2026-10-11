@@ -55,3 +55,6 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 find_package(Qwt REQUIRED)
 
 add_subdirectory(src)
+
+enable_testing()
+add_subdirectory(test)
