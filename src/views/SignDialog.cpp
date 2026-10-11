@@ -1,5 +1,7 @@
 #include "views/SignDialog.h"
 
+#include "engine/ModelFileTree.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
@@ -43,6 +45,7 @@ enum Column
 /// /model/seed, or nothing: the search is then seeded at random.
 std::optional<std::uint64_t> modelSeed(const QString &file)
 {
+    const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
     try
     {
         HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
@@ -369,6 +372,7 @@ void SignDialog::identify()
     QProgressBar *bar = progress_;
     std::atomic<bool> *cancelled = &cancelled_;
     watcher_->setFuture(QtConcurrent::run([file, spec, zspec, zero, output, seed, bar, cancelled]() {
+        const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
         Outcome o;
         o.zero = zero;
         const auto progress = [bar, cancelled](int done, int total) {

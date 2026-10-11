@@ -107,6 +107,8 @@ public:
     bool structural() const { return structural_; }
     bool moving() const { return aMoves_ || sigmaMoves_; }
     int periods() const { return tt_; }
+    /// The lag order as the file states it, a VEC's in levels.
+    int lagOrder() const { return p_; }
 
     System system(int draw, int period) const
     {

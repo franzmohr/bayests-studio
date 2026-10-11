@@ -109,8 +109,15 @@ QString shape(const H5Node &node)
 
 } // namespace
 
+std::recursive_mutex &hdf5Mutex()
+{
+    static std::recursive_mutex mutex;
+    return mutex;
+}
+
 QStringList readStringsAttribute(const QString &file, const QString &path, const QString &name)
 {
+    const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
     QStringList out;
     try
     {
@@ -138,6 +145,7 @@ QStringList readStringsAttribute(const QString &file, const QString &path, const
 
 Matrix readMatrix(const QString &file, const QString &path)
 {
+    const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
     HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
     const HighFive::DataSet ds = h5.getDataSet(path.toStdString());
     const std::vector<std::size_t> dims = ds.getSpace().getDimensions();
@@ -174,6 +182,7 @@ void ModelFileTree::load(const QString &file)
     root->name = QStringLiteral("/");
     root->path = QStringLiteral("/");
     {
+        const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
         HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
         readGroup(h5.getGroup("/"), *root);
     }

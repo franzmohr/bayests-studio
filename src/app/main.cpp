@@ -105,6 +105,23 @@ int main(int argc, char *argv[])
                     window.grab().save(QStringLiteral("%1-fevd.png").arg(QString::fromLocal8Bit(prefix)));
                     st->setCurrentIndex(0);
                 }
+                // STUDIO_SMOKE_SPILLOVER=1: every tab of the spillovers.
+                if (!qgetenv("STUDIO_SMOKE_SPILLOVER").isEmpty())
+                {
+                    app->setCurrentIndex(2);
+                    settle(5000);
+                    if (auto *sp = window.findChild<QTabWidget *>(QStringLiteral("spilloverTabs")))
+                    {
+                        for (int tab = 0; tab < sp->count(); ++tab)
+                        {
+                            sp->setCurrentIndex(tab);
+                            settle(400);
+                            window.grab().save(
+                                QStringLiteral("%1-spillover%2.png").arg(QString::fromLocal8Bit(prefix)).arg(tab + 1));
+                        }
+                    }
+                    app->setCurrentIndex(1);
+                }
                 // STUDIO_SMOKE_SIGN=1: identify by the restriction the dialog
                 // starts with, capturing the dialog and then the responses.
                 if (!qgetenv("STUDIO_SMOKE_SIGN").isEmpty())

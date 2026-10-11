@@ -5,10 +5,16 @@
 #include <QStringList>
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace studio
 {
+
+/// The HDF5 library this links is built without thread safety, so no two
+/// threads may be inside it at once. Every reader here takes this lock, and
+/// an analysis job on a worker thread holds it for the whole job.
+std::recursive_mutex &hdf5Mutex();
 
 /// One node of an HDF5 file, read once and held in memory so the file is
 /// closed again before a run opens it read-write.

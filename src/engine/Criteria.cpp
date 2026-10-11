@@ -41,6 +41,7 @@ bool exists(const QString &file, const char *path)
 
 Criteria computeCriteria(const QString &file)
 {
+    const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
     Criteria c;
     try
     {

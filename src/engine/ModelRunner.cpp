@@ -1,4 +1,5 @@
 #include "engine/ModelRunner.h"
+#include "engine/ModelFileTree.h"
 
 #include "engine/QtReporter.h"
 
@@ -81,6 +82,7 @@ ModelRunner::~ModelRunner()
 
 CheckReport ModelRunner::check(const QString &file, const QString &group)
 {
+    const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
     CheckReport report;
     try
     {

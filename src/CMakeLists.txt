@@ -15,6 +15,8 @@ add_library(studio_engine STATIC
     engine/QtReporter.h
     engine/SignZero.cpp
     engine/SignZero.h
+    engine/Spillover.cpp
+    engine/Spillover.h
     engine/Structural.cpp
     engine/Structural.h
     engine/VarBuilder.cpp
@@ -55,6 +57,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/SignDialog.cpp
     views/SignDialog.h
     views/StagePages.cpp
+    views/SpilloverView.cpp
+    views/SpilloverView.h
     views/StructuralView.cpp
     views/StructuralView.h
     views/StagePages.h

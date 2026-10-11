@@ -135,13 +135,32 @@ components it uses.
   responses within Monte Carlo error; and bvartools, reading the studio's
   file, reproduces its responses within 2e-15.
 
+- **Spillovers** (Application › Spillovers): the connectedness measures of
+  Diebold and Yilmaz (2012, 2014) as bvartools' `spillover()` computes them --
+  generalised (Pesaran and Shin 1998, by the shock's variance, rows
+  normalised), Choleski, or from a sign identification's rotations; the H
+  step error made of the responses of periods 0 to H - 1; every measure
+  computed per draw and only then summarised. Four views: the table with its
+  from column, to row and total index; the directional measures (net, to,
+  from) with 90 % intervals; the net pairwise table; and, for a model whose
+  coefficients or covariance move, **the total index in every period of the
+  sample** with 68 and 90 % bands -- what Diebold and Yilmaz get from rolling
+  windows, from one estimation. A VEC is decomposed as its level VAR; a
+  structural model is refused, as in bvartools.
+
+  Verified in `test/structural_test.cpp` against bvartools
+  (`test/spillover_reference.R`), every draw's total, from, to and net and
+  the mean table and net pairwise: generalised and Choleski on the VAR(2),
+  the sign identification, the VEC, and the TVP-SV model at the last and the
+  tenth period, all within 1.1e-13.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted
    models, `VecKlgs2010`, factor models and FAVARs, unobserved components;
    exogenous variables and seasonal dummies; Excel import; an R-side reader
    (`rclass`) so a studio file opens as a bvartools object.
-2. Analysis: spillover indices, dynamic multipliers,
+2. Analysis: dynamic multipliers,
    historical decompositions, inclusion probabilities, the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
 3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the

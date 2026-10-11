@@ -1,5 +1,6 @@
 #include "views/StructuralView.h"
 
+#include "engine/ModelFileTree.h"
 #include "views/PlotStyle.h"
 #include "views/SeriesPlot.h"
 #include "views/SignDialog.h"
@@ -309,6 +310,7 @@ void StructuralView::compute()
     const int impulse = impulse_->currentIndex();
     const int response = response_->currentIndex();
     watcher_->setFuture(QtConcurrent::run([file, req, impulse, response]() {
+        const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
         Result r;
         try
         {

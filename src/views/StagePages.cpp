@@ -7,6 +7,7 @@
 #include "views/LiveBandsView.h"
 #include "views/OverviewView.h"
 #include "views/SeriesPlot.h"
+#include "views/SpilloverView.h"
 #include "views/StructuralView.h"
 
 #include <QComboBox>
@@ -575,6 +576,8 @@ ApplicationPage::ApplicationPage(QWidget *parent) : StagePage(parent)
     tabs_->setDocumentMode(true);
     tabs_->addTab(forecasting, tr("Forecasting"));
     tabs_->addTab(structural_, tr("Structural analysis"));
+    spillover_ = new SpilloverView;
+    tabs_->addTab(spillover_, tr("Spillovers"));
     tabs_->setObjectName(QStringLiteral("applicationTabs"));
     layout->addWidget(tabs_, 1);
 }
@@ -590,6 +593,7 @@ void ApplicationPage::showModel(const ModelContext &context)
     const CheckReport &r = context.report;
     forecast_->setEnabled(!context.file.isEmpty() && r.hasPosterior && r.horizon > 0);
     structural_->setModel(r.hasPosterior ? context.file : QString());
+    spillover_->setModel(r.hasPosterior ? context.file : QString());
 
     const QSignalBlocker block(variable_);
     variable_->clear();

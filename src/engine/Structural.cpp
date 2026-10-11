@@ -139,6 +139,7 @@ QStringList levelNames(const QString &file)
 
 StructuralSupport structuralSupport(const QString &file)
 {
+    const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
     StructuralSupport out;
     try
     {
@@ -301,6 +302,7 @@ std::vector<arma::mat> varianceDecomposition(const QString &file, const Response
 
 std::optional<SignIdentification> readSignIdentification(const QString &file)
 {
+    const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
     try
     {
         HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);

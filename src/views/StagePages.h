@@ -22,6 +22,7 @@ class LiveBandsView;
 class ModelFileTree;
 class OverviewView;
 class SeriesPlot;
+class SpilloverView;
 class StructuralView;
 
 /// The stages of the workflow in Mohr's bvartools article (Section 3,
@@ -148,7 +149,7 @@ private:
     QLabel *explanation_;
 };
 
-/// 5. Application: forecasting and structural analysis.
+/// 5. Application: forecasting, structural analysis and spillovers.
 class ApplicationPage : public StagePage
 {
     Q_OBJECT
@@ -168,6 +169,7 @@ private:
     QLabel *forecastNote_;
     SeriesPlot *fan_;
     StructuralView *structural_;
+    SpilloverView *spillover_;
 };
 
 } // namespace studio

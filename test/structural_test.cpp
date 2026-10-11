@@ -8,6 +8,7 @@
 
 #include "engine/ModelFileTree.h"
 #include "engine/SignZero.h"
+#include "engine/Spillover.h"
 #include "engine/Structural.h"
 
 #include <QDir>
@@ -133,6 +134,49 @@ void compareFevd(const QString &dir, const QString &model, ResponseType type, co
     std::printf("%s  %s fevd %s of %s: max difference %.2e\n", ok ? "ok  " : "FAIL",
                 model.toStdString().c_str(), typeName.toStdString().c_str(),
                 response.toStdString().c_str(), worst);
+    failures += ok ? 0 : 1;
+}
+
+/// The connectedness measures against bvartools' spillover(), draw by draw:
+/// the total index, from, to and net of every draw, and the posterior mean
+/// table with its margins.
+void compareSpillover(const QString &dir, const QString &name, const QString &model, SpilloverType type,
+                      int horizon, int period = -1)
+{
+    const QString csv = QStringLiteral("%1/spillover_%2.csv").arg(dir, name);
+    if (!QFile::exists(csv))
+    {
+        std::printf("skip  spillover %s: run test/spillover_reference.R first\n", name.toStdString().c_str());
+        return;
+    }
+    const arma::mat reference = readCsv(csv);
+    const arma::mat table = readCsv(QStringLiteral("%1/spillover_%2_table.csv").arg(dir, name));
+    const arma::mat pairwise = readCsv(QStringLiteral("%1/spillover_%2_pairwise.csv").arg(dir, name));
+    SpilloverRequest request;
+    request.type = type;
+    request.horizon = horizon;
+    request.period = period;
+    request.maxDraws = 1 << 30;
+    const Spillovers s = spillovers(dir + "/" + model + ".h5", request);
+    const arma::uword k = s.from.n_cols;
+    double worst = 0.0;
+    if (s.total.n_elem == reference.n_rows)
+    {
+        const arma::mat ours = arma::join_rows(arma::join_rows(arma::mat(s.total), s.from), arma::join_rows(s.to, s.net));
+        worst = arma::abs(ours - reference).max();
+    }
+    // The printed table: shares, the from column, the to row, the total in the corner.
+    arma::mat printed(k + 1, k + 1);
+    printed.submat(0, 0, k - 1, k - 1) = s.table;
+    printed.submat(0, k, k - 1, k) = arma::trans(arma::mean(s.from, 0));
+    printed.submat(k, 0, k, k - 1) = arma::mean(s.to, 0);
+    printed(k, k) = arma::mean(s.total);
+    const double worstTable = std::max(arma::abs(printed - table).max(), arma::abs(s.pairwise - pairwise).max());
+    const double identity = arma::abs(arma::sum(s.from, 1) - s.total).max() + arma::abs(arma::sum(s.to, 1) - s.total).max();
+    const bool ok = s.total.n_elem == reference.n_rows && worst < 1e-9 && worstTable < 1e-9 && identity < 1e-9;
+    std::printf("%s  spillover %s: %u draws, max difference %.2e, table %.2e, median total %.2f\n",
+                ok ? "ok  " : "FAIL", name.toStdString().c_str(), static_cast<unsigned>(s.total.n_elem),
+                std::max(worst, identity), worstTable, arma::median(s.total));
     failures += ok ? 0 : 1;
 }
 
@@ -400,6 +444,12 @@ int main(int argc, char *argv[])
         compareFevd(dir, "vec", ResponseType::Oir, "oir", "Dp");
         compareIrf(dir, "tvp", ResponseType::Oir, "oir", "income", "cons");
         compareFevd(dir, "tvp", ResponseType::Oir, "oir", "cons");
+        compareSpillover(dir, "var2_gir", "var2", SpilloverType::Gir, 10);
+        compareSpillover(dir, "var2_oir", "var2", SpilloverType::Oir, 4);
+        compareSpillover(dir, "sign", "sign", SpilloverType::Sign, 10);
+        compareSpillover(dir, "vec_gir", "vec", SpilloverType::Gir, 10);
+        compareSpillover(dir, "tvp_gir_last", "tvp", SpilloverType::Gir, 10);
+        compareSpillover(dir, "tvp_gir_10", "tvp", SpilloverType::Gir, 10, 10);
         ownIdentification(dir);
         signZeroChecks(dir);
         // The round trip: bvartools reading the studio's identification. The
