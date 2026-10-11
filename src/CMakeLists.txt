@@ -2,6 +2,8 @@
 # that draws. A library of its own so the tests in test/ link exactly what the
 # application runs.
 add_library(studio_engine STATIC
+    engine/CoefficientSummary.cpp
+    engine/CoefficientSummary.h
     engine/Criteria.cpp
     engine/Criteria.h
     engine/DataSet.cpp
@@ -59,6 +61,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/StagePages.cpp
     views/SpilloverView.cpp
     views/SpilloverView.h
+    views/SummaryPlotView.cpp
+    views/SummaryPlotView.h
     views/StructuralView.cpp
     views/StructuralView.h
     views/StagePages.h

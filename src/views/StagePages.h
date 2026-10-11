@@ -19,6 +19,7 @@ namespace studio
 
 class DiagnosticsView;
 class LiveBandsView;
+class SummaryPlotView;
 class ModelFileTree;
 class OverviewView;
 class SeriesPlot;
@@ -131,6 +132,7 @@ private:
     LiveBandsView *live_;
     QComboBox *dataset_;
     DiagnosticsView *draws_;
+    SummaryPlotView *summary_;
 };
 
 /// 4. Evaluation: information criteria and forecast performance, across all

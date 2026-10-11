@@ -8,6 +8,7 @@
 #include "views/OverviewView.h"
 #include "views/SeriesPlot.h"
 #include "views/SpilloverView.h"
+#include "views/SummaryPlotView.h"
 #include "views/StructuralView.h"
 
 #include <QComboBox>
@@ -311,6 +312,9 @@ PosteriorPage::PosteriorPage(QtReporter *reporter, QWidget *parent) : StagePage(
     tabs_->setDocumentMode(true);
     tabs_->addTab(live_, tr("Time-varying coefficients"));
     tabs_->addTab(drawsPage, tr("Draws and convergence"));
+    summary_ = new SummaryPlotView;
+    tabs_->addTab(summary_, tr("Summary plot"));
+    tabs_->setObjectName(QStringLiteral("posteriorTabs"));
     layout->addWidget(tabs_, 1);
 }
 
@@ -353,6 +357,7 @@ void PosteriorPage::showModel(const ModelContext &context)
         live_->showStored(context.file);
     }
     tabs_->setTabEnabled(0, have && r.timeVarying);
+    summary_->setModel(have && r.hasPosterior ? context.file : QString());
     if (!(have && r.timeVarying))
     {
         tabs_->setCurrentIndex(1);

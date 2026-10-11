@@ -155,6 +155,24 @@ components it uses.
   the sign identification, the VEC, and the TVP-SV model at the last and the
   tenth period, all within 1.1e-13.
 
+- **Summary plot** (Posterior simulation › Summary plot): bvartools'
+  `plot()` of a model -- one grid per block of coefficients, a row per
+  equation and a column per regressor, each panel a histogram (Sturges on
+  pretty breaks, as `hist()`), trace or box plot (Tukey's hinges and
+  whiskers, as `boxplot()`) of the draws, and for a coefficient or covariance
+  that moves its median and credible band over the sample. The blocks are
+  bvartools': lagged endogenous variables, exogenous variables and
+  deterministic terms for a VAR; the cointegration matrix Π = αβ′, lagged
+  differences, differenced exogenous variables and unrestricted
+  deterministic terms for a VEC; A₀ of a structural model, its ones and
+  zeros as values; and the error covariance. A block wider than six columns
+  is split into pages of nearly equal width, as `max_cols` splits it.
+
+  Verified in `test/structural_test.cpp` against bvartools' `summary()`
+  (`test/summary_reference.R`): every panel's mean, median and 95 % bounds,
+  in summary()'s order, on the VAR(2) (30 panels, 4e-14), the VEC with Π
+  (22, 3e-15) and the structural VAR with A₀ (39, 4e-14).
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted

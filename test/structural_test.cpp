@@ -7,6 +7,7 @@
 // agree with bvartools' to rounding, and the posterior mean decomposition too.
 
 #include "engine/ModelFileTree.h"
+#include "engine/CoefficientSummary.h"
 #include "engine/SignZero.h"
 #include "engine/Spillover.h"
 #include "engine/Structural.h"
@@ -177,6 +178,57 @@ void compareSpillover(const QString &dir, const QString &name, const QString &mo
     std::printf("%s  spillover %s: %u draws, max difference %.2e, table %.2e, median total %.2f\n",
                 ok ? "ok  " : "FAIL", name.toStdString().c_str(), static_cast<unsigned>(s.total.n_elem),
                 std::max(worst, identity), worstTable, arma::median(s.total));
+    failures += ok ? 0 : 1;
+}
+
+/// The summary plot's panels against bvartools' summary(): block by block,
+/// column by column, equation by equation -- the order of summary()'s columns
+/// -- each panel's mean, median and 95% bounds, A_0's fixed ones and zeros
+/// included, then the error covariance.
+void compareSummary(const QString &dir, const QString &model)
+{
+    const QString csv = QStringLiteral("%1/summary_%2.csv").arg(dir, model);
+    if (!QFile::exists(csv))
+    {
+        std::printf("skip  summary %s: run test/summary_reference.R first\n", model.toStdString().c_str());
+        return;
+    }
+    // The first two columns are text; the reader turns them into zeros.
+    const arma::mat reference = readCsv(csv);
+    const CoefficientSummary s = coefficientSummary(dir + "/" + model + ".h5");
+    std::vector<arma::rowvec> ours;
+    for (const CoefficientBlock &b : s.blocks)
+    {
+        for (const CoefficientPanel &p : b.panels)
+        {
+            if (p.kind == CoefficientPanel::Kind::Fixed)
+            {
+                ours.push_back({p.value, p.value, p.value, p.value});
+                continue;
+            }
+            std::vector<double> v(p.draws.begin(), p.draws.end());
+            std::sort(v.begin(), v.end());
+            const auto q = [&](double pr) {
+                const double h = (static_cast<double>(v.size()) - 1.0) * pr;
+                const auto lo = static_cast<std::size_t>(std::floor(h));
+                const std::size_t hi = std::min(lo + 1, v.size() - 1);
+                return v[lo] + (h - static_cast<double>(lo)) * (v[hi] - v[lo]);
+            };
+            ours.push_back({arma::mean(p.draws), q(0.5), q(0.025), q(0.975)});
+        }
+    }
+    double worst = 0.0;
+    if (ours.size() == reference.n_rows)
+    {
+        for (std::size_t r = 0; r < ours.size(); ++r)
+        {
+            worst = std::max(worst, arma::abs(ours[r] - reference.row(r).cols(3, 6)).max());
+        }
+    }
+    const bool ok = ours.size() == reference.n_rows && worst < 1e-9;
+    std::printf("%s  summary %s: %zu blocks, %zu panels (bvartools %u), max difference %.2e\n", ok ? "ok  " : "FAIL",
+                model.toStdString().c_str(), s.blocks.size(), ours.size(), static_cast<unsigned>(reference.n_rows),
+                worst);
     failures += ok ? 0 : 1;
 }
 
@@ -450,6 +502,9 @@ int main(int argc, char *argv[])
         compareSpillover(dir, "vec_gir", "vec", SpilloverType::Gir, 10);
         compareSpillover(dir, "tvp_gir_last", "tvp", SpilloverType::Gir, 10);
         compareSpillover(dir, "tvp_gir_10", "tvp", SpilloverType::Gir, 10, 10);
+        compareSummary(dir, "var2");
+        compareSummary(dir, "vec");
+        compareSummary(dir, "svar");
         ownIdentification(dir);
         signZeroChecks(dir);
         // The round trip: bvartools reading the studio's identification. The

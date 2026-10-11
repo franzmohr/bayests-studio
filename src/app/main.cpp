@@ -94,6 +94,36 @@ int main(int argc, char *argv[])
                     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
                 }
             };
+            // STUDIO_SMOKE_SUMMARY=1: the summary plot, every block, then
+            // the first block as a trace and a box plot.
+            if (!qgetenv("STUDIO_SMOKE_SUMMARY").isEmpty())
+            {
+                window.showStage(studio::StageId::Posterior);
+                if (auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("posteriorTabs")))
+                {
+                    tabs->setCurrentIndex(2);
+                    settle(4000);
+                    auto *block = window.findChild<QComboBox *>(QStringLiteral("summaryBlock"));
+                    auto *type = window.findChild<QComboBox *>(QStringLiteral("summaryType"));
+                    for (int b = 0; block != nullptr && b < block->count(); ++b)
+                    {
+                        block->setCurrentIndex(b);
+                        settle(400);
+                        window.grab().save(QStringLiteral("%1-summary%2.png").arg(QString::fromLocal8Bit(prefix)).arg(b + 1));
+                    }
+                    if (block != nullptr && type != nullptr)
+                    {
+                        block->setCurrentIndex(0);
+                        for (int t = 1; t < type->count(); ++t)
+                        {
+                            type->setCurrentIndex(t);
+                            settle(400);
+                            window.grab().save(QStringLiteral("%1-summary-type%2.png").arg(QString::fromLocal8Bit(prefix)).arg(t + 1));
+                        }
+                    }
+                }
+                window.showStage(studio::StageId::Application);
+            }
             if (auto *app = window.findChild<QTabWidget *>(QStringLiteral("applicationTabs")))
             {
                 app->setCurrentIndex(1);
