@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QElapsedTimer>
+#include <QPushButton>
 #include <QTabWidget>
 #include <QTimer>
 
@@ -100,6 +101,37 @@ int main(int argc, char *argv[])
                     st->setCurrentIndex(1);
                     settle(500);
                     window.grab().save(QStringLiteral("%1-fevd.png").arg(QString::fromLocal8Bit(prefix)));
+                    st->setCurrentIndex(0);
+                }
+                // STUDIO_SMOKE_SIGN=1: identify by the restriction the dialog
+                // starts with, capturing the dialog and then the responses.
+                if (!qgetenv("STUDIO_SMOKE_SIGN").isEmpty())
+                {
+                    for (QPushButton *b : window.findChildren<QPushButton *>())
+                    {
+                        if (b->text().startsWith(QStringLiteral("Sign Restrictions")) && b->isEnabled())
+                        {
+                            QTimer::singleShot(800, [prefix]() {
+                                QWidget *dialog = QApplication::activeModalWidget();
+                                if (dialog == nullptr)
+                                {
+                                    return;
+                                }
+                                dialog->grab().save(QStringLiteral("%1-signdialog.png").arg(QString::fromLocal8Bit(prefix)));
+                                for (QPushButton *ib : dialog->findChildren<QPushButton *>())
+                                {
+                                    if (ib->text() == QStringLiteral("Identify"))
+                                    {
+                                        ib->click();
+                                    }
+                                }
+                            });
+                            b->click();
+                            settle(3000);
+                            window.grab().save(QStringLiteral("%1-sign.png").arg(QString::fromLocal8Bit(prefix)));
+                            break;
+                        }
+                    }
                 }
             }
             QCoreApplication::exit(ok ? 0 : 1);

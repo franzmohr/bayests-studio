@@ -2,6 +2,7 @@
 
 #include "views/PlotStyle.h"
 #include "views/SeriesPlot.h"
+#include "views/SignDialog.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -9,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPen>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -71,6 +73,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     type_ = new QComboBox;
     impulse_ = new QComboBox;
     impulse_->setMinimumContentsLength(10);
+    impulse_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     horizon_ = new QSpinBox;
     horizon_->setRange(0, 200);
     horizon_->setValue(20);
@@ -98,6 +101,20 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     controls->addWidget(cumulative_);
     controls->addWidget(standardDeviation_);
     controls->addStretch(1);
+    signButton_ = new QPushButton(tr("Sign Restrictions…"));
+    controls->addWidget(signButton_);
+    connect(signButton_, &QPushButton::clicked, this, [this]() {
+        SignDialog dialog(file_, support_, this);
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            setModel(file_);
+            const int sign = type_->findData(static_cast<int>(ResponseType::Sign));
+            if (sign >= 0)
+            {
+                type_->setCurrentIndex(sign);
+            }
+        }
+    });
 
     // Impulse responses: one plot per response, in a grid.
     gridHost_ = new QWidget;
@@ -167,6 +184,24 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     connect(type_, &QComboBox::currentIndexChanged, this, [this]() {
         const auto t = static_cast<ResponseType>(type_->currentData().toInt());
         standardDeviation_->setEnabled(t == ResponseType::Feir || t == ResponseType::Sir);
+        // Under sign restrictions a shock is named for the variable whose
+        // column it is, and only the restricted ones mean anything.
+        for (int v = 0; v < impulse_->count(); ++v)
+        {
+            QString label = support_.variables.value(v);
+            if (t == ResponseType::Sign && support_.sign)
+            {
+                bool restricted = false;
+                for (const SignRestriction &r : support_.sign->restrictions)
+                {
+                    restricted = restricted || r.impulse == v;
+                }
+                label = restricted ? tr("%1 shock (restricted)").arg(label)
+                                   : tr("%1 shock (unrestricted: no interpretation)").arg(label);
+            }
+            impulse_->setItemText(v, label);
+        }
+        period_->setEnabled(t != ResponseType::Sign);
     });
     setModel(QString());
 }
@@ -181,6 +216,9 @@ void StructuralView::setModel(const QString &file)
     {
         w->setEnabled(ok);
     }
+    signButton_->setEnabled(ok && support_.signAllowed);
+    signButton_->setToolTip(ok && !support_.signAllowed ? support_.signRefusal
+                                                        : tr("Identify the shocks by the signs of their responses."));
     if (!ok)
     {
         status_->setText(file.isEmpty() ? tr("Select a model of the project.")
@@ -204,9 +242,16 @@ void StructuralView::setModel(const QString &file)
         {
             type_->addItem(responseTypeName(t), static_cast<int>(t));
         }
+        if (support_.sign)
+        {
+            type_->addItem(responseTypeName(ResponseType::Sign), static_cast<int>(ResponseType::Sign));
+        }
         impulse_->clear();
         response_->clear();
-        impulse_->addItems(support_.variables);
+        for (int v = 0; v < support_.k; ++v)
+        {
+            impulse_->addItem(support_.variables.value(v));
+        }
         response_->addItems(support_.variables);
         period_->setMaximum(std::max(1, support_.periods));
         period_->setValue(std::max(1, support_.periods));
@@ -258,7 +303,7 @@ void StructuralView::compute()
         try
         {
             r.responses = impulseResponses(file, req, impulse);
-            if (req.type == ResponseType::Oir || req.type == ResponseType::Sir)
+            if (req.type == ResponseType::Oir || req.type == ResponseType::Sir || req.type == ResponseType::Sign)
             {
                 r.shares = varianceDecomposition(file, req, response);
             }
@@ -351,14 +396,19 @@ void StructuralView::show(const Result &result)
     fevd_->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
     if (result.shares.empty())
     {
-        fevdNote_->setText(tr("The variance decomposition is shown for orthogonal shocks (oir, sir), whose "
-                              "shares add up to one; choose one of those."));
+        fevdNote_->setText(tr("The variance decomposition is shown for orthogonal shocks (oir, sir, sign "
+                              "restrictions), whose shares add up to one; choose one of those."));
         fevd_->replot();
         return;
     }
-    fevdNote_->setText(tr("Posterior mean share of each %1 shock in the forecast error variance of %2.")
-                           .arg(req.type == ResponseType::Sir ? tr("structural") : tr("orthogonalised"),
-                                response_->currentText()));
+    fevdNote_->setText(tr("Posterior mean share of each %1 shock in the forecast error variance of %2%3.")
+                           .arg(req.type == ResponseType::Sir    ? tr("structural")
+                                : req.type == ResponseType::Sign ? tr("sign-identified")
+                                                                 : tr("orthogonalised"),
+                                response_->currentText(),
+                                req.type == ResponseType::Sign
+                                    ? tr(", over the %1 identified draws").arg(result.shares.size())
+                                    : QString()));
     arma::mat mean(static_cast<arma::uword>(horizons), static_cast<arma::uword>(support_.k), arma::fill::zeros);
     for (const auto &d : result.shares)
     {

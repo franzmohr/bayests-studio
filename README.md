@@ -87,13 +87,35 @@ components it uses.
   decompositions (gir, sgir) are left out until the open question of their
   normalisation in bvartools is settled.
 
+- **Sign restrictions** (Structural analysis › Sign Restrictions…): a table
+  of restrictions -- shock, response, sign, horizon -- and a budget of tries
+  per draw; for every draw a rotation of the Choleski factor is drawn
+  uniformly until the restrictions hold (bvartools'
+  `add_sign_restrictions()`: QR of a normal matrix, R's signs moved into Q,
+  a failing shock retried with its column negated). The identification is
+  written as bvartools writes it -- `/model/sign_restrictions/restrictions`,
+  `/posterior/q/coeffs` -- so R reads it back with the model, and a file
+  bvartools identified opens with its identification. Impulse responses and
+  the variance decomposition then offer "Sign restrictions", over the
+  identified draws, with unrestricted shocks marked as having no
+  interpretation. Seeded from `/model/seed` on a stream of its own.
+
+  Verified in `test/structural_test.cpp`: on bvartools' rotations the
+  studio's responses and decomposition agree with `irf(type = "sign")` and
+  `fevd(type = "sign")` within 6e-15; the studio's own search accepts only
+  orthonormal rotations (|Q'Q - I| ~ 1e-15) with no restriction violated,
+  and its median responses sit within Monte Carlo error of bvartools' (0.08
+  of the 68 % band); and bvartools, reading the studio's identification,
+  reproduces the studio's responses within 5e-15.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted
    models, `VecKlgs2010`, factor models and FAVARs, unobserved components;
    exogenous variables and seasonal dummies; Excel import; an R-side reader
    (`rclass`) so a studio file opens as a bvartools object.
-2. Analysis: sign restrictions, spillover indices, dynamic multipliers,
+2. Analysis: sign and zero restrictions (Arias, Rubio-Ramírez and Waggoner
+   2018), spillover indices, dynamic multipliers,
    historical decompositions, inclusion probabilities, the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
 3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the

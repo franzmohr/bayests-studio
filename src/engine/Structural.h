@@ -3,6 +3,9 @@
 #include <QString>
 #include <QStringList>
 
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <vector>
 
 #include "bayests/arma.h"
@@ -35,6 +38,30 @@ enum class ResponseType
     Gir,
     Sir,
     Sgir,
+    Sign,   ///< chol(Sigma)' Q, Q the rotation /posterior/q/coeffs holds for the draw
+};
+
+/// One sign restriction: the response of `response` to the shock of
+/// `impulse` at `horizon` has the sign of `sign` (+1 or -1). Variables are
+/// 0-based here and 1-based in the file, as bvartools writes them.
+struct SignRestriction
+{
+    int impulse = 0;
+    int response = 0;
+    int sign = 1;
+    int horizon = 0;
+};
+
+/// A sign restricted identification as bvartools' add_sign_restrictions()
+/// stores it: the table under /model/sign_restrictions, the rotations under
+/// /posterior/q/coeffs.
+struct SignIdentification
+{
+    std::vector<SignRestriction> restrictions;
+    int maxTries = 1000;
+    int period = -1;          ///< 1-based, -1 for the last; meaningful where Sigma moves
+    int accepted = 0;         ///< draws a rotation was found for
+    int draws = 0;
 };
 
 QString responseTypeName(ResponseType type);
@@ -62,6 +89,12 @@ struct StructuralSupport
     int periods = 0;
     int k = 0;
     QStringList variables;
+
+    /// Whether the model can be identified by sign restrictions at all, and
+    /// the identification it already carries.
+    bool signAllowed = false;
+    QString signRefusal;
+    std::optional<SignIdentification> sign;
 };
 
 StructuralSupport structuralSupport(const QString &file);
@@ -69,6 +102,21 @@ StructuralSupport structuralSupport(const QString &file);
 /// The names of the endogenous variables in levels: /data/train/y's
 /// `variables`, less the "d." bvartools puts in front of a VEC's differences.
 QStringList levelNames(const QString &file);
+
+/// The identification stored in the file, if any.
+std::optional<SignIdentification> readSignIdentification(const QString &file);
+
+/// Searches a rotation for every draw that satisfies `restrictions` --
+/// bvartools' draw_sign_restricted_q(): Q from the QR decomposition of a
+/// standard normal matrix, the signs of R's diagonal moved into Q so the draw
+/// is uniform on the orthogonal group, and a restricted shock that fails
+/// tried again with its column negated -- and writes the result in bvartools'
+/// layout, replacing an earlier identification. Draws without an admissible
+/// rotation within `maxTries` are NaN, as there. `progress(done, total)`
+/// returning false cancels and writes nothing. Returns the identification
+/// written.
+SignIdentification identifySigns(const QString &file, const SignIdentification &spec, std::uint64_t seed,
+                                 const std::function<bool(int, int)> &progress = {});
 
 /// Responses of every variable to a shock in `impulse`: draws[d] is
 /// (horizon + 1) x k, rows horizons and columns responses.

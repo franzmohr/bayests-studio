@@ -6,13 +6,17 @@
 // <dir> is what test/structural_reference.R writes. Every response draw has to
 // agree with bvartools' to rounding, and the posterior mean decomposition too.
 
+#include "engine/ModelFileTree.h"
 #include "engine/Structural.h"
 
+#include <QDir>
 #include <QFile>
+#include <QTemporaryDir>
 #include <QString>
 #include <QStringList>
 #include <QTextStream>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -85,7 +89,7 @@ void compareIrf(const QString &dir, const QString &model, ResponseType type, con
     ResponseRequest request;
     request.type = type;
     request.horizon = static_cast<int>(reference.n_cols) - 1;
-    request.maxDraws = static_cast<int>(reference.n_rows);
+    request.maxDraws = 1 << 30;   // every draw; unidentified ones drop out on both sides
     const auto draws = impulseResponses(file, request, indexOf(support, impulse));
     const auto j = static_cast<arma::uword>(indexOf(support, response));
     double worst = 0.0;
@@ -129,6 +133,96 @@ void compareFevd(const QString &dir, const QString &model, ResponseType type, co
     failures += ok ? 0 : 1;
 }
 
+/// The studio's own rotation search on the VAR bvartools estimated: every
+/// accepted rotation orthonormal and satisfying every restriction, and the
+/// identified responses distributed as bvartools' -- both draw uniformly on
+/// the orthogonal group, so their medians agree up to Monte Carlo error.
+void ownIdentification(const QString &dir)
+{
+    QTemporaryDir tmp;
+    const QString file = tmp.filePath(QStringLiteral("var2.h5"));
+    QFile::copy(dir + "/var2.h5", file);
+    QFile::setPermissions(file, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    const StructuralSupport support = structuralSupport(file);
+    const int income = indexOf(support, "income");
+    const int cons = indexOf(support, "cons");
+
+    SignIdentification spec;
+    spec.restrictions = {{income, income, 1, 0}, {income, cons, 1, 0}, {cons, cons, 1, 0}};
+    spec.maxTries = 500;
+    const SignIdentification done = identifySigns(file, spec, 20261011ULL);
+
+    const auto stored = readSignIdentification(file);
+    if (!stored || stored->restrictions.size() != 3 || stored->accepted != done.accepted)
+    {
+        std::printf("FAIL  the identification does not read back as written\n");
+        ++failures;
+        return;
+    }
+
+    // Every identified draw: Q orthonormal, impact responses of the right sign.
+    ResponseRequest request;
+    request.type = ResponseType::Sign;
+    request.horizon = 8;
+    request.maxDraws = 1 << 30;
+    const auto toIncome = impulseResponses(file, request, income);
+    const auto toCons = impulseResponses(file, request, cons);
+    int violations = 0;
+    for (std::size_t d = 0; d < toIncome.size(); ++d)
+    {
+        violations += toIncome[d](0, income) > 0 ? 0 : 1;
+        violations += toIncome[d](0, cons) > 0 ? 0 : 1;
+        violations += toCons[d](0, cons) > 0 ? 0 : 1;
+    }
+    const Matrix q = readMatrix(file, QStringLiteral("/posterior/q/coeffs"));
+    double worstOrthogonality = 0.0;
+    const auto k = static_cast<arma::uword>(support.k);
+    for (std::size_t d = 0; d < q.cols; ++d)
+    {
+        if (std::isnan(q.at(0, d)))
+        {
+            continue;
+        }
+        arma::mat Q(k, k);
+        for (std::size_t i = 0; i < k * k; ++i)
+        {
+            Q(i % k, i / k) = q.at(i, d);
+        }
+        worstOrthogonality = std::max(worstOrthogonality, arma::abs(Q.t() * Q - arma::eye(k, k)).max());
+    }
+
+    // Medians against bvartools', relative to the width of the 68% band.
+    const arma::mat reference = readCsv(dir + "/sign_irf_sign_income_cons.csv");
+    double worstGap = 0.0;
+    for (int h = 0; h <= 8; ++h)
+    {
+        std::vector<double> ours, theirs;
+        for (const auto &m : toIncome)
+        {
+            ours.push_back(m(static_cast<arma::uword>(h), static_cast<arma::uword>(cons)));
+        }
+        for (arma::uword d = 0; d < reference.n_rows; ++d)
+        {
+            theirs.push_back(reference(d, static_cast<arma::uword>(h)));
+        }
+        std::sort(ours.begin(), ours.end());
+        std::sort(theirs.begin(), theirs.end());
+        const auto q = [](const std::vector<double> &v, double p) { return v[static_cast<std::size_t>(p * (v.size() - 1))]; };
+        const double width = std::max(q(theirs, 0.84) - q(theirs, 0.16), 1e-12);
+        worstGap = std::max(worstGap, std::abs(q(ours, 0.5) - q(theirs, 0.5)) / width);
+    }
+    const bool ok = done.accepted > 0 && violations == 0 && worstOrthogonality < 1e-10 && worstGap < 0.25;
+    std::printf("%s  own identification: %d of %d draws, %d violations, |Q'Q - I| %.1e, "
+                "median gap to bvartools %.3f of the 68%% band\n",
+                ok ? "ok  " : "FAIL", done.accepted, done.draws, violations, worstOrthogonality, worstGap);
+    failures += ok ? 0 : 1;
+
+    // Kept for the R side of the round trip (test/structural_reference.R
+    // does not need it; a reader can open it in bvartools).
+    QFile::remove(dir + "/studio_sign.h5");
+    QFile::copy(file, dir + "/studio_sign.h5");
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -145,6 +239,9 @@ int main(int argc, char *argv[])
         compareIrf(dir, "var2", ResponseType::Oir, "oir", "income", "cons");
         compareIrf(dir, "var2", ResponseType::Gir, "gir", "invest", "income");
         compareFevd(dir, "var2", ResponseType::Oir, "oir", "cons");
+        compareIrf(dir, "sign", ResponseType::Sign, "sign", "income", "cons");
+        compareIrf(dir, "sign", ResponseType::Sign, "sign", "cons", "invest");
+        compareFevd(dir, "sign", ResponseType::Sign, "sign", "cons");
         compareIrf(dir, "svar", ResponseType::Sir, "sir", "invest", "cons");
         compareIrf(dir, "svar", ResponseType::Sgir, "sgir", "income", "invest");
         compareFevd(dir, "svar", ResponseType::Sir, "sir", "cons");
@@ -152,6 +249,15 @@ int main(int argc, char *argv[])
         compareFevd(dir, "vec", ResponseType::Oir, "oir", "Dp");
         compareIrf(dir, "tvp", ResponseType::Oir, "oir", "income", "cons");
         compareFevd(dir, "tvp", ResponseType::Oir, "oir", "cons");
+        ownIdentification(dir);
+        // The round trip: bvartools reading the studio's identification. The
+        // CSVs come from bvartools on studio_sign.h5, which the line above
+        // writes; present only once that has been run.
+        if (QFile::exists(dir + "/studio_sign_irf_sign_income_cons.csv"))
+        {
+            compareIrf(dir, "studio_sign", ResponseType::Sign, "sign", "income", "cons");
+            compareFevd(dir, "studio_sign", ResponseType::Sign, "sign", "cons");
+        }
     }
     catch (const std::exception &e)
     {

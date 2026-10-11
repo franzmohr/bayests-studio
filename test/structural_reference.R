@@ -52,6 +52,17 @@ save_case("var2", var2,
                list(type = "gir", impulse = "invest", response = "income")),
           "oir")
 
+# The same VAR identified by sign restrictions: an income shock raises income
+# and consumption on impact, a consumption shock raises consumption.
+sign <- add_sign_restrictions(var2, data.frame(impulse = c("income", "income", "cons"),
+                                               response = c("income", "cons", "cons"),
+                                               sign = c(1, 1, 1), horizon = c(0, 0, 0)),
+                              max_tries = 500)
+save_case("sign", sign,
+          list(list(type = "sign", impulse = "income", response = "cons"),
+               list(type = "sign", impulse = "cons", response = "invest")),
+          "sign")
+
 # A structural VAR with gamma errors.
 svar <- create_bvarmodel(e1, p = 2, deterministic = "const", structural = TRUE, error = "gamma",
                          iterations = 1000, burnin = 500)

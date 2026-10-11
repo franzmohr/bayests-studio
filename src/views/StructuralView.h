@@ -8,6 +8,7 @@
 #include "engine/Structural.h"
 
 class QCheckBox;
+class QPushButton;
 class QComboBox;
 class QGridLayout;
 class QLabel;
@@ -65,6 +66,7 @@ private:
     QLabel *periodLabel_;
     QCheckBox *cumulative_;
     QCheckBox *standardDeviation_;
+    QPushButton *signButton_;
     QTabWidget *tabs_;
     QWidget *gridHost_;
     QGridLayout *grid_;

@@ -99,6 +99,7 @@ CheckReport ModelRunner::check(const QString &file, const QString &group)
         report.rank = spec.rank;
         report.kBeta = spec.k_beta;
         report.structural = spec.structural;
+        report.errorSpec = QString::fromStdString(result.error_attribute);
         report.factors = spec.n_factors;
         report.horizon = spec.h;
         report.iterations = spec.iterations;

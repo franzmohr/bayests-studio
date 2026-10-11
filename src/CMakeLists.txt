@@ -49,6 +49,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/PlotStyle.h
     views/SeriesPlot.cpp
     views/SeriesPlot.h
+    views/SignDialog.cpp
+    views/SignDialog.h
     views/StagePages.cpp
     views/StructuralView.cpp
     views/StructuralView.h
