@@ -54,6 +54,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/BuilderDialog.h
     views/DiagnosticsView.cpp
     views/DiagnosticsView.h
+    views/FigureExport.cpp
+    views/FigureExport.h
     views/HistoricalDecompositionView.cpp
     views/HistoricalDecompositionView.h
     views/InclusionView.cpp

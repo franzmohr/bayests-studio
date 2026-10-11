@@ -247,6 +247,18 @@ components it uses.
   `test/table_test.cpp` reads the CSV back cell for cell and compiles the
   LaTeX with pdflatex where one is on PATH.
 
+- **Figure export**: every figure -- impulse responses, the variance
+  decomposition, spillovers, multipliers, the historical decomposition, the
+  summary plot, the time-varying bands, traces and the data and forecast
+  plots -- has a right-click menu, and the analysis views an Export Figure
+  button: Copy Figure (an image for a document), Save Figure As… PDF
+  (vector, for `\includegraphics`), SVG or PNG at a chosen resolution, and
+  for a grid Save This Panel As…. A grid exports whole, with its title, row
+  and column labels. A figure is drawn 16 cm wide by default -- a LaTeX
+  article's text width -- with 9 pt text, in black on white whatever the
+  application's theme. Numbers everywhere, on screen too, now use a
+  decimal point and no group separator, as the tables and R do.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted
@@ -255,7 +267,7 @@ components it uses.
    file opens as a bvartools object.
 2. Analysis: the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
-3. Export: figures (SVG, PDF, PNG) and a script reproducing the session.
+3. Export: a script reproducing the session.
 4. Packaging: signed installers per platform (Windows MSI, macOS notarised
    DMG, Linux AppImage), licence activation.
 

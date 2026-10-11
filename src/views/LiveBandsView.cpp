@@ -2,6 +2,7 @@
 
 #include "engine/ModelFileTree.h"
 #include "engine/QtReporter.h"
+#include "views/FigureExport.h"
 #include "views/PlotStyle.h"
 
 #include <QHBoxLayout>
@@ -64,6 +65,10 @@ LiveBandsView::LiveBandsView(QtReporter *reporter, QWidget *parent)
 
     plot_ = new QwtPlot;
     styleAxes(plot_, tr("Period"), tr("Coefficient"));
+    attachFigureExport(plot_, [this]() {
+        return singleFigure(plot_, tr("Time-varying coefficient %1").arg(row_->currentText()),
+                            QStringLiteral("tvp-%1").arg(row_->currentText()));
+    });
     band90_ = band(seriesColor(0, 50));
     band68_ = band(seriesColor(0, 95));
     band90_->attach(plot_);

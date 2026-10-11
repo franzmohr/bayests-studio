@@ -93,6 +93,21 @@ MultipliersView::MultipliersView(QWidget *parent) : QWidget(parent)
     controls->addSpacing(12);
     controls->addWidget(cumulative_);
     controls->addStretch(1);
+    figure_ = [this]() {
+        FigureSpec spec;
+        const MultiplierRequest req = request();
+        spec.title = tr("Dynamic multipliers of a %1 change in %2")
+                         .arg(req.permanent ? tr("permanent") : tr("transitory"), impulse_->currentText());
+        spec.subtitle = tr("Median, 68% and 90% bands%1").arg(req.cumulative ? tr(", cumulative") : QString());
+        spec.columns = columns_;
+        for (QwtPlot *p : plots_)
+        {
+            spec.cells.push_back({p, {}});
+        }
+        spec.name = QStringLiteral("multipliers-%1").arg(impulse_->currentText());
+        return spec;
+    };
+    controls->addWidget(figureExportButton(figure_));
 
     gridHost_ = new QWidget;
     grid_ = new QGridLayout(gridHost_);
@@ -222,9 +237,11 @@ void MultipliersView::rebuildGrid()
     plots_.clear();
     const int k = support_.ok ? support_.k : 0;
     const int columns = k <= 4 ? std::max(1, std::min(k, 2)) : 3;
+    columns_ = columns;
     for (int i = 0; i < k; ++i)
     {
         auto *plot = new QwtPlot;
+        attachFigureExport(plot, figure_);
         plot->setMinimumHeight(220);
         styleAxes(plot, tr("Horizon"), QString());
         QwtText title(support_.variables.value(i));

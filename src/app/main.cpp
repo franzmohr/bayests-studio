@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 #include "app/Theme.h"
 #include "views/BuilderDialog.h"
+#include "views/FigureExport.h"
 #include "views/TableExport.h"
 
 #include <QAbstractButton>
@@ -12,7 +13,10 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QComboBox>
+
+#include <cstdio>
 #include <QFile>
+#include <QLocale>
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QKeyEvent>
@@ -46,6 +50,11 @@ int main(int argc, char *argv[])
     }
 
     QApplication app(argc, argv);
+    // Numbers as R, the tables and a LaTeX document write them -- a decimal
+    // point and no group separator -- whatever the system's locale: the axis
+    // labels would otherwise read "0,6" and "1 970" beside tables that read
+    // "0.6", and so would every exported figure.
+    QLocale::setDefault(QLocale::c());
     QApplication::setOrganizationName(QStringLiteral("Franz X. Mohr"));
     QApplication::setOrganizationDomain(QStringLiteral("franzmohr.github.io"));
     QApplication::setApplicationName(QStringLiteral("BayesTS Studio"));
@@ -254,6 +263,29 @@ int main(int argc, char *argv[])
                             settle(qgetenv("STUDIO_SMOKE_SIGN") == "zero" ? 6000 : 3000);
                             window.grab().save(QStringLiteral("%1-sign.png").arg(QString::fromLocal8Bit(prefix)));
                             break;
+                        }
+                    }
+                }
+            }
+            // STUDIO_SMOKE_FIGURES=<directory>: every view's figure as PDF,
+            // SVG and PNG, as its Export Figure button writes it.
+            if (const QByteArray dir = qgetenv("STUDIO_SMOKE_FIGURES"); !dir.isEmpty())
+            {
+                int n = 0;
+                for (const studio::FigureSpec &spec : studio::figureSources(&window))
+                {
+                    double w = 0.0, h = 0.0;
+                    studio::defaultFigureSize(spec, w, h);
+                    ++n;
+                    for (const char *ext : {"pdf", "svg", "png"})
+                    {
+                        QString error;
+                        const QString path = QStringLiteral("%1/%2-%3.%4")
+                                                 .arg(QString::fromLocal8Bit(dir)).arg(n).arg(spec.name).arg(ext);
+                        if (!studio::writeFigure(spec, path, w, h, 200, &error))
+                        {
+                            std::fprintf(stderr, "figure %s: %s\n", path.toLocal8Bit().constData(),
+                                         error.toLocal8Bit().constData());
                         }
                     }
                 }

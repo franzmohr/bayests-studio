@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "engine/CoefficientSummary.h"
+#include "views/FigureExport.h"
 
 class QComboBox;
 class QDoubleSpinBox;
@@ -52,6 +53,7 @@ private:
     QLabel *title_;
     QWidget *gridHost_;
     QGridLayout *grid_;
+    FigureSpec figure_;   // the page shown
 };
 
 } // namespace studio

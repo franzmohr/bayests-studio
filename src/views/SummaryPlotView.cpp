@@ -260,6 +260,7 @@ SummaryPlotView::SummaryPlotView(QWidget *parent) : QWidget(parent)
     controls->addWidget(new QLabel(tr("Band")));
     controls->addWidget(ci_);
     controls->addStretch(1);
+    controls->addWidget(figureExportButton([this]() { return figure_; }));
 
     title_ = new QLabel;
     title_->setAlignment(Qt::AlignCenter);
@@ -386,6 +387,7 @@ void SummaryPlotView::showPage()
         delete item;
     }
     title_->clear();
+    figure_ = FigureSpec{};   // its plots were just deleted
     if (!summary_ || page_->currentIndex() < 0)
     {
         return;
@@ -402,11 +404,19 @@ void SummaryPlotView::showPage()
     const int count = base + (at.y() < extra ? 1 : 0);
 
     title_->setText(QStringLiteral("%1\n%2").arg(summary_->title, page_->currentText()));
+    figure_ = FigureSpec{};
+    figure_.title = summary_->title;
+    figure_.subtitle = page_->currentText();
+    figure_.columns = count;
+    figure_.rowLabels = summary_->equations;
+    figure_.name = QStringLiteral("summary-%1").arg(page_->currentText());
+    figure_.cells.resize(static_cast<std::size_t>(k * count));
     const auto type = static_cast<PanelType>(type_->currentData().toInt());
     bool anyDraws = false;
     for (int c = 0; c < count; ++c)
     {
         grid_->addWidget(headerLabel(block.columns.value(first + c)), 0, c + 1);
+        figure_.columnLabels << block.columns.value(first + c);
     }
     for (int i = 0; i < k; ++i)
     {
@@ -420,6 +430,7 @@ void SummaryPlotView::showPage()
                 value->setAlignment(Qt::AlignCenter);
                 value->setMinimumSize(150, 120);
                 grid_->addWidget(value, i + 1, c + 1);
+                figure_.cells[static_cast<std::size_t>(i * count + c)].text = value->text();
                 continue;
             }
             QwtPlot *plot = smallPlot();
@@ -439,6 +450,8 @@ void SummaryPlotView::showPage()
             }
             plot->replot();
             grid_->addWidget(plot, i + 1, c + 1);
+            figure_.cells[static_cast<std::size_t>(i * count + c)].plot = plot;
+            attachFigureExport(plot, [this]() { return figure_; });
         }
     }
     for (int c = 1; c <= count; ++c)

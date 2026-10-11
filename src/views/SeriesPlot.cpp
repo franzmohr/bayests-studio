@@ -1,5 +1,6 @@
 #include "views/SeriesPlot.h"
 
+#include "views/FigureExport.h"
 #include "views/PlotStyle.h"
 
 #include <QPen>
@@ -35,6 +36,7 @@ SeriesPlot::SeriesPlot(const QString &xTitle, const QString &yTitle, QWidget *pa
     plot_ = new QwtPlot;
     styleAxes(plot_, xTitle, yTitle);
     plot_->insertLegend(new QwtLegend, QwtPlot::BottomLegend);
+    attachFigureExport(plot_, [this, yTitle]() { return singleFigure(plot_, title_, title_.isEmpty() ? yTitle : title_); });
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(plot_);

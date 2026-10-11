@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "engine/Multipliers.h"
+#include "views/FigureExport.h"
 
 class QCheckBox;
 class QComboBox;
@@ -63,6 +64,8 @@ private:
     QWidget *gridHost_;
     QGridLayout *grid_;
     std::vector<QwtPlot *> plots_;
+    int columns_ = 1;
+    FigureProvider figure_;
 };
 
 } // namespace studio

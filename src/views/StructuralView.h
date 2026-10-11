@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "engine/Structural.h"
+#include "views/FigureExport.h"
 
 class QCheckBox;
 class QPushButton;
@@ -77,6 +78,8 @@ private:
     std::vector<QwtPlot *> plots_;
     QwtPlot *fevd_;
     QLabel *fevdNote_;
+    int columns_ = 1;
+    FigureProvider figure_;
 };
 
 } // namespace studio

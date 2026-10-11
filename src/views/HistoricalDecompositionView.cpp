@@ -1,6 +1,7 @@
 #include "views/HistoricalDecompositionView.h"
 
 #include "engine/ModelFileTree.h"
+#include "views/FigureExport.h"
 #include "views/PlotStyle.h"
 
 #include <QCheckBox>
@@ -91,6 +92,14 @@ HistoricalDecompositionView::HistoricalDecompositionView(QWidget *parent) : QWid
 
     plot_ = new QwtPlot;
     plot_->setObjectName(QStringLiteral("hdPlot"));
+    const FigureProvider figure = [this]() {
+        FigureSpec spec = singleFigure(plot_, tr("Historical decomposition of %1").arg(response_->currentText()),
+                                       QStringLiteral("hd-%1").arg(response_->currentText()));
+        spec.subtitle = tr("%1, %2 contributions").arg(type_->currentText(), statistic_->currentText().toLower());
+        return spec;
+    };
+    controls->addWidget(figureExportButton(figure));
+    attachFigureExport(plot_, figure);
     styleAxes(plot_, tr("Period"), QString());
     plot_->insertLegend(new QwtLegend, QwtPlot::RightLegend);
 

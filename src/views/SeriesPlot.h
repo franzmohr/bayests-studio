@@ -34,8 +34,12 @@ public:
 
     void replot();
 
+    /// The title an exported figure carries.
+    void setExportTitle(const QString &title) { title_ = title; }
+
 private:
     QwtPlot *plot_;
+    QString title_;
 };
 
 /// Quantile of a sorted sample, linear between order statistics.

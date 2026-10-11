@@ -1,6 +1,7 @@
 #include "views/SpilloverView.h"
 
 #include "engine/ModelFileTree.h"
+#include "views/FigureExport.h"
 #include "views/PlotStyle.h"
 #include "views/SeriesPlot.h"
 #include "views/TableExport.h"
@@ -195,6 +196,18 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
                             "that transmits more forecast error variance than it receives.")));
     bars_ = new QwtPlot;
     styleAxes(bars_, QString(), tr("Percent"));
+    {
+        const FigureProvider figure = [this]() {
+            FigureSpec spec = singleFigure(bars_, measure_->currentText().section(QLatin1Char(':'), 0, 0) +
+                                                      tr(" spillovers"),
+                                           QStringLiteral("spillovers-directional"));
+            spec.subtitle = tr("Median and 90% credible interval");
+            spec.heightMm = 80.0;
+            return spec;
+        };
+        pick->addWidget(figureExportButton(figure));
+        attachFigureExport(bars_, figure);
+    }
     bl->addWidget(bars_, 1);
     connect(measure_, &QComboBox::currentIndexChanged, this, &SpilloverView::showDirectional);
 
@@ -223,6 +236,19 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     path_ = new QwtPlot;
     styleAxes(path_, tr("Period"), tr("Total spillover index, percent"));
     path_->insertLegend(new QwtLegend, QwtPlot::BottomLegend);
+    {
+        const FigureProvider figure = [this]() {
+            FigureSpec spec = singleFigure(path_, tr("Total spillover index"), QStringLiteral("spillover-index"));
+            spec.subtitle = tr("Median, 68% and 90% bands");
+            spec.heightMm = 80.0;
+            return spec;
+        };
+        auto *row = new QHBoxLayout;
+        row->addStretch(1);
+        row->addWidget(figureExportButton(figure));
+        ol->addLayout(row);
+        attachFigureExport(path_, figure);
+    }
     ol->addWidget(path_, 1);
 
     tabs_ = new QTabWidget;

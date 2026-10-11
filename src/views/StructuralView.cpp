@@ -1,6 +1,7 @@
 #include "views/StructuralView.h"
 
 #include "engine/ModelFileTree.h"
+#include "views/FigureExport.h"
 #include "views/PlotStyle.h"
 #include "views/SeriesPlot.h"
 #include "views/SignDialog.h"
@@ -106,6 +107,29 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     controls->addStretch(1);
     signButton_ = new QPushButton(tr("Sign Restrictions…"));
     controls->addWidget(signButton_);
+    // The figure of the tab shown: the responses, or the decomposition.
+    const FigureProvider figure = [this]() {
+        FigureSpec spec;
+        const ResponseRequest req = request();
+        if (tabs_->currentIndex() == 1)
+        {
+            spec = singleFigure(fevd_, tr("Forecast error variance decomposition of %1").arg(response_->currentText()),
+                                QStringLiteral("fevd-%1").arg(response_->currentText()));
+            spec.subtitle = fevdNote_->text();
+            return spec;
+        }
+        spec.title = tr("Responses to %1: %2").arg(impulse_->currentText(), responseTypeName(req.type).toLower());
+        spec.subtitle = tr("Median, 68% and 90% bands%1").arg(req.cumulative ? tr(", cumulative") : QString());
+        spec.columns = columns_;
+        for (QwtPlot *p : plots_)
+        {
+            spec.cells.push_back({p, {}});
+        }
+        spec.name = QStringLiteral("irf-%1-%2").arg(responseTypeName(req.type), impulse_->currentText());
+        return spec;
+    };
+    controls->addWidget(figureExportButton(figure));
+    figure_ = figure;
     connect(signButton_, &QPushButton::clicked, this, [this]() {
         SignDialog dialog(file_, support_, this);
         if (dialog.exec() == QDialog::Accepted)
@@ -156,6 +180,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     tabs_->addTab(scroll, tr("Impulse responses"));
     tabs_->addTab(fevdPage, tr("Variance decomposition"));
     tabs_->setObjectName(QStringLiteral("structuralTabs"));
+    attachFigureExport(fevd_, figure_);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 8, 0, 0);
@@ -337,9 +362,11 @@ void StructuralView::rebuildGrid(int k)
     }
     plots_.clear();
     const int columns = k <= 4 ? std::max(1, std::min(k, 2)) : 3;
+    columns_ = columns;
     for (int i = 0; i < k; ++i)
     {
         auto *plot = new QwtPlot;
+        attachFigureExport(plot, figure_);
         plot->setMinimumHeight(220);
         styleAxes(plot, tr("Horizon"), QString());
         QwtText title(support_.variables.value(i));

@@ -1,5 +1,6 @@
 #include "views/DiagnosticsView.h"
 
+#include "views/FigureExport.h"
 #include "views/PlotStyle.h"
 
 #include <QComboBox>
@@ -61,6 +62,18 @@ DiagnosticsView::DiagnosticsView(QWidget *parent) : QWidget(parent)
     styleAxes(density_, tr("Value"), tr("Share of draws"));
     trace_->setTitle(tr("Trace"));
     density_->setTitle(tr("Marginal posterior"));
+    // Both panels side by side, as the view shows them.
+    const FigureProvider figure = [this]() {
+        FigureSpec spec;
+        spec.title = row_->currentText();
+        spec.columns = 2;
+        spec.cells = {{trace_, {}}, {density_, {}}};
+        spec.name = QStringLiteral("draws-%1").arg(row_->currentText());
+        spec.heightMm = 65.0;
+        return spec;
+    };
+    attachFigureExport(trace_, figure);
+    attachFigureExport(density_, figure);
 
     traceCurve_ = new QwtPlotCurve;
     traceCurve_->setPen(seriesColor(0), 1.0);
