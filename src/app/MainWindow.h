@@ -62,6 +62,9 @@ public:
     void importFrom(const QString &file);
     /// Adds a model file the builder wrote to the project and selects it.
     void addCreatedModel(const QString &file);
+    /// Adds a model derived from the selected one -- a sign and zero
+    /// identification's resample -- and opens its structural analysis.
+    void addDerivedModel(const QString &file);
     const DataSet &workingData() const { return data_; }
 
 private:

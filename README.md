@@ -108,14 +108,40 @@ components it uses.
   of the 68 % band); and bvartools, reading the studio's identification,
   reproduces the studio's responses within 5e-15.
 
+- **Sign and zero restrictions** (the same dialog, with a sign of "0 zero"
+  and a horizon of "long run"): Arias, Rubio-Ramírez and Waggoner (2018) as
+  bvartools' `add_sign_zero_restrictions()` implements it -- each draw's
+  rotation built column by column on the null space of its zero
+  restrictions (Algorithm 2), weighted by the ratio of the closed-form and
+  the numerically differentiated volume elements (Algorithm 3), the weights
+  Pareto smoothed (Vehtari et al. 2024), more tries per draw with the
+  Girshick–Mosteller–Savage estimate of the acceptance probability, and the
+  posterior resampled by the weights. The dialog reports the accepted draws,
+  the effective sample size and the Pareto shape, and bvartools' warnings
+  where the importance sample is unreliable. **The resample is written to a
+  new model file** beside the original, whose chain is left as it was, in
+  bvartools' layout (`/model/sign_zero_restrictions`, plus
+  `/model/sign_restrictions` and `/posterior/q/coeffs` for the responses);
+  the new model joins the project and opens on its identification.
+
+  Verified in `test/structural_test.cpp` against bvartools
+  (`test/signzero_reference.R`): the Pareto smoother exactly (7e-14, the
+  shape to 1e-10); responses and decompositions from bvartools' sign and
+  zero rotations exactly (4e-15); under signs alone the two volume elements
+  cancel to 1e-9, which checks the numerical one by an independent route;
+  the studio's own identification of bvartools' example accepts 200 of 1000
+  draws (bvartools 216) with an effective sample size of 167 (181), Pareto
+  k -0.07 (-0.10), its zero restriction exact to 4e-16 and no sign violated,
+  responses within Monte Carlo error; and bvartools, reading the studio's
+  file, reproduces its responses within 2e-15.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted
    models, `VecKlgs2010`, factor models and FAVARs, unobserved components;
    exogenous variables and seasonal dummies; Excel import; an R-side reader
    (`rclass`) so a studio file opens as a bvartools object.
-2. Analysis: sign and zero restrictions (Arias, Rubio-Ramírez and Waggoner
-   2018), spillover indices, dynamic multipliers,
+2. Analysis: spillover indices, dynamic multipliers,
    historical decompositions, inclusion probabilities, the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
 3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the

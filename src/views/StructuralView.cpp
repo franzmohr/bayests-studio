@@ -71,6 +71,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     status_ = subtle();
 
     type_ = new QComboBox;
+    type_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     impulse_ = new QComboBox;
     impulse_->setMinimumContentsLength(10);
     impulse_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
@@ -107,6 +108,11 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
         SignDialog dialog(file_, support_, this);
         if (dialog.exec() == QDialog::Accepted)
         {
+            if (!dialog.createdFile().isEmpty())
+            {
+                emit modelCreated(dialog.createdFile());
+                return;
+            }
             setModel(file_);
             const int sign = type_->findData(static_cast<int>(ResponseType::Sign));
             if (sign >= 0)
@@ -255,6 +261,10 @@ void StructuralView::setModel(const QString &file)
         response_->addItems(support_.variables);
         period_->setMaximum(std::max(1, support_.periods));
         period_->setValue(std::max(1, support_.periods));
+    }
+    if (support_.sign)
+    {
+        type_->setCurrentIndex(type_->findData(static_cast<int>(ResponseType::Sign)));
     }
     period_->setVisible(support_.moving);
     periodLabel_->setVisible(support_.moving);

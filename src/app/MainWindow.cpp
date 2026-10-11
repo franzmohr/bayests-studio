@@ -249,6 +249,7 @@ void MainWindow::buildLayout()
         connect(page, &StagePage::runRequested, this, &MainWindow::run);
         connect(page, &StagePage::importRequested, this, &MainWindow::importData);
         connect(page, &StagePage::newModelRequested, this, &MainWindow::newModel);
+        connect(page, &StagePage::modelCreated, this, &MainWindow::addDerivedModel);
     }
     connect(stages_, &QListWidget::currentRowChanged, pagesStack_, &QStackedWidget::setCurrentIndex);
 
@@ -541,6 +542,13 @@ void MainWindow::addCreatedModel(const QString &created)
     }
     selectModel(info.absoluteFilePath());
     showStage(StageId::Posterior);
+}
+
+void MainWindow::addDerivedModel(const QString &file)
+{
+    addCreatedModel(file);
+    showStage(StageId::Application);
+    static_cast<ApplicationPage *>(pages_[static_cast<std::size_t>(StageId::Application)])->showStructural();
 }
 
 void MainWindow::showAbout()

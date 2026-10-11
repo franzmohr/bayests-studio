@@ -7,6 +7,7 @@
 // agree with bvartools' to rounding, and the posterior mean decomposition too.
 
 #include "engine/ModelFileTree.h"
+#include "engine/SignZero.h"
 #include "engine/Structural.h"
 
 #include <QDir>
@@ -18,6 +19,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
+#include <limits>
 #include <cstdio>
 
 using namespace studio;
@@ -223,6 +226,154 @@ void ownIdentification(const QString &dir)
     QFile::copy(file, dir + "/studio_sign.h5");
 }
 
+/// Sign and zero restrictions (Arias, Rubio-Ramírez and Waggoner 2018), held
+/// to bvartools four ways: the Pareto smoother exactly, responses from
+/// bvartools' rotations exactly, the volume element by the identity it must
+/// satisfy, and the studio's own identification within Monte Carlo error.
+void signZeroChecks(const QString &dir)
+{
+    if (!QFile::exists(dir + "/psis.csv"))
+    {
+        std::printf("skip  sign and zero restrictions: run test/signzero_reference.R first\n");
+        return;
+    }
+
+    // 1. The smoother, on the same log weights.
+    {
+        const arma::mat psis = readCsv(dir + "/psis.csv");
+        const double referenceK = readCsv(dir + "/psis_k.csv")(0, 0);
+        std::vector<double> lw(psis.n_rows);
+        for (arma::uword i = 0; i < psis.n_rows; ++i)
+        {
+            lw[i] = psis(i, 0);
+        }
+        double k = 0.0;
+        const std::vector<double> smoothed = psisSmooth(lw, k);
+        double worst = 0.0;
+        for (arma::uword i = 0; i < psis.n_rows; ++i)
+        {
+            worst = std::max(worst, std::abs(smoothed[i] - psis(i, 1)));
+        }
+        const bool ok = worst < 1e-10 && std::abs(k - referenceK) < 1e-10;
+        std::printf("%s  Pareto smoothing: max difference %.2e, k %.6f against %.6f\n", ok ? "ok  " : "FAIL", worst,
+                    k, referenceK);
+        failures += ok ? 0 : 1;
+    }
+
+    // 2. Responses from bvartools' own sign and zero rotations.
+    compareIrf(dir, "signzero", ResponseType::Sign, "sign", "invest", "income");
+    compareIrf(dir, "signzero", ResponseType::Sign, "sign", "invest", "cons");
+    compareIrf(dir, "signzero", ResponseType::Sign, "sign", "income", "cons");
+    compareFevd(dir, "signzero", ResponseType::Sign, "sign", "cons");
+
+    const QString var2 = dir + "/var2.h5";
+    const StructuralSupport support = structuralSupport(var2);
+    const int invest = indexOf(support, "invest");
+    const int income = indexOf(support, "income");
+    const int cons = indexOf(support, "cons");
+
+    // 3. With signs alone the two volume elements -- one in closed form, one
+    // by numerical differentiation of Algorithm 2 read backwards -- cancel:
+    // every weight is the same up to the derivative's rounding.
+    {
+        const std::vector<ZeroSignRestriction> signsOnly = {{income, income, 1, 0.0}, {income, cons, 1, 0.0}};
+        const std::vector<double> lw = signZeroLogWeights(var2, signsOnly, 7, 150);
+        double lo = std::numeric_limits<double>::infinity(), hi = -lo;
+        int finite = 0;
+        for (const double v : lw)
+        {
+            if (std::isfinite(v))
+            {
+                lo = std::min(lo, v);
+                hi = std::max(hi, v);
+                ++finite;
+            }
+        }
+        const bool ok = finite > 20 && hi - lo < 1e-5;
+        std::printf("%s  volume elements cancel under signs alone: %d draws, log weights within %.2e\n",
+                    ok ? "ok  " : "FAIL", finite, hi - lo);
+        failures += ok ? 0 : 1;
+    }
+
+    // 4. The studio's own identification, as bvartools' was made.
+    {
+        QTemporaryDir tmp;
+        const QString output = dir + "/studio_signzero.h5";
+        SignZeroSpec spec;
+        spec.restrictions = {{invest, invest, 1, 0.0}, {invest, income, 0, 0.0}, {income, income, 1, 0.0},
+                             {income, cons, 1, 0.0}};
+        spec.draws = 1000;
+        const SignZeroResult res = identifySignZero(var2, output, spec, 20261012ULL);
+        const arma::mat summary = readCsv(dir + "/signzero_summary.csv");
+        const double theirAccepted = summary(0, 0);
+        const double theirEffective = summary(0, 1);
+
+        ResponseRequest request;
+        request.type = ResponseType::Sign;
+        request.horizon = 8;
+        request.maxDraws = 1 << 30;
+        const auto toInvest = impulseResponses(output, request, invest);
+        const auto toIncome = impulseResponses(output, request, income);
+        double worstZero = 0.0;
+        int violations = 0;
+        for (std::size_t d = 0; d < toInvest.size(); ++d)
+        {
+            worstZero = std::max(worstZero, std::abs(toInvest[d](0, static_cast<arma::uword>(income))));
+            violations += toInvest[d](0, static_cast<arma::uword>(invest)) > 0 ? 0 : 1;
+            violations += toIncome[d](0, static_cast<arma::uword>(income)) > 0 ? 0 : 1;
+            violations += toIncome[d](0, static_cast<arma::uword>(cons)) > 0 ? 0 : 1;
+        }
+        // Accepted draws: binomial around bvartools' rate; the effective
+        // sample size within a factor the importance sampler's noise allows.
+        const double rate = theirAccepted / 1000.0;
+        const double sd = std::sqrt(1000.0 * rate * (1.0 - rate));
+        const bool acceptance = std::abs(res.accepted - theirAccepted) < 5.0 * sd;
+        const bool efficiency = res.effectiveSampleSize > 0.5 * theirEffective && res.effectiveSampleSize < 2.0 * theirEffective;
+
+        // Medians of the identified responses against bvartools', relative
+        // to the 68% band.
+        double worstGap = 0.0;
+        for (const auto &[shock, response, name] :
+             {std::tuple{invest, cons, "invest_cons"}, std::tuple{income, cons, "income_cons"}})
+        {
+            const auto ours = impulseResponses(output, request, shock);
+            const arma::mat theirs = readCsv(QStringLiteral("%1/signzero_irf_sign_%2.csv").arg(dir, name));
+            for (int h = 0; h <= 8; ++h)
+            {
+                std::vector<double> a, b;
+                for (const auto &m : ours)
+                {
+                    a.push_back(m(static_cast<arma::uword>(h), static_cast<arma::uword>(response)));
+                }
+                for (arma::uword d = 0; d < theirs.n_rows; ++d)
+                {
+                    b.push_back(theirs(d, static_cast<arma::uword>(h)));
+                }
+                std::sort(a.begin(), a.end());
+                std::sort(b.begin(), b.end());
+                const auto q = [](const std::vector<double> &v, double p) { return v[static_cast<std::size_t>(p * (v.size() - 1))]; };
+                const double width = std::max(q(b, 0.84) - q(b, 0.16), 1e-12);
+                worstGap = std::max(worstGap, std::abs(q(a, 0.5) - q(b, 0.5)) / width);
+            }
+        }
+        const bool ok = worstZero < 1e-10 && violations == 0 && acceptance && efficiency &&
+                        !(res.paretoK >= 0.7) && worstGap < 0.3;
+        std::printf("%s  own sign and zero identification: %d of %d accepted (bvartools %.0f), effective %d "
+                    "(bvartools %.0f), Pareto k %.3f, zero restriction within %.1e, %d sign violations, "
+                    "median gap %.3f of the 68%% band\n",
+                    ok ? "ok  " : "FAIL", res.accepted, res.candidates, theirAccepted, res.effectiveSampleSize,
+                    theirEffective, res.paretoK, worstZero, violations, worstGap);
+        failures += ok ? 0 : 1;
+
+        // The round trip, once bvartools has read the studio's file.
+        if (QFile::exists(dir + "/studio_signzero_irf_sign_invest_cons.csv"))
+        {
+            compareIrf(dir, "studio_signzero", ResponseType::Sign, "sign", "invest", "cons");
+            compareFevd(dir, "studio_signzero", ResponseType::Sign, "sign", "cons");
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -250,6 +401,7 @@ int main(int argc, char *argv[])
         compareIrf(dir, "tvp", ResponseType::Oir, "oir", "income", "cons");
         compareFevd(dir, "tvp", ResponseType::Oir, "oir", "cons");
         ownIdentification(dir);
+        signZeroChecks(dir);
         // The round trip: bvartools reading the studio's identification. The
         // CSVs come from bvartools on studio_sign.h5, which the line above
         // writes; present only once that has been run.

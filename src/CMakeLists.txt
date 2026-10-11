@@ -11,7 +11,10 @@ add_library(studio_engine STATIC
     engine/ModelRunner.cpp
     engine/ModelRunner.h
     engine/QtReporter.cpp
+    engine/PosteriorDraws.h
     engine/QtReporter.h
+    engine/SignZero.cpp
+    engine/SignZero.h
     engine/Structural.cpp
     engine/Structural.h
     engine/VarBuilder.cpp

@@ -57,6 +57,8 @@ signals:
     void runRequested(const std::vector<studio::Stage> &stages);
     void importRequested();
     void newModelRequested();
+    /// A model file derived from the current one, to join the project.
+    void modelCreated(const QString &file);
 };
 
 /// 1. Data: the series the model is estimated on.
@@ -154,6 +156,7 @@ class ApplicationPage : public StagePage
 public:
     explicit ApplicationPage(QWidget *parent = nullptr);
     void showModel(const ModelContext &context) override;
+    void showStructural();
 
 private:
     void showVariable(int variable);

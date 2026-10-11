@@ -569,6 +569,7 @@ ApplicationPage::ApplicationPage(QWidget *parent) : StagePage(parent)
 
     // Structural analysis
     structural_ = new StructuralView;
+    connect(structural_, &StructuralView::modelCreated, this, &StagePage::modelCreated);
 
     tabs_ = new QTabWidget;
     tabs_->setDocumentMode(true);
@@ -576,6 +577,11 @@ ApplicationPage::ApplicationPage(QWidget *parent) : StagePage(parent)
     tabs_->addTab(structural_, tr("Structural analysis"));
     tabs_->setObjectName(QStringLiteral("applicationTabs"));
     layout->addWidget(tabs_, 1);
+}
+
+void ApplicationPage::showStructural()
+{
+    tabs_->setCurrentWidget(structural_);
 }
 
 void ApplicationPage::showModel(const ModelContext &context)

@@ -9,6 +9,8 @@
 #include <QCommandLineParser>
 #include <QElapsedTimer>
 #include <QPushButton>
+#include <QComboBox>
+#include <QTableWidget>
 #include <QTabWidget>
 #include <QTimer>
 
@@ -117,6 +119,24 @@ int main(int argc, char *argv[])
                                 {
                                     return;
                                 }
+                                // =zero: investment shock zero on income and
+                                // positive on investment at impact.
+                                if (qgetenv("STUDIO_SMOKE_SIGN") == "zero")
+                                {
+                                    for (QPushButton *ab : dialog->findChildren<QPushButton *>())
+                                    {
+                                        if (ab->text() == QStringLiteral("Add Restriction"))
+                                        {
+                                            ab->click();
+                                        }
+                                    }
+                                    if (auto *table = dialog->findChild<QTableWidget *>())
+                                    {
+                                        qobject_cast<QComboBox *>(table->cellWidget(0, 1))->setCurrentIndex(1);
+                                        qobject_cast<QComboBox *>(table->cellWidget(0, 2))->setCurrentIndex(2);
+                                    }
+                                    QCoreApplication::processEvents();
+                                }
                                 dialog->grab().save(QStringLiteral("%1-signdialog.png").arg(QString::fromLocal8Bit(prefix)));
                                 for (QPushButton *ib : dialog->findChildren<QPushButton *>())
                                 {
@@ -125,9 +145,20 @@ int main(int argc, char *argv[])
                                         ib->click();
                                     }
                                 }
+                                // A warning keeps the dialog open on "Done".
+                                QTimer::singleShot(8000, [dialog]() {
+                                    for (QPushButton *db : dialog->findChildren<QPushButton *>())
+                                    {
+                                        if (db->text() == QStringLiteral("Done"))
+                                        {
+                                            dialog->grab().save(QStringLiteral("signzero-warning.png"));
+                                            db->click();
+                                        }
+                                    }
+                                });
                             });
                             b->click();
-                            settle(3000);
+                            settle(qgetenv("STUDIO_SMOKE_SIGN") == "zero" ? 6000 : 3000);
                             window.grab().save(QStringLiteral("%1-sign.png").arg(QString::fromLocal8Bit(prefix)));
                             break;
                         }

@@ -37,6 +37,10 @@ public:
     /// the view with the reason.
     void setModel(const QString &file);
 
+signals:
+    /// A sign and zero identification wrote a new model file.
+    void modelCreated(const QString &file);
+
 private:
     struct Result
     {
