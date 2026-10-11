@@ -8,6 +8,9 @@
 
 #include "engine/ModelFileTree.h"
 #include "engine/CoefficientSummary.h"
+#include "engine/DataSet.h"
+#include "engine/Multipliers.h"
+#include "engine/VarBuilder.h"
 #include "engine/SignZero.h"
 #include "engine/Spillover.h"
 #include "engine/Structural.h"
@@ -229,6 +232,114 @@ void compareSummary(const QString &dir, const QString &model)
     std::printf("%s  summary %s: %zu blocks, %zu panels (bvartools %u), max difference %.2e\n", ok ? "ok  " : "FAIL",
                 model.toStdString().c_str(), s.blocks.size(), ours.size(), static_cast<unsigned>(reference.n_rows),
                 worst);
+    failures += ok ? 0 : 1;
+}
+
+/// The dynamic multipliers against bvartools' multipliers(), every draw:
+/// permanent and transitory, for each response the reference script wrote.
+void compareMultipliers(const QString &dir, const QString &model, const QString &impulse,
+                        const QStringList &responses, int period = -1)
+{
+    const QString file = dir + "/" + model + ".h5";
+    if (!QFile::exists(file))
+    {
+        std::printf("skip  multipliers %s: run test/exogenous_reference.R first\n", model.toStdString().c_str());
+        return;
+    }
+    const MultiplierSupport support = multiplierSupport(file);
+    if (!support.ok)
+    {
+        std::printf("FAIL  multipliers %s: %s\n", model.toStdString().c_str(), support.reason.toStdString().c_str());
+        ++failures;
+        return;
+    }
+    for (const bool permanent : {true, false})
+    {
+        for (const QString &response : responses)
+        {
+            const arma::mat reference = readCsv(QStringLiteral("%1/multipliers_%2_%3_%4_%5.csv")
+                                                    .arg(dir, model, permanent ? "permanent" : "transitory",
+                                                         impulse, response));
+            MultiplierRequest request;
+            request.impulse = static_cast<int>(support.exogenous.indexOf(impulse));
+            request.horizon = static_cast<int>(reference.n_cols) - 1;
+            request.permanent = permanent;
+            request.period = period;
+            request.maxDraws = 1 << 30;
+            const auto draws = dynamicMultipliers(file, request);
+            const auto j = static_cast<arma::uword>(support.variables.indexOf(response));
+            double worst = 0.0;
+            for (std::size_t d = 0; d < draws.size() && d < reference.n_rows; ++d)
+            {
+                for (arma::uword h = 0; h < reference.n_cols; ++h)
+                {
+                    worst = std::max(worst, std::abs(draws[d](h, j) - reference(d, h)));
+                }
+            }
+            const bool ok = draws.size() == reference.n_rows && worst < 1e-9;
+            std::printf("%s  multipliers %s %s %s -> %s: %zu draws, max difference %.2e\n", ok ? "ok  " : "FAIL",
+                        model.toStdString().c_str(), permanent ? "permanent" : "transitory",
+                        impulse.toStdString().c_str(), response.toStdString().c_str(), draws.size(), worst);
+            failures += ok ? 0 : 1;
+        }
+    }
+}
+
+/// The builder's data against bvartools' for the same model with exogenous
+/// variables: the response, the SUR regressors, a VEC's error correction
+/// term and the forecast regressors, element by element.
+void compareBuilderData(const QString &dir, const QString &model, const QString &csv, VarBuilderSpec spec)
+{
+    const QString reference = dir + "/" + model + ".h5";
+    if (!QFile::exists(reference))
+    {
+        std::printf("skip  builder %s: run test/exogenous_reference.R first\n", model.toStdString().c_str());
+        return;
+    }
+    spec.data = readDelimited(dir + "/" + csv);
+    QTemporaryDir tmp;
+    const QString built = tmp.filePath(QStringLiteral("built.h5"));
+    writeVarModel(spec, built);
+    double worst = 0.0;
+    QString where;
+    for (const char *path : {"/data/train/y", "/data/train/z", "/data/train/w", "/data/forecast/x", "/data/test/y"})
+    {
+        const bool vecOnly = std::string(path) == "/data/train/w";
+        if (vecOnly && !spec.vec())
+        {
+            continue;
+        }
+        Matrix b;
+        try
+        {
+            b = readMatrix(reference, QString::fromLatin1(path));
+        }
+        catch (const std::exception &)
+        {
+            continue;   // not part of bvartools' file
+        }
+        const Matrix a = readMatrix(built, QString::fromLatin1(path));
+        if (a.rows != b.rows || a.cols != b.cols)
+        {
+            std::printf("FAIL  builder %s: %s is (%zu, %zu), bvartools' (%zu, %zu)\n", model.toStdString().c_str(),
+                        path, a.rows, a.cols, b.rows, b.cols);
+            ++failures;
+            return;
+        }
+        for (std::size_t i = 0; i < a.values.size(); ++i)
+        {
+            const double gap = std::abs(a.values[i] - b.values[i]);
+            if (gap > worst)
+            {
+                worst = gap;
+                where = QString::fromLatin1(path);
+            }
+        }
+    }
+    const bool ok = worst < 1e-9;
+    std::printf("%s  builder %s: y, z%s, and forecast x as bvartools writes them, max difference %.2e%s\n",
+                ok ? "ok  " : "FAIL", model.toStdString().c_str(), spec.vec() ? ", w" : "", worst,
+                ok ? "" : (" in " + where.toStdString()).c_str());
     failures += ok ? 0 : 1;
 }
 
@@ -505,6 +616,24 @@ int main(int argc, char *argv[])
         compareSummary(dir, "var2");
         compareSummary(dir, "vec");
         compareSummary(dir, "svar");
+        {
+            VarBuilderSpec varx;
+            varx.columns = {0, 1};
+            varx.exogenous = {2};
+            varx.p = 2;
+            varx.s = 1;
+            varx.horizon = 4;
+            varx.holdout = 4;
+            compareBuilderData(dir, "varx", "e1.csv", varx);
+            VarBuilderSpec vecx = varx;
+            vecx.family = VarBuilderSpec::Family::Vec;
+            vecx.s = 2;
+            vecx.rank = 1;
+            compareBuilderData(dir, "vecx", "e6x.csv", vecx);
+        }
+        compareMultipliers(dir, "varx", "cons", {"invest", "income"});
+        compareMultipliers(dir, "vecx", "g", {"R", "Dp"});
+        compareMultipliers(dir, "tvpx", "cons", {"income"}, 20);
         ownIdentification(dir);
         signZeroChecks(dir);
         // The round trip: bvartools reading the studio's identification. The

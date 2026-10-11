@@ -25,6 +25,11 @@ struct VarBuilderSpec
     // and the rows used, inclusive. A VEC takes them as levels.
     DataSet data;
     std::vector<int> columns;
+    /// Columns that are weakly exogenous: regressors the model does not
+    /// explain, entering at lags 0 to `s` -- in levels for a VAR, as
+    /// differences (and in the cointegration space at lag 1) for a VEC.
+    std::vector<int> exogenous;
+    int s = 1;          ///< lag order of the exogenous variables; for a VEC a level order, at least 1
     int firstRow = 0;
     int lastRow = -1;   ///< -1: the last row
 
@@ -95,6 +100,7 @@ struct VarBuilderSummary
     int nparams = 0;   ///< coefficients
     int npsi = 0;
     int kBeta = 0;     ///< VEC: rows of the cointegration matrix
+    int m = 0;         ///< exogenous variables
     QString refusal;
     QStringList notes;
 };

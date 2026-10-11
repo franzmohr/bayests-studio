@@ -48,6 +48,10 @@ struct Matrix
 /// on /data/train/z, the variable names on /data/train/y.
 QStringList readStringsAttribute(const QString &file, const QString &path, const QString &name);
 
+/// The integer attribute `name` of the group at `path` -- a scalar, or the
+/// one-element array R writes -- or `fallback` when either is absent.
+int readGroupInt(const QString &file, const QString &path, const QString &name, int fallback);
+
 /// Reads a one- or two-dimensional numeric dataset. Throws on anything else.
 Matrix readMatrix(const QString &file, const QString &path);
 

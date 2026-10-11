@@ -173,14 +173,40 @@ components it uses.
   in summary()'s order, on the VAR(2) (30 panels, 4e-14), the VEC with Π
   (22, 3e-15) and the structural VAR with A₀ (39, 4e-14).
 
+- **Weakly exogenous variables** (the model builder's second list): series
+  the model does not explain, at lags 0 to s -- levels for a VAR, and for a
+  VEC differences at lags 0 to s - 1 with the level at lag 1 in the
+  cointegration space (s a level order, as bvartools has it). A forecast is
+  conditional on their values over the horizon, so with exogenous variables
+  the horizon is bounded by the data after the sample and the periods held
+  out. Under the Minnesota prior their coefficients get bvartools'
+  κ₁κ₂/(l + 1)² σᵢ²/sⱼ².
+
+  Verified twice. In `test/structural_test.cpp`, the builder's y, z, w and
+  forecast regressors for a VARX and a VECX are those bvartools'
+  `create_bvarmodel()`/`create_bvecmodel()` and `add_forecast_input()`
+  write for the same specification (`test/exogenous_reference.R`), within
+  2.5e-14. In `test/builder_test.cpp`, all twelve VAR and VEC algorithms with
+  an exogenous variable pass `bayests check` without a warning and run every
+  stage, forecast and score included.
+
+- **Dynamic multipliers** (Application › Multipliers): the response of every
+  endogenous variable to a change in one exogenous variable, permanent (held
+  from period 0) or transitory, of any size, cumulated or not, at any period
+  of a time-varying model -- bvartools' `multipliers()`. A VEC is read as its
+  level VAR (B₀ = Υ₀, B₁ = Πₓ − Υ₀ + Υ₁, …, as BayesTS's `vec_to_var.h`), so
+  its cointegration relations move the levels for good. Held to bvartools
+  draw by draw, permanent and transitory: the VARX, the VECX and a TVP-SV
+  VARX at period 20, within 6e-15. The sign and zero restrictions now read a
+  VEC with exogenous variables in the same level layout.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted
    models, `VecKlgs2010`, factor models and FAVARs, unobserved components;
-   exogenous variables and seasonal dummies; Excel import; an R-side reader
-   (`rclass`) so a studio file opens as a bvartools object.
-2. Analysis: dynamic multipliers,
-   historical decompositions, inclusion probabilities, the Savage–Dickey test
+   seasonal dummies; Excel import; an R-side reader (`rclass`) so a studio
+   file opens as a bvartools object.
+2. Analysis: historical decompositions, inclusion probabilities, the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
 3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the
    session.

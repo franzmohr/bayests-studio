@@ -262,6 +262,104 @@ int main()
     }
     std::printf("%d combinations written and run\n", written);
 
+    // -- Weakly exogenous variables: every family, coefficient and error
+    // specification with the third series moved to the right-hand side,
+    // forecast given its values over the held-out horizon.
+    int exogenousRuns = 0;
+    for (const Family family : {Family::Var, Family::Vec})
+    {
+        for (const bool tvp : {false, true})
+        {
+            for (const Errors errors : {Errors::Wishart, Errors::Gamma, Errors::Stochvol})
+            {
+                VarBuilderSpec s;
+                s.family = family;
+                s.data = family == Family::Vec ? levels : data;
+                s.columns = {0, 1};
+                s.exogenous = {2};
+                s.p = 2;
+                s.s = (exogenousRuns % 2 == 0) ? 1 : (family == Family::Vec ? 2 : 0);
+                s.rank = 1;
+                s.timeVarying = tvp;
+                s.errors = errors;
+                s.covar = errors != Errors::Wishart;
+                s.minnesota = exogenousRuns % 2 == 1;
+                s.iterations = 60;
+                s.burnin = 40;
+                s.seed = 7;
+                s.horizon = 4;
+                s.holdout = 4;
+                const QString name = QStringLiteral("exogenous-%1-s%2.h5").arg(s.algorithm()).arg(s.s);
+                const QString file = dir.filePath(name);
+                ++exogenousRuns;
+                try
+                {
+                    const VarBuilderSummary summary = summarise(s);
+                    if (!summary.refusal.isEmpty())
+                    {
+                        fail(name.toStdString() + ": refused: " + summary.refusal.toStdString());
+                        continue;
+                    }
+                    writeVarModel(s, file);
+                    const CheckReport report = ModelRunner::check(file, QString());
+                    if (!report.ok)
+                    {
+                        fail(name.toStdString() + ": check refuses it: " + report.error.toStdString());
+                        continue;
+                    }
+                    for (const QString &w : report.warnings)
+                    {
+                        fail(name.toStdString() + ": check warns: " + w.toStdString());
+                    }
+                    runAll(file, 7);
+                    for (const char *path : {"/posterior/loglik", "/posterior/forecast/forecasts",
+                                             "/posterior/forecast/loglik"})
+                    {
+                        if (!exists(file, path))
+                        {
+                            fail(name.toStdString() + ": no " + path);
+                        }
+                    }
+                    std::printf("ok    %s\n", name.toStdString().c_str());
+                }
+                catch (const std::exception &e)
+                {
+                    fail(name.toStdString() + ": " + e.what());
+                }
+            }
+        }
+    }
+
+    // -- Refusals that are the builder's own: a variable on both sides, a
+    // VEC's exogenous level order of zero, a forecast past the exogenous data.
+    {
+        VarBuilderSpec s;
+        s.data = data;
+        s.columns = {0, 1};
+        s.exogenous = {1};
+        if (summarise(s).refusal.isEmpty())
+        {
+            fail("a variable both endogenous and exogenous is not refused");
+        }
+        s.exogenous = {2};
+        s.family = Family::Vec;
+        s.data = levels;
+        s.s = 0;
+        if (summarise(s).refusal.isEmpty())
+        {
+            fail("a VEC with exogenous level order 0 is not refused");
+        }
+        s.family = Family::Var;
+        s.data = data;
+        s.s = 1;
+        s.horizon = 4;
+        s.holdout = 0;
+        if (summarise(s).refusal.isEmpty())
+        {
+            fail("a forecast past the end of the exogenous data is not refused");
+        }
+    }
+
     // -- Recovery: a VAR(1) under a weak prior finds the coefficients the data
     // came from, and its posterior mean sits on least squares.
     {

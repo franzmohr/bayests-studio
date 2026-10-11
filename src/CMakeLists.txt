@@ -9,6 +9,8 @@ add_library(studio_engine STATIC
     engine/DataSet.cpp
     engine/DataSet.h
     engine/ModelFileTree.cpp
+    engine/Multipliers.cpp
+    engine/Multipliers.h
     engine/ModelFileTree.h
     engine/ModelRunner.cpp
     engine/ModelRunner.h
@@ -50,6 +52,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/DiagnosticsView.h
     views/LiveBandsView.cpp
     views/LiveBandsView.h
+    views/MultipliersView.cpp
+    views/MultipliersView.h
     views/OverviewView.cpp
     views/OverviewView.h
     views/PlotStyle.cpp

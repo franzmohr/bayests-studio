@@ -63,6 +63,7 @@ private:
 
     // Data
     QListWidget *variables_;
+    QListWidget *exogenous_;
     QComboBox *first_;
     QComboBox *last_;
 
@@ -73,6 +74,7 @@ private:
     QCheckBox *restrictConstant_;
     QCheckBox *restrictTrend_;
     QSpinBox *p_;
+    QSpinBox *exoLags_;
     QCheckBox *constant_;
     QCheckBox *trend_;
     QRadioButton *coefConstant_;
@@ -122,6 +124,7 @@ private:
     QLineEdit *seed_;
     QSpinBox *horizon_;
     QSpinBox *holdout_;
+    QLabel *exoForecast_;
 
     // Summary
     QLabel *algorithm_;

@@ -73,6 +73,8 @@ public:
         structural_ = report.structural;
         tt_ = report.periods;
         vec_ = algorithm_.startsWith(QLatin1String("Vec"));
+        m_ = readGroupInt(file, QStringLiteral("/model"), QStringLiteral("m"), 0);
+        s_ = m_ > 0 ? readGroupInt(file, QStringLiteral("/model"), QStringLiteral("s"), 0) : 0;
         a_ = readMatrix(file, QStringLiteral("/posterior/a/coeffs"));
         sigmaInv_ = readMatrix(file, QStringLiteral("/posterior/u_sigma_inv/coeffs"));
         if (vec_)
@@ -109,6 +111,7 @@ public:
     int periods() const { return tt_; }
     /// The lag order as the file states it, a VEC's in levels.
     int lagOrder() const { return p_; }
+    bool vec() const { return vec_; }
 
     System system(int draw, int period) const
     {
@@ -240,35 +243,91 @@ public:
             }
             return full;
         }
-        // A VEC: the unrestricted deterministic terms follow the Gamma blocks
-        // in a; the restricted ones are Pi_d = alpha beta_d'.
+        // A VEC: after the Gamma blocks come Upsilon_0 .. Upsilon_{s-1} and
+        // the unrestricted deterministic terms; the restricted ones are
+        // Pi_d = alpha beta_d', beta's rows after y and x.
         const auto r = static_cast<arma::uword>(rank_);
-        const std::size_t afterGamma = k * r + static_cast<std::size_t>(std::max(p_ - 1, 0)) * k * k;
-        const std::size_t nUnrestricted = (static_cast<std::size_t>(nparams_) - afterGamma) / k;
+        const auto m = static_cast<std::size_t>(m_);
+        const std::size_t afterUpsilon = k * r + static_cast<std::size_t>(std::max(p_ - 1, 0)) * k * k +
+                                         k * m * static_cast<std::size_t>(m_ > 0 ? s_ : 0);
+        const std::size_t nUnrestricted = (static_cast<std::size_t>(nparams_) - afterUpsilon) / k;
         arma::mat c(k, nUnrestricted);
         for (std::size_t i = 0; i < k * nUnrestricted; ++i)
         {
-            c(i % k, i / k) = coef(afterGamma + i);
+            c(i % k, i / k) = coef(afterUpsilon + i);
         }
-        arma::mat alpha(k, r);
-        for (std::size_t i = 0; i < k * r; ++i)
-        {
-            alpha(i % k, i / k) = coef(i);
-        }
-        const std::size_t nBeta = static_cast<std::size_t>(kBeta_) * r;
-        const bool betaMoves = beta_.rows == nBeta * static_cast<std::size_t>(tt_) && tt_ > 1;
-        const std::size_t bOff = betaMoves ? static_cast<std::size_t>(t - 1) * nBeta : 0;
-        arma::mat beta(static_cast<arma::uword>(kBeta_), r);
-        for (std::size_t i = 0; i < nBeta; ++i)
-        {
-            beta(i % static_cast<std::size_t>(kBeta_), i / static_cast<std::size_t>(kBeta_)) = beta_.at(bOff + i, d);
-        }
+        const arma::mat alpha = loadings(d, aOff);
+        const arma::mat beta = space(d, t);
         arma::mat restricted;
-        if (static_cast<arma::uword>(kBeta_) > k)
+        const auto firstRestricted = static_cast<arma::uword>(k_ + m_);
+        if (static_cast<arma::uword>(kBeta_) > firstRestricted)
         {
-            restricted = alpha * arma::trans(beta.rows(k, static_cast<arma::uword>(kBeta_) - 1));
+            restricted = alpha * arma::trans(beta.rows(firstRestricted, static_cast<arma::uword>(kBeta_) - 1));
         }
-        return arma::join_rows(arma::join_rows(s.A, c), restricted);
+        return arma::join_rows(arma::join_rows(arma::join_rows(s.A, exogenousLevels(draw, period)), c), restricted);
+    }
+
+    int exogenous() const { return m_; }
+    /// The exogenous lag order as the file states it, a VEC's in levels.
+    int exogenousLags() const { return s_; }
+
+    /// The level form's coefficients on the exogenous variables, [B_0 .. B_s]
+    /// (k x m(s+1)), each block all m variables. A VAR stores them; a VEC's
+    /// follow from vec_to_var.h: B_0 = Upsilon_0, B_1 = Pi_x - Upsilon_0 +
+    /// Upsilon_1, B_j = Upsilon_j - Upsilon_{j-1}, B_s = -Upsilon_{s-1}, Pi_x
+    /// = alpha beta_x'. Empty without exogenous variables.
+    arma::mat exogenousLevels(int draw, int period) const
+    {
+        const auto k = static_cast<arma::uword>(k_);
+        const auto m = static_cast<arma::uword>(m_);
+        if (m == 0)
+        {
+            return arma::mat(k, 0);
+        }
+        const auto d = static_cast<std::size_t>(draw);
+        const int t = (period < 1 || period > tt_) ? tt_ : period;
+        const std::size_t aOff = aMoves_ ? static_cast<std::size_t>(t - 1) * nparams_ : 0;
+        const auto coef = [&](std::size_t i) { return a_.at(aOff + i, d); };
+        const auto blocks = static_cast<arma::uword>(s_ + 1);
+        arma::mat B(k, m * blocks, arma::fill::zeros);
+        if (!vec_)
+        {
+            const std::size_t first = k * k * static_cast<std::size_t>(p_);
+            for (std::size_t i = 0; i < k * m * blocks; ++i)
+            {
+                B(i % k, i / k) = coef(first + i);
+            }
+            return B;
+        }
+        const auto r = static_cast<arma::uword>(rank_);
+        const std::size_t first = k * r + static_cast<std::size_t>(std::max(p_ - 1, 0)) * k * k;
+        arma::mat ups(k, m * static_cast<arma::uword>(s_));
+        for (std::size_t i = 0; i < ups.n_elem; ++i)
+        {
+            ups(i % k, i / k) = coef(first + i);
+        }
+        const auto block = [&](const arma::mat &x, int j) {
+            return x.cols(static_cast<arma::uword>(j) * m, static_cast<arma::uword>(j + 1) * m - 1);
+        };
+        for (int j = 0; j <= s_; ++j)
+        {
+            arma::mat Bj(k, m, arma::fill::zeros);
+            if (j < s_)
+            {
+                Bj += block(ups, j);
+            }
+            if (j >= 1)
+            {
+                Bj -= block(ups, j - 1);
+            }
+            B.cols(static_cast<arma::uword>(j) * m, static_cast<arma::uword>(j + 1) * m - 1) = Bj;
+        }
+        if (rank_ > 0)
+        {
+            const arma::mat piX = loadings(d, aOff) * arma::trans(space(d, t).rows(k, k + m - 1));
+            B.cols(m, 2 * m - 1) += piX;
+        }
+        return B;
     }
 
     /// The lags of the level form.
@@ -276,9 +335,39 @@ public:
     const QString &algorithm() const { return algorithm_; }
 
 private:
+    /// alpha (k x r) of draw d, its period's coefficients starting at aOff.
+    arma::mat loadings(std::size_t d, std::size_t aOff) const
+    {
+        const auto k = static_cast<arma::uword>(k_);
+        const auto r = static_cast<arma::uword>(rank_);
+        arma::mat alpha(k, r);
+        for (std::size_t i = 0; i < k * r; ++i)
+        {
+            alpha(i % k, i / k) = a_.at(aOff + i, d);
+        }
+        return alpha;
+    }
+
+    /// beta (k_beta x r) of draw d at period t (1-based).
+    arma::mat space(std::size_t d, int t) const
+    {
+        const auto r = static_cast<std::size_t>(rank_);
+        const auto kb = static_cast<std::size_t>(kBeta_);
+        const std::size_t nBeta = kb * r;
+        const bool betaMoves = beta_.rows == nBeta * static_cast<std::size_t>(tt_) && tt_ > 1;
+        const std::size_t bOff = betaMoves ? static_cast<std::size_t>(t - 1) * nBeta : 0;
+        arma::mat beta(kb, r);
+        for (std::size_t i = 0; i < nBeta; ++i)
+        {
+            beta(i % kb, i / kb) = beta_.at(bOff + i, d);
+        }
+        return beta;
+    }
+
     QString algorithm_;
     QString errorSpec_;
     mutable Matrix q_;
+    int m_ = 0, s_ = 0;
     int k_ = 0, p_ = 0, rank_ = 0, kBeta_ = 0, tt_ = 0, nparams_ = 0;
     bool structural_ = false, vec_ = false, aMoves_ = false, sigmaMoves_ = false;
     Matrix a_, sigmaInv_, beta_;

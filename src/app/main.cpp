@@ -13,6 +13,7 @@
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QKeyEvent>
+#include <QListWidget>
 #include <QTimer>
 
 #include <cstdlib>
@@ -136,6 +137,24 @@ int main(int argc, char *argv[])
                     window.grab().save(QStringLiteral("%1-fevd.png").arg(QString::fromLocal8Bit(prefix)));
                     st->setCurrentIndex(0);
                 }
+                // STUDIO_SMOKE_MULTIPLIERS=1: the multipliers, permanent then
+                // transitory.
+                if (!qgetenv("STUDIO_SMOKE_MULTIPLIERS").isEmpty())
+                {
+                    app->setCurrentIndex(3);
+                    settle(3000);
+                    window.grab().save(QStringLiteral("%1-multipliers.png").arg(QString::fromLocal8Bit(prefix)));
+                    for (QComboBox *c : app->widget(3)->findChildren<QComboBox *>())
+                    {
+                        if (c->count() == 2 && c->itemData(1).typeId() == QMetaType::Bool)
+                        {
+                            c->setCurrentIndex(1);
+                        }
+                    }
+                    settle(2000);
+                    window.grab().save(QStringLiteral("%1-multipliers-transitory.png").arg(QString::fromLocal8Bit(prefix)));
+                    app->setCurrentIndex(1);
+                }
                 // STUDIO_SMOKE_SPILLOVER=1: every tab of the spillovers.
                 if (!qgetenv("STUDIO_SMOKE_SPILLOVER").isEmpty())
                 {
@@ -232,6 +251,20 @@ int main(int argc, char *argv[])
                     if (auto *b = dialog->findChild<QAbstractButton *>(QString::fromLatin1(name)))
                     {
                         b->setChecked(true);
+                    }
+                }
+                // STUDIO_SMOKE_EXOGENOUS names a series to tick as weakly exogenous.
+                if (const QByteArray exo = qgetenv("STUDIO_SMOKE_EXOGENOUS"); !exo.isEmpty())
+                {
+                    if (auto *list = dialog->findChild<QListWidget *>(QStringLiteral("exogenousList")))
+                    {
+                        for (int i = 0; i < list->count(); ++i)
+                        {
+                            if (list->item(i)->text() == QString::fromLocal8Bit(exo))
+                            {
+                                list->item(i)->setCheckState(Qt::Checked);
+                            }
+                        }
                     }
                 }
                 QElapsedTimer wait;

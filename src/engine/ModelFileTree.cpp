@@ -143,6 +143,39 @@ QStringList readStringsAttribute(const QString &file, const QString &path, const
     return out;
 }
 
+int readGroupInt(const QString &file, const QString &path, const QString &name, int fallback)
+{
+    const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
+    try
+    {
+        HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+        if (!h5.exist(path.toStdString()))
+        {
+            return fallback;
+        }
+        const HighFive::Group g = h5.getGroup(path.toStdString());
+        if (!g.hasAttribute(name.toStdString()))
+        {
+            return fallback;
+        }
+        const HighFive::Attribute a = g.getAttribute(name.toStdString());
+        if (a.getSpace().getElementCount() == 0)
+        {
+            return fallback;
+        }
+        if (a.getSpace().getNumberDimensions() == 0)
+        {
+            return static_cast<int>(a.read<double>());
+        }
+        const auto v = a.read<std::vector<double>>();
+        return v.empty() ? fallback : static_cast<int>(v.front());
+    }
+    catch (const std::exception &)
+    {
+        return fallback;
+    }
+}
+
 Matrix readMatrix(const QString &file, const QString &path)
 {
     const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());

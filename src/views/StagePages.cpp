@@ -7,6 +7,7 @@
 #include "views/LiveBandsView.h"
 #include "views/OverviewView.h"
 #include "views/SeriesPlot.h"
+#include "views/MultipliersView.h"
 #include "views/SpilloverView.h"
 #include "views/SummaryPlotView.h"
 #include "views/StructuralView.h"
@@ -583,6 +584,8 @@ ApplicationPage::ApplicationPage(QWidget *parent) : StagePage(parent)
     tabs_->addTab(structural_, tr("Structural analysis"));
     spillover_ = new SpilloverView;
     tabs_->addTab(spillover_, tr("Spillovers"));
+    multipliers_ = new MultipliersView;
+    tabs_->addTab(multipliers_, tr("Multipliers"));
     tabs_->setObjectName(QStringLiteral("applicationTabs"));
     layout->addWidget(tabs_, 1);
 }
@@ -599,6 +602,7 @@ void ApplicationPage::showModel(const ModelContext &context)
     forecast_->setEnabled(!context.file.isEmpty() && r.hasPosterior && r.horizon > 0);
     structural_->setModel(r.hasPosterior ? context.file : QString());
     spillover_->setModel(r.hasPosterior ? context.file : QString());
+    multipliers_->setModel(r.hasPosterior ? context.file : QString());
 
     const QSignalBlocker block(variable_);
     variable_->clear();

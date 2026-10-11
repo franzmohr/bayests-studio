@@ -2,6 +2,7 @@
 
 #include <QObject>
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -102,6 +103,9 @@ struct Layout
     int k = 0;
     int p = 0;          // level order
     int lagBlocks = 0;  // p for a VAR, p - 1 for a VEC
+    int m = 0;          // exogenous variables
+    int s = 0;          // their level lag order
+    int exoBlocks = 0;  // s + 1 for a VAR (lags 0..s), s for a VEC (differences at 0..s-1)
     int n = 0;          // unrestricted deterministic terms
     int nRestricted = 0;
     int kBeta = 0;
@@ -129,6 +133,9 @@ Layout layoutOf(const VarBuilderSpec &s)
     l.k = static_cast<int>(s.columns.size());
     l.p = s.p;
     l.lagBlocks = l.vec ? std::max(s.p - 1, 0) : s.p;
+    l.m = static_cast<int>(s.exogenous.size());
+    l.s = l.m > 0 ? s.s : 0;
+    l.exoBlocks = l.m == 0 ? 0 : (l.vec ? l.s : l.s + 1);
     l.restrictedConstant = l.vec && s.constant && s.restrictConstant;
     l.restrictedTrend = l.vec && s.trend && s.restrictTrend;
     l.unrestrictedConstant = s.constant && !l.restrictedConstant;
@@ -136,16 +143,17 @@ Layout layoutOf(const VarBuilderSpec &s)
     l.n = (l.unrestrictedConstant ? 1 : 0) + (l.unrestrictedTrend ? 1 : 0);
     l.nRestricted = (l.restrictedConstant ? 1 : 0) + (l.restrictedTrend ? 1 : 0);
     l.rank = l.vec ? s.rank : 0;
-    l.kBeta = l.vec ? l.k + l.nRestricted : 0;
+    l.kBeta = l.vec ? l.k + l.m + l.nRestricted : 0;
     l.nAlpha = l.k * l.rank;
-    l.nx = l.k * l.lagBlocks + l.n;
+    l.nx = l.k * l.lagBlocks + l.m * l.exoBlocks + l.n;
     l.nNonStruct = l.nAlpha + l.k * l.nx;
     l.nStruct = s.structural ? l.k * (l.k - 1) / 2 : 0;
     l.nparams = l.nNonStruct + l.nStruct;
     l.npsi = s.covar ? l.k * (l.k - 1) / 2 : 0;
     const int last = s.lastRow < 0 ? s.data.length() - 1 : s.lastRow;
     l.testRows = std::min(s.holdout, s.horizon);
-    l.estFirst = s.firstRow + s.p;
+    // Every lag of either kind must lie inside the data.
+    l.estFirst = s.firstRow + std::max(s.p, l.s);
     l.estLast = last - l.testRows;
     l.tt = l.estLast - l.estFirst + 1;
     return l;
@@ -162,11 +170,23 @@ arma::mat endogenous(const VarBuilderSpec &s)
     return y;
 }
 
+/// The exogenous data, data-set rows by exogenous variables, in levels.
+arma::mat exogenousData(const VarBuilderSpec &s)
+{
+    arma::mat x(s.data.values.n_rows, s.exogenous.size());
+    for (std::size_t j = 0; j < s.exogenous.size(); ++j)
+    {
+        x.col(j) = s.data.values.col(static_cast<arma::uword>(s.exogenous[j]));
+    }
+    return x;
+}
+
 /// The regressors of one period after a VEC's loadings: the lag blocks -- of
-/// levels for a VAR, of differences for a VEC -- then the unrestricted
-/// deterministic terms. `trendValue` counts from 1 at the first estimation
-/// period.
-arma::vec regressors(const arma::mat &y, const Layout &l, int row, double trendValue)
+/// levels for a VAR, of differences for a VEC -- then the exogenous blocks --
+/// x_t .. x_{t-s} for a VAR, dx_t .. dx_{t-s+1} for a VEC, each block all m
+/// variables -- then the unrestricted deterministic terms. `trendValue` counts
+/// from 1 at the first estimation period.
+arma::vec regressors(const arma::mat &y, const arma::mat &xo, const Layout &l, int row, double trendValue)
 {
     arma::vec x(static_cast<arma::uword>(l.nx));
     const auto k = static_cast<arma::uword>(l.k);
@@ -178,6 +198,14 @@ arma::vec regressors(const arma::mat &y, const Layout &l, int row, double trendV
                                                : arma::vec(arma::trans(y.row(r)));
     }
     arma::uword d = k * static_cast<arma::uword>(l.lagBlocks);
+    const auto m = static_cast<arma::uword>(l.m);
+    for (int j = 0; j < l.exoBlocks; ++j)
+    {
+        const auto r = static_cast<arma::uword>(row - j);
+        x.subvec(d, d + m - 1) = l.vec ? arma::vec(arma::trans(xo.row(r) - xo.row(r - 1)))
+                                       : arma::vec(arma::trans(xo.row(r)));
+        d += m;
+    }
     if (l.unrestrictedConstant)
     {
         x(d++) = 1.0;
@@ -189,13 +217,18 @@ arma::vec regressors(const arma::mat &y, const Layout &l, int row, double trendV
     return x;
 }
 
-/// The error correction term of one period: y_{t-1}, then the restricted terms.
-arma::vec errorCorrection(const arma::mat &y, const Layout &l, int row, double trendValue)
+/// The error correction term of one period: y_{t-1}, x_{t-1}, then the
+/// restricted terms.
+arma::vec errorCorrection(const arma::mat &y, const arma::mat &xo, const Layout &l, int row, double trendValue)
 {
     arma::vec w(static_cast<arma::uword>(l.kBeta));
     const auto k = static_cast<arma::uword>(l.k);
     w.subvec(0, k - 1) = arma::trans(y.row(static_cast<arma::uword>(row - 1)));
     arma::uword d = k;
+    for (int j = 0; j < l.m; ++j)
+    {
+        w(d++) = xo(static_cast<arma::uword>(row - 1), static_cast<arma::uword>(j));
+    }
     if (l.restrictedConstant)
     {
         w(d++) = 1.0;
@@ -268,6 +301,7 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
     out.nparams = l.nparams;
     out.npsi = l.npsi;
     out.kBeta = l.kBeta;
+    out.m = l.m;
 
     // The refusals BayesTS makes, in its own terms, so the form can stop them
     // before a file is written. `bayests check` remains the authority: the
@@ -287,6 +321,30 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
     else if (l.vec && l.k < 2)
     {
         out.refusal = QObject::tr("A VEC needs two variables or more.");
+    }
+    else if (std::any_of(s.exogenous.begin(), s.exogenous.end(), [&](int c) {
+                 return std::find(s.columns.begin(), s.columns.end(), c) != s.columns.end();
+             }))
+    {
+        out.refusal = QObject::tr("A variable cannot be endogenous and exogenous at once.");
+    }
+    else if (l.m > 0 && (s.s < 0 || (l.vec && s.s < 1)))
+    {
+        // The level order s of a VEC counts the differences dx_t .. dx_{t-s+1}:
+        // at zero the current exogenous values could not be recovered
+        // (bvartools' vec_to_var()).
+        out.refusal = l.vec ? QObject::tr("A VEC's exogenous lag order is a level order and must be at least 1.")
+                            : QObject::tr("The exogenous lag order must be at least 0.");
+    }
+    else if (l.m > 0 && s.horizon > 0 && l.estLast + s.horizon > s.data.length() - 1)
+    {
+        // A forecast conditions on the exogenous variables over the horizon,
+        // which only the data can supply.
+        out.refusal = QObject::tr("A forecast of %1 periods needs the exogenous variables over them, and the "
+                                  "data end %2 period(s) after the estimation sample. Shorten the horizon, "
+                                  "end the sample earlier or hold periods out.")
+                          .arg(s.horizon)
+                          .arg(s.data.length() - 1 - l.estLast);
     }
     else if (l.vec && (s.rank < 1 || s.rank > l.k))
     {
@@ -387,6 +445,13 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     const auto nAlpha = static_cast<arma::uword>(l.nAlpha);
     const auto nBeta = static_cast<arma::uword>(l.kBeta * l.rank);
     const arma::mat y = endogenous(s);   // levels
+    const arma::mat xo = exogenousData(s);
+    const auto m = static_cast<arma::uword>(l.m);
+    std::vector<std::string> exoNames;
+    for (const int c : s.exogenous)
+    {
+        exoNames.push_back(s.data.names[c].toStdString());
+    }
 
     std::vector<std::string> vars;
     for (const int c : s.columns)
@@ -404,10 +469,10 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
         const int row = l.estFirst + static_cast<int>(t);
         const auto r = static_cast<arma::uword>(row);
         response.row(t) = l.vec ? arma::rowvec(y.row(r) - y.row(r - 1)) : arma::rowvec(y.row(r));
-        x.row(t) = arma::trans(regressors(y, l, row, static_cast<double>(t + 1)));
+        x.row(t) = arma::trans(regressors(y, xo, l, row, static_cast<double>(t + 1)));
         if (l.vec)
         {
-            w.row(t) = arma::trans(errorCorrection(y, l, row, static_cast<double>(t + 1)));
+            w.row(t) = arma::trans(errorCorrection(y, xo, l, row, static_cast<double>(t + 1)));
         }
     }
     const arma::vec yStacked = arma::vectorise(response.t());   // by period
@@ -479,6 +544,13 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
                 regressor.push_back(delta + v + "(-" + std::to_string(lag) + ")");
             }
         }
+        for (int j = 0; j < l.exoBlocks; ++j)
+        {
+            for (const auto &v : exoNames)
+            {
+                regressor.push_back(delta + v + (j == 0 ? std::string() : "(-" + std::to_string(j) + ")"));
+            }
+        }
         if (l.unrestrictedConstant)
         {
             regressor.push_back("constant");
@@ -504,6 +576,10 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
         if (l.vec)
         {
             for (const auto &v : vars)
+            {
+                terms.push_back(v + "(-1)");
+            }
+            for (const auto &v : exoNames)
             {
                 terms.push_back(v + "(-1)");
             }
@@ -549,9 +625,18 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     // kron(x', I_k) lays out.
     arma::vec precision(nparams, arma::fill::value(s.coefPrecision));
     arma::uvec isDet(nparams, arma::fill::zeros);
+    // The sample variance of each exogenous regressor, for the Minnesota scale.
+    const auto endoRegressors = static_cast<arma::uword>(l.k * l.lagBlocks);
+    const arma::uword exoRegressors = m * static_cast<arma::uword>(l.exoBlocks);
+    arma::vec exoVar(exoRegressors, arma::fill::ones);
+    for (arma::uword j = 0; j < exoRegressors; ++j)
+    {
+        exoVar(j) = std::max(arma::var(x.col(endoRegressors + j)), 1e-8);
+    }
     for (arma::uword q = 0; q < static_cast<arma::uword>(l.nx); ++q)
     {
-        const bool det = q >= static_cast<arma::uword>(l.k * l.lagBlocks);
+        const bool exo = q >= endoRegressors && q < endoRegressors + exoRegressors;
+        const bool det = q >= endoRegressors + exoRegressors;
         for (arma::uword i = 0; i < k; ++i)
         {
             const arma::uword pos = nAlpha + q * k + i;
@@ -567,6 +652,15 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
             if (det)
             {
                 variance = s.kappa1 * s.kappa4 * residVar(i);
+            }
+            else if (exo)
+            {
+                // bvartools' minnesota_prior() without kappa3: kappa1 kappa2
+                // / (l + 1)^2 sigma_i^2 / s_j^2, s_j the regressor's sample
+                // standard deviation.
+                const double lag = static_cast<double>((q - endoRegressors) / m);
+                variance = s.kappa1 * s.kappa2 / ((lag + 1.0) * (lag + 1.0)) * residVar(i) /
+                           exoVar(q - endoRegressors);
             }
             else
             {
@@ -622,8 +716,8 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     writeAttribute<std::string>(file, "/model", "algorithm", s.algorithm().toStdString());
     writeAttribute<int>(file, "/model", "k", l.k);
     writeAttribute<int>(file, "/model", "p", l.p);
-    writeAttribute<int>(file, "/model", "m", 0);
-    writeAttribute<int>(file, "/model", "s", 0);
+    writeAttribute<int>(file, "/model", "m", l.m);
+    writeAttribute<int>(file, "/model", "s", l.s);
     writeAttribute<int>(file, "/model", "n", l.n);
     if (l.vec)
     {
@@ -659,6 +753,10 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     writeSeries(file, "/data/train/y", response, responseNames, sample);
     writeMat(file, "/data/train/z", z);
     writeDatasetAttribute(file, "/data/train/z", "coefficients", names);
+    if (l.m > 0)
+    {
+        writeDatasetAttribute(file, "/data/train/z", "exogenous", exoNames);
+    }
     if (l.vec)
     {
         writeMat(file, "/data/train/w", w);   // (tt, k_beta): (k_beta, tt) on disk
@@ -671,8 +769,11 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
         // lags, the unrestricted terms, then the restricted ones (vec_to_var.h).
         // Lag j at horizon i comes from the data while j > i; the sampler
         // overwrites the rest with the path it simulates.
+        // The exogenous levels x_t .. x_{t-s} follow the lags, and are the
+        // data's over the horizon: the forecast is conditional on them.
         const int levelLags = l.p;
-        const int width = l.k * levelLags + l.n + l.nRestricted;
+        const int levelExo = l.m > 0 ? l.s + 1 : 0;
+        const int width = l.k * levelLags + l.m * levelExo + l.n + l.nRestricted;
         arma::mat fx(static_cast<arma::uword>(s.horizon), static_cast<arma::uword>(width), arma::fill::zeros);
         for (int i = 0; i < s.horizon; ++i)
         {
@@ -687,6 +788,11 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
                 }
             }
             arma::uword d = static_cast<arma::uword>(l.k * levelLags);
+            for (int j = 0; j < levelExo; ++j)
+            {
+                fx.submat(hi, d, hi, d + m - 1) = xo.row(static_cast<arma::uword>(l.estLast + 1 + i - j));
+                d += m;
+            }
             const double trendValue = static_cast<double>(l.tt + i + 1);
             if (l.unrestrictedConstant)
             {

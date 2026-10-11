@@ -138,7 +138,26 @@ BuilderDialog::BuilderDialog(const DataSet &data, const QString &projectDir, QWi
     {
         connect(w, &QLineEdit::textChanged, this, &BuilderDialog::scheduleCheck);
     }
-    connect(variables_, &QListWidget::itemChanged, this, &BuilderDialog::scheduleCheck);
+    // A series is endogenous or exogenous, never both: ticking it in one list
+    // unticks it in the other.
+    const auto exclusive = [this](QListWidget *from, QListWidget *other) {
+        connect(from, &QListWidget::itemChanged, this, [this, other](QListWidgetItem *item) {
+            if (item->checkState() == Qt::Checked)
+            {
+                const QSignalBlocker block(other);
+                for (int i = 0; i < other->count(); ++i)
+                {
+                    if (other->item(i)->data(Qt::UserRole) == item->data(Qt::UserRole))
+                    {
+                        other->item(i)->setCheckState(Qt::Unchecked);
+                    }
+                }
+            }
+            scheduleCheck();
+        });
+    };
+    exclusive(variables_, exogenous_);
+    exclusive(exogenous_, variables_);
 
     updateEnabled();
     runCheck();
@@ -149,7 +168,9 @@ QWidget *BuilderDialog::buildDataBox()
     auto *box = new QGroupBox(tr("Data"));
     auto *layout = new QVBoxLayout(box);
     layout->addWidget(hint(tr("Tick the endogenous variables and put them in order: the order is the "
-                              "recursive ordering of a structural form or a covariance block.")));
+                              "recursive ordering of a structural form or a covariance block. Series "
+                              "ticked as weakly exogenous enter as regressors the model does not "
+                              "explain, and a forecast is conditional on their values.")));
 
     variables_ = new QListWidget;
     variables_->setMaximumHeight(130);
@@ -183,9 +204,30 @@ QWidget *BuilderDialog::buildDataBox()
     arrows->addWidget(up);
     arrows->addWidget(down);
     arrows->addStretch(1);
+    exogenous_ = new QListWidget;
+    exogenous_->setObjectName(QStringLiteral("exogenousList"));
+    exogenous_->setMaximumHeight(130);
+    for (int c = 0; c < data_.series(); ++c)
+    {
+        auto *item = new QListWidgetItem(data_.names[c]);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+        item->setData(Qt::UserRole, c);
+        exogenous_->addItem(item);
+    }
+    auto *endoColumn = new QVBoxLayout;
+    endoColumn->addWidget(new QLabel(tr("Endogenous")));
+    auto *endoRow = new QHBoxLayout;
+    endoRow->addWidget(variables_, 1);
+    endoRow->addLayout(arrows);
+    endoColumn->addLayout(endoRow);
+    auto *exoColumn = new QVBoxLayout;
+    exoColumn->addWidget(new QLabel(tr("Weakly exogenous")));
+    exoColumn->addWidget(exogenous_);
     auto *list = new QHBoxLayout;
-    list->addWidget(variables_, 1);
-    list->addLayout(arrows);
+    list->addLayout(endoColumn, 1);
+    list->addSpacing(12);
+    list->addLayout(exoColumn, 1);
     layout->addLayout(list);
 
     first_ = new QComboBox;
@@ -239,6 +281,15 @@ QWidget *BuilderDialog::buildSpecBox()
     p_->setToolTip(tr("For a VEC this is the order of the VAR in levels, so a VEC of order 1 "
                       "has no lagged differences."));
     form->addRow(tr("Lags (p)"), p_);
+
+    exoLags_ = new QSpinBox;
+    exoLags_->setRange(0, 24);
+    exoLags_->setValue(1);
+    exoLags_->setObjectName(QStringLiteral("exoLags"));
+    exoLags_->setToolTip(tr("The exogenous variables enter at lags 0 to s. For a VEC this is a level "
+                            "order: their differences at lags 0 to s - 1, and their level at lag 1 in "
+                            "the cointegration space, so it is at least 1."));
+    form->addRow(tr("Exogenous lags (s)"), exoLags_);
 
     constant_ = new QCheckBox(tr("Constant"));
     constant_->setChecked(true);
@@ -429,6 +480,9 @@ QWidget *BuilderDialog::buildSamplerBox()
     form->addRow(tr("Hold out for evaluation"), holdout_);
     form->addRow(QString(), hint(tr("Held-out periods are left out of estimation and scored against the "
                                      "forecast: the log predictive score of the Evaluation stage.")));
+    exoForecast_ = hint(QString());
+    form->addRow(QString(), exoForecast_);
+    connect(holdout_, &QSpinBox::valueChanged, this, &BuilderDialog::updateEnabled);
     connect(horizon_, &QSpinBox::valueChanged, this, &BuilderDialog::updateEnabled);
     return box;
 }
@@ -481,6 +535,13 @@ void BuilderDialog::updateEnabled()
 
     // The refusals of algorithms.md, as disabled controls.
     const bool vec = familyVec_->isChecked();
+    int m = 0;
+    for (int i = 0; i < exogenous_->count(); ++i)
+    {
+        m += exogenous_->item(i)->checkState() == Qt::Checked ? 1 : 0;
+    }
+    exoLags_->setEnabled(m > 0);
+    exoLags_->setMinimum(vec ? 1 : 0);
     rank_->setEnabled(vec);
     rank_->setMaximum(std::max(1, k));
     restrictConstant_->setVisible(vec);
@@ -536,7 +597,30 @@ void BuilderDialog::updateEnabled()
     svBox_->setVisible(sv);
 
     // A structural model cannot be scored, so it has nothing to hold out for.
-    holdout_->setMaximum(structural_->isChecked() ? 0 : horizon_->value());
+    // With exogenous variables a forecast is conditional on their values over
+    // the horizon, which only the data after the sample -- or the periods held
+    // out of it -- can supply; so the horizon is bounded by those, and the
+    // holdout is what makes room for one.
+    if (m > 0)
+    {
+        const QSignalBlocker b1(horizon_);
+        const QSignalBlocker b2(holdout_);
+        const int after = data_.length() - 1 - last_->currentIndex();
+        holdout_->setMaximum(structural_->isChecked() ? 0 : 200);
+        horizon_->setMaximum(std::max(0, after + holdout_->value()));
+        exoForecast_->setText(tr("A forecast is conditional on the exogenous variables over the horizon: "
+                                 "at most %1 period(s) here, the %2 after the sample and those held out.")
+                                  .arg(horizon_->maximum())
+                                  .arg(after));
+        exoForecast_->setVisible(true);
+    }
+    else
+    {
+        const QSignalBlocker b1(horizon_);
+        horizon_->setMaximum(200);
+        holdout_->setMaximum(structural_->isChecked() ? 0 : horizon_->value());
+        exoForecast_->setVisible(false);
+    }
 }
 
 VarBuilderSpec BuilderDialog::readForm() const
@@ -550,6 +634,14 @@ VarBuilderSpec BuilderDialog::readForm() const
             s.columns.push_back(variables_->item(i)->data(Qt::UserRole).toInt());
         }
     }
+    for (int i = 0; i < exogenous_->count(); ++i)
+    {
+        if (exogenous_->item(i)->checkState() == Qt::Checked)
+        {
+            s.exogenous.push_back(exogenous_->item(i)->data(Qt::UserRole).toInt());
+        }
+    }
+    s.s = exoLags_->value();
     s.firstRow = first_->currentIndex();
     s.lastRow = last_->currentIndex();
     s.family = familyVec_->isChecked() ? VarBuilderSpec::Family::Vec : VarBuilderSpec::Family::Var;
