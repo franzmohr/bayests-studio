@@ -1,0 +1,85 @@
+% Exported from BayesTS Studio. Needs \usepackage{booktabs}.
+\begin{table}[htbp]
+  \centering
+  \caption{Model comparison}
+  \label{tab:model-comparison}
+  \begin{tabular}{llrrrrr}
+    \toprule
+    Model & Algorithm & Periods & lppd & p\_WAIC & WAIC & Log predictive score \\
+    \midrule
+    \textbf{built} & VarNormalWishart & 89 & \ensuremath{-}494.34 & 24.81 & 1038.29 & --- \\
+    \bottomrule
+  \end{tabular}
+  \par\medskip\footnotesize WAIC = \ensuremath{-}2 (lppd \ensuremath{-} p\_WAIC), smaller is better; the log predictive score sums the log predictive density of the held-out periods, larger is better. \ensuremath{\star}: the smallest WAIC.
+\end{table}
+
+% Exported from BayesTS Studio. Needs \usepackage{booktabs}.
+\begin{table}[htbp]
+  \centering
+  \caption{Posterior inclusion probabilities: lagged endogenous variables}
+  \label{tab:posterior-inclusion-probabilities-lagged}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+     & invest(-1) & income(-1) & cons(-1) & invest(-2) & income(-2) & cons(-2) \\
+    \midrule
+    invest & 0.36 & 0.44 & 0.48 & 0.18 & 0.34 & 0.43 \\
+    income & 0.12 & 0.19 & \textbf{0.79} & 0.05 & 0.13 & 0.26 \\
+    cons & 0.03 & \textbf{0.91} & \textbf{0.79} & 0.06 & \textbf{0.98} & 0.16 \\
+    \bottomrule
+  \end{tabular}
+  \par\medskip\footnotesize Bayesian variable selection (Korobilis 2013), prior inclusion probability 0.5, 20000 draws. Bold: at least one half, the median probability model. Grey: not subject to selection.
+\end{table}
+
+% Exported from BayesTS Studio. Needs \usepackage{booktabs} and \usepackage{xcolor}.
+\begin{table}[htbp]
+  \centering
+  \caption{Posterior inclusion probabilities: deterministic terms}
+  \label{tab:posterior-inclusion-probabilities-determ}
+  \begin{tabular}{lr}
+    \toprule
+     & constant \\
+    \midrule
+    invest & \textcolor{gray}{1} \\
+    income & \textcolor{gray}{1} \\
+    cons & \textcolor{gray}{1} \\
+    \bottomrule
+  \end{tabular}
+  \par\medskip\footnotesize Bayesian variable selection (Korobilis 2013), prior inclusion probability 0.5, 20000 draws. Bold: at least one half, the median probability model. Grey: not subject to selection.
+\end{table}
+
+% Exported from BayesTS Studio. Needs \usepackage{booktabs}.
+\begin{table}[htbp]
+  \centering
+  \caption{Connectedness table}
+  \label{tab:connectedness-table}
+  \begin{tabular}{lrrrr}
+    \toprule
+     & invest & income & cons & From others \\
+    \midrule
+    invest & 86.9 & 3.6 & 9.5 & \textbf{4.4} \\
+    income & 2.2 & 70.3 & 27.5 & \textbf{9.9} \\
+    cons & 6.1 & 28.5 & 65.4 & \textbf{11.5} \\
+    \midrule
+    To others & \textbf{2.8} & \textbf{10.7} & \textbf{12.3} & \textbf{25.8} \\
+    \bottomrule
+  \end{tabular}
+  \par\medskip\footnotesize Row j, column k: the share of the forecast error variance of j due to shocks to k, in percent. From others: what each variable receives; to others: what it transmits; the corner is the total spillover index, 25.7 (90\% interval 18.9 to 33.3). Generalised (Diebold and Yilmaz 2012), H = 10, posterior mean over 4000 draws.
+\end{table}
+
+% Exported from BayesTS Studio. Needs \usepackage{booktabs}.
+\begin{table}[htbp]
+  \centering
+  \caption{Net pairwise spillovers}
+  \label{tab:net-pairwise-spillovers}
+  \begin{tabular}{lrrr}
+    \toprule
+     & invest & income & cons \\
+    \midrule
+    invest & -- & \ensuremath{-}0.48 & \ensuremath{-}1.13 \\
+    income & 0.48 & -- & 0.34 \\
+    cons & 1.13 & \ensuremath{-}0.34 & -- \\
+    \bottomrule
+  \end{tabular}
+  \par\medskip\footnotesize Row j, column k: what k transmits to j less what j transmits to k, in percent. Generalised (Diebold and Yilmaz 2012), H = 10, posterior mean over 4000 draws.
+\end{table}
+
