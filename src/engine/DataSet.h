@@ -26,6 +26,22 @@ struct DataSet
     }
 };
 
+/// R's `tsp` of a run of periods: the time of the first and the last, and the
+/// number of periods per unit of time -- 4 for "1960 Q2", 12 for "1960-04",
+/// 1 for "1960". `known` is false where the labels follow none of these, and
+/// the index is then 1, 2, ... at frequency one, which is what R gives a
+/// series without one.
+struct TimeIndex
+{
+    double start = 1.0;
+    double end = 1.0;
+    double frequency = 1.0;
+    bool known = false;
+};
+
+/// The index of rows `first` to `last` of `data`, from its period labels.
+TimeIndex timeIndex(const DataSet &data, int first, int last);
+
 /// Reads a delimited text file: a header row of names, then one row per
 /// period. The delimiter (comma, semicolon or tab) is detected from the header.
 /// A first column that is not numeric in every row is taken as period labels.

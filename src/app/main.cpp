@@ -91,7 +91,13 @@ int main(int argc, char *argv[])
                 window.importFrom(QString::fromLocal8Bit(csv));
                 auto *dialog = new studio::BuilderDialog(window.workingData(), QDir::currentPath(), &window);
                 dialog->show();
-                for (const char *name : {"coefTvp", "errSv", "covar"})
+                // STUDIO_SMOKE_TICK names the controls to tick, by object name.
+                QByteArray tick = qgetenv("STUDIO_SMOKE_TICK");
+                if (tick.isEmpty())
+                {
+                    tick = "coefTvp,errSv,covar";
+                }
+                for (const QByteArray &name : tick.split(','))
                 {
                     if (auto *b = dialog->findChild<QAbstractButton *>(QString::fromLatin1(name)))
                     {
@@ -105,7 +111,7 @@ int main(int argc, char *argv[])
                     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
                 }
                 dialog->grab().save(QStringLiteral("%1-builder.png").arg(QString::fromLocal8Bit(prefix)));
-                if (dialog->createAt(QDir::current().filePath(QStringLiteral("built-VarTvpStochvol.h5"))))
+                if (dialog->createAt(QDir::current().filePath(QStringLiteral("built.h5"))))
                 {
                     window.addCreatedModel(dialog->createdFile());
                 }

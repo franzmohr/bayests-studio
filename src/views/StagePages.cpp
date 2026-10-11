@@ -95,13 +95,24 @@ void rootAt(QTreeView *view, const ModelFileTree *tree, const QString &path)
 /// /data/train/y is one row stacked by period: element t*k + i.
 std::vector<std::vector<double>> seriesOf(const QString &file, int k)
 {
+    // Either spelling BayesTS reads: one row stacked by period, element t*k + i,
+    // or the time series bvartools and the model builder write, one row per
+    // variable and one column per period.
     const Matrix y = readMatrix(file, QStringLiteral("/data/train/y"));
     const std::size_t n = y.rows * y.cols;
     const auto kk = static_cast<std::size_t>(k);
     std::vector<std::vector<double>> series(kk, std::vector<double>(n / kk));
+    const bool byVariable = y.rows == kk && kk > 1;
     for (std::size_t j = 0; j < n; ++j)
     {
-        series[j % kk][j / kk] = y.values[j];
+        if (byVariable)
+        {
+            series[j / y.cols][j % y.cols] = y.values[j];
+        }
+        else
+        {
+            series[j % kk][j / kk] = y.values[j];
+        }
     }
     return series;
 }
@@ -394,6 +405,19 @@ void PosteriorPage::showDataset(int index)
         {
             rows = names_;
         }
+        else if (path == QLatin1String("/posterior/beta/coeffs") && !context_.report.timeVarying)
+        {
+            // vec(beta), k_beta x rank, column by column: one relation after the other.
+            const QStringList terms =
+                readStringsAttribute(context_.file, QStringLiteral("/data/train/w"), QStringLiteral("terms"));
+            for (int r = 0; !terms.isEmpty() && r < 16; ++r)
+            {
+                for (const QString &term : terms)
+                {
+                    rows << QStringLiteral("ec%1: %2").arg(r + 1).arg(term);
+                }
+            }
+        }
         draws_->showDataset(context_.file, path, rows);
     }
 }
@@ -596,8 +620,28 @@ void ApplicationPage::showVariable(int variable)
     }
     try
     {
-        const auto history = seriesOf(context_.file, r.k);
-        const auto &y = history[static_cast<std::size_t>(variable)];
+        const bool vec = r.algorithm.startsWith(QLatin1String("Vec"));
+        std::vector<double> y;
+        if (vec)
+        {
+            // A VEC is estimated in differences and forecast in levels. Its
+            // levels are in the file all the same: column t of /data/train/w
+            // starts with y_{t-1}, and the first lag block of
+            // /data/forecast/x is y_T, which together are the history from
+            // the period before the sample to its end.
+            const Matrix w = readMatrix(context_.file, QStringLiteral("/data/train/w"));   // (k_beta, tt)
+            const Matrix fx = readMatrix(context_.file, QStringLiteral("/data/forecast/x"));   // (n_x, h)
+            const auto row = static_cast<std::size_t>(variable);
+            for (std::size_t t = 0; t < w.cols; ++t)
+            {
+                y.push_back(w.at(row, t));
+            }
+            y.push_back(fx.at(row, 0));
+        }
+        else
+        {
+            y = seriesOf(context_.file, r.k)[static_cast<std::size_t>(variable)];
+        }
         const std::size_t shown = std::min<std::size_t>(y.size(), static_cast<std::size_t>(4 * r.horizon));
         const std::vector<double> tail(y.end() - static_cast<std::ptrdiff_t>(shown), y.end());
 
@@ -612,14 +656,12 @@ void ApplicationPage::showVariable(int variable)
                 draws[h][d] = f.at(h * static_cast<std::size_t>(r.k) + static_cast<std::size_t>(variable), d);
             }
         }
-        // A VEC is estimated in differences and forecast in levels, so its
-        // /data/train/y is not the history of the forecast it makes.
-        if (!r.algorithm.startsWith(QLatin1String("Vec")))
-        {
-            const double origin = static_cast<double>(y.size() - shown);
-            fan_->addLine(tr("Observed"), tail, 0, origin);
-        }
-        fan_->addFan(tr("Forecast median"), draws, 1, static_cast<double>(y.size()));
+        // The history ends at the last sample period, x = y.size() - 1 for a
+        // VEC (whose history starts one period before the sample) and
+        // y.size() for a VAR; the forecast takes over from there.
+        const double last = vec ? static_cast<double>(y.size() - 1) : static_cast<double>(y.size());
+        fan_->addLine(tr("Observed"), tail, 0, last - static_cast<double>(shown));
+        fan_->addFan(tr("Forecast median"), draws, 1, last);
         forecastNote_->setText(tr("%1-step forecast from %2 draws; median with 68% and 90% bands. "
                                   "VEC forecasts are in levels.")
                                    .arg(horizon)

@@ -71,6 +71,36 @@ DataSet simulate(arma::mat &A, arma::vec &c)
     return data;
 }
 
+/// Three series in levels: y1 and y3 random walks, y2 = y1 plus a stationary
+/// AR(1), so the one cointegrating vector is proportional to (1, -1, 0).
+DataSet simulateCointegrated()
+{
+    const int T = 300;
+    std::mt19937_64 rng(20261012ULL);
+    std::normal_distribution<double> normal(0.0, 1.0);
+    arma::mat y(T, 3, arma::fill::zeros);
+    double gap = 0.0;
+    y(0, 0) = 10.0;
+    y(0, 2) = 5.0;
+    y(0, 1) = 10.0;
+    for (int t = 1; t < T; ++t)
+    {
+        y(t, 0) = y(t - 1, 0) + 0.2 + normal(rng);
+        gap = 0.5 * gap + 0.5 * normal(rng);
+        y(t, 1) = y(t, 0) + gap;
+        y(t, 2) = y(t - 1, 2) + normal(rng);
+    }
+    DataSet data;
+    data.source = QStringLiteral("simulated, cointegrated");
+    data.names = {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")};
+    for (int t = 0; t < T; ++t)
+    {
+        data.periods << QStringLiteral("%1 Q%2").arg(1950 + t / 4).arg(t % 4 + 1);
+    }
+    data.values = y;
+    return data;
+}
+
 bool exists(const QString &file, const std::string &path)
 {
     HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
@@ -116,13 +146,17 @@ int main()
     arma::mat A;
     arma::vec c;
     const DataSet data = simulate(A, c);
+    const DataSet levels = simulateCointegrated();
     QTemporaryDir dir;
+    using Family = VarBuilderSpec::Family;
 
     using Errors = VarBuilderSpec::Errors;
     using Selection = VarBuilderSpec::Selection;
 
     // -- Every combination the form allows.
     int written = 0;
+    for (const Family family : {Family::Var, Family::Vec})
+    {
     for (const bool tvp : {false, true})
     {
         for (const Errors errors : {Errors::Wishart, Errors::Gamma, Errors::Stochvol})
@@ -136,9 +170,21 @@ int main()
                         for (const bool nonCentred : {false, true})
                         {
                             VarBuilderSpec s;
-                            s.data = data;
+                            s.family = family;
+                            s.data = family == Family::Vec ? levels : data;
                             s.columns = {0, 1, 2};
                             s.p = 2;
+                            if (family == Family::Vec)
+                            {
+                                // The deterministic cases rotate: an unrestricted
+                                // constant; the constant in the space; an
+                                // unrestricted constant with the trend in it.
+                                const int variant = written % 3;
+                                s.restrictConstant = variant == 1;
+                                s.trend = variant == 2;
+                                s.restrictTrend = true;
+                                s.rank = 1 + written % 2;
+                            }
                             s.timeVarying = tvp;
                             s.errors = errors;
                             s.covar = covar;
@@ -161,11 +207,13 @@ int main()
                             {
                                 continue;   // refused by the form, as BayesTS would
                             }
-                            const QString name = QStringLiteral("%1-c%2-s%3-v%4-n%5-m%6.h5")
+                            const QString name = QStringLiteral("%1-r%7-d%8-c%2-s%3-v%4-n%5-m%6.h5")
                                                      .arg(s.algorithm())
                                                      .arg(covar).arg(structural)
                                                      .arg(static_cast<int>(selection))
-                                                     .arg(nonCentred).arg(s.minnesota);
+                                                     .arg(nonCentred).arg(s.minnesota)
+                                                     .arg(s.vec() ? s.rank : 0)
+                                                     .arg(s.vec() ? written % 3 : 0);
                             const QString file = dir.filePath(name);
                             ++written;
                             try
@@ -210,6 +258,7 @@ int main()
                 }
             }
         }
+    }
     }
     std::printf("%d combinations written and run\n", written);
 
@@ -265,10 +314,62 @@ int main()
         s.burnin = 0;
         const QString file = dir.filePath(QStringLiteral("order.h5"));
         writeVarModel(s, file);
-        const arma::mat y = readDraws(file, "/data/train/y");   // (1, tt*k)
-        if (std::abs(y(0, 0) - data.values(1, 2)) > 1e-12 || std::abs(y(0, 1) - data.values(1, 0)) > 1e-12)
+        // A time series as bayests-r writes one: (k, tt) in dataspace terms,
+        // one row per variable in the chosen order.
+        const arma::mat y = readDraws(file, "/data/train/y");
+        if (y.n_rows != 3 || std::abs(y(0, 0) - data.values(1, 2)) > 1e-12 ||
+            std::abs(y(1, 0) - data.values(1, 0)) > 1e-12)
         {
-            fail("/data/train/y is not stacked by period in the chosen variable order");
+            fail("/data/train/y is not the chosen variables in their order, one row each");
+        }
+        if (readStringsAttribute(file, QStringLiteral("/data/train/y"), QStringLiteral("variables")) !=
+            QStringList{QStringLiteral("y3"), QStringLiteral("y1"), QStringLiteral("y2")})
+        {
+            fail("/data/train/y does not carry the variable names in their order");
+        }
+    }
+
+    // -- A VEC finds the space the data were simulated from, and its forecast
+    // is in levels.
+    {
+        VarBuilderSpec s;
+        s.family = Family::Vec;
+        s.data = levels;
+        s.columns = {0, 1, 2};
+        s.p = 2;
+        s.rank = 1;
+        s.coefPrecision = 1e-2;
+        s.cointShrinkage = 0.0;   // flat on the loadings, uniform on the space
+        s.iterations = 3000;
+        s.burnin = 1000;
+        s.seed = 13;
+        s.horizon = 4;
+        const QString file = dir.filePath(QStringLiteral("vec-recovery.h5"));
+        writeVarModel(s, file);
+        runAll(file, 13);
+        // beta is identified up to scale: normalise each draw on its first row.
+        const arma::mat beta = readDraws(file, "/posterior/beta/coeffs");   // (3, draws)
+        arma::mat normalised = beta.each_row() / beta.row(0);
+        const arma::vec mean = arma::median(normalised, 1);
+        std::printf("VEC: median of beta normalised on x = (%.3f, %.3f, %.3f); simulated (1, -1, 0)\n",
+                    mean(0), mean(1), mean(2));
+        if (std::abs(mean(1) + 1.0) > 0.1 || std::abs(mean(2)) > 0.1)
+        {
+            fail("the VEC does not recover the cointegration space");
+        }
+        // The Johansen start is already in the right place.
+        const arma::vec start = arma::vectorise(readDraws(file, "/initial/beta"));
+        if (std::abs(start(1) / start(0) + 1.0) > 0.1)
+        {
+            fail("the Johansen starting value of beta is not near the simulated space");
+        }
+        const arma::mat forecast = readDraws(file, "/posterior/forecast/forecasts");   // (h*k, draws)
+        const double first = arma::median(forecast.row(0));
+        const double last = levels.values(levels.length() - 1, 0);
+        std::printf("VEC: first forecast of x %.2f, last level %.2f\n", first, last);
+        if (std::abs(first - last) > 5.0)
+        {
+            fail("the VEC forecast is not in levels");
         }
     }
 

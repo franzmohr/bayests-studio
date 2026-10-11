@@ -67,6 +67,11 @@ private:
     QComboBox *last_;
 
     // Specification
+    QRadioButton *familyVar_;
+    QRadioButton *familyVec_;
+    QSpinBox *rank_;
+    QCheckBox *restrictConstant_;
+    QCheckBox *restrictTrend_;
     QSpinBox *p_;
     QCheckBox *constant_;
     QCheckBox *trend_;
@@ -90,6 +95,10 @@ private:
     QDoubleSpinBox *kappa1_;
     QDoubleSpinBox *kappa2_;
     QDoubleSpinBox *kappa4_;
+    QGroupBox *cointBox_;
+    QDoubleSpinBox *cointShrinkage_;
+    QDoubleSpinBox *cointPTauInv_;
+    QDoubleSpinBox *cointRho_;
     QGroupBox *stateBox_;
     QDoubleSpinBox *stateShape_;
     QLineEdit *stateRate_;

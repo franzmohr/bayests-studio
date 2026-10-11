@@ -46,16 +46,34 @@ components it uses.
   names travel in the file as attributes no reader looks at, so every view
   says "income ← invest(-1)" rather than "row 4".
 
-  Covered so far: the six Gaussian VARs. `test/builder_test.cpp` writes all
-  46 combinations the form allows from a simulated VAR, checks each with
-  `bayests check` (no refusal, no warning), runs all three stages, and holds
-  a flat-prior VAR(1) to the simulated coefficients and to least squares.
+  Covered so far: the twelve Gaussian VARs and VECs. For a VEC the form adds
+  the cointegration rank, whether the constant and the trend sit inside the
+  cointegration space, and its prior -- Koop, León-González and Strachan
+  (2010) for a constant space, the state equation with autocorrelation ρ for
+  a time-varying one. Its chain starts at Johansen's maximum likelihood
+  estimate of beta, scaled to the state equation where the space moves, as
+  bvartools starts it.
+
+  Files follow the conventions of bayests-r's `write_bayests_tree()`:
+  `/data/train/y` and `/data/test/y` are time series with `variables` and
+  `tsp`, so `read_bayests_tree()` gives R a named `ts` with its dates; the
+  seed is an R integer. BayesTS reads that layout of `y` exactly as the
+  stacked one (identical draws).
+
+  `test/builder_test.cpp` writes all 92 combinations the form allows -- a
+  simulated VAR for the VAR row, a simulated cointegrated system for the VEC
+  row, across ranks and deterministic cases -- checks each with
+  `bayests check` (no refusal, no warning), runs all three stages, holds a
+  flat-prior VAR(1) to the simulated coefficients and to least squares, and
+  a VEC to the simulated cointegration space (β normalised: 1, −1.003, 0.003
+  against 1, −1, 0) with a forecast in levels.
 
 ## Roadmap
 
-1. The builder for the remaining families: VECs, the quantile and
-   discounted VARs, factor models and FAVARs, unobserved components;
-   exogenous variables and seasonal dummies; Excel import.
+1. The builder for the remaining families: the quantile and discounted
+   models, `VecKlgs2010`, factor models and FAVARs, unobserved components;
+   exogenous variables and seasonal dummies; Excel import; an R-side reader
+   (`rclass`) so a studio file opens as a bvartools object.
 2. Analysis: forecasts with fan charts, impulse responses, FEVD, inclusion
    probabilities, the Savage–Dickey test for time variation, model comparison
    by WAIC / PSIS-LOO across several files.

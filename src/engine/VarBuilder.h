@@ -11,24 +11,31 @@
 namespace studio
 {
 
-/// Everything the model builder asks for, for the six Gaussian VARs of the
-/// taxonomy: {constant, time-varying} coefficients x {Wishart, gamma,
-/// stochastic volatility} errors. Defaults are those of the bvartools article's
-/// replication script, so a model built here and one built there agree.
+/// Everything the model builder asks for, for the twelve Gaussian VARs and VECs
+/// of the taxonomy: {VAR, VEC} x {constant, time-varying} coefficients x
+/// {Wishart, gamma, stochastic volatility} errors. Defaults are those of the
+/// bvartools article's replication script, so a model built here and one built
+/// there agree.
 struct VarBuilderSpec
 {
+    enum class Family { Var, Vec } family = Family::Var;
+
     // Data: the columns of the data set that are endogenous, in the order the
     // model takes them (which matters for a structural or covariance block),
-    // and the rows used, inclusive.
+    // and the rows used, inclusive. A VEC takes them as levels.
     DataSet data;
     std::vector<int> columns;
     int firstRow = 0;
     int lastRow = -1;   ///< -1: the last row
 
-    // Specification
+    // Specification. `p` is a level order for a VEC too, so a VEC of order 1
+    // has no lagged differences.
     int p = 2;
     bool constant = true;
     bool trend = false;
+    bool restrictConstant = false;    ///< VEC: the constant inside the cointegration space
+    bool restrictTrend = false;       ///< VEC: the trend inside the cointegration space
+    int rank = 1;                     ///< VEC: cointegration rank
     bool timeVarying = false;
     enum class Errors { Wishart, Gamma, Stochvol } errors = Errors::Wishart;
     bool covar = false;       ///< the covariance block, gamma or SV only
@@ -45,6 +52,13 @@ struct VarBuilderSpec
     double detPrecision = 0.1;        ///< v_i_det
     double kappa1 = 0.2, kappa2 = 0.5, kappa4 = 100.0; ///< Minnesota: overall, cross, deterministic
     double covarPrecision = 1.0;      ///< psi v_i
+
+    // Cointegration space (VEC). Constant: Koop, León-González and Strachan
+    // (2010), v and P_tau^-1 = this times I. Time-varying: the state equation
+    // beta_t = rho beta_{t-1} + eta_t and its stationary distribution.
+    double cointShrinkage = 0.1;      ///< coint v_i
+    double cointPTauInv = 1.0;        ///< coint p_tau_i
+    double cointRho = 0.999;          ///< coint rho
 
     // Random walks (time-varying coefficients)
     bool nonCentred = false;          ///< Frühwirth-Schnatter and Wagner (2010), for the time-variation test
@@ -66,6 +80,7 @@ struct VarBuilderSpec
     int horizon = 0;
     int holdout = 0;                  ///< last periods kept out of estimation, written as /data/test/y
 
+    bool vec() const { return family == Family::Vec; }
     QString algorithm() const;
 };
 
@@ -76,9 +91,10 @@ struct VarBuilderSummary
 {
     int k = 0;
     int periods = 0;   ///< tt, after lags and holdout
-    int nx = 0;        ///< regressors per equation
+    int nx = 0;        ///< regressors per equation, after a VEC's loadings
     int nparams = 0;   ///< coefficients
     int npsi = 0;
+    int kBeta = 0;     ///< VEC: rows of the cointegration matrix
     QString refusal;
     QStringList notes;
 };

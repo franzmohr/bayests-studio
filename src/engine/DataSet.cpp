@@ -2,8 +2,10 @@
 
 #include <QFile>
 #include <QLocale>
+#include <QRegularExpression>
 #include <QTextStream>
 
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -64,6 +66,79 @@ bool toNumber(const QString &text, QChar delimiter, double &out)
 }
 
 } // namespace
+
+TimeIndex timeIndex(const DataSet &data, int first, int last)
+{
+    TimeIndex index;
+    index.start = first + 1;
+    index.end = last + 1;
+    if (data.periods.size() <= last || first > last)
+    {
+        return index;
+    }
+
+    // Year and sub-period of one label, and the frequency its spelling implies.
+    static const QRegularExpression quarter(QStringLiteral(R"(^(\d{4})\s*[-_ ]?\s*[Qq]([1-4])$)"));
+    static const QRegularExpression month(QStringLiteral(R"(^(\d{4})[-/.M]?(\d{1,2})(?:[-/.]\d{1,2})?$)"));
+    static const QRegularExpression year(QStringLiteral(R"(^(\d{4})$)"));
+    const auto parse = [&](const QString &label, double &time, double &frequency) {
+        const QString text = label.trimmed();
+        if (const auto m = quarter.match(text); m.hasMatch())
+        {
+            frequency = 4.0;
+            time = m.captured(1).toDouble() + (m.captured(2).toDouble() - 1.0) / 4.0;
+            return true;
+        }
+        if (const auto m = year.match(text); m.hasMatch())
+        {
+            frequency = 1.0;
+            time = m.captured(1).toDouble();
+            return true;
+        }
+        if (const auto m = month.match(text); m.hasMatch())
+        {
+            const double mo = m.captured(2).toDouble();
+            if (mo < 1 || mo > 12)
+            {
+                return false;
+            }
+            frequency = 12.0;
+            time = m.captured(1).toDouble() + (mo - 1.0) / 12.0;
+            return true;
+        }
+        return false;
+    };
+
+    double t0 = 0.0, f0 = 0.0, t1 = 0.0, f1 = 0.0;
+    if (!parse(data.periods[first], t0, f0) || !parse(data.periods[last], t1, f1) || f0 != f1)
+    {
+        return index;
+    }
+    // Monthly labels written as quarter-start dates ("1960-04-01", "1960-07-01")
+    // are quarterly: the spacing decides, not the spelling.
+    if (f0 == 12.0 && last > first)
+    {
+        const double step = (t1 - t0) / (last - first);
+        if (std::abs(step - 0.25) < 1e-9)
+        {
+            f0 = 4.0;
+        }
+        else if (std::abs(step - 1.0) < 1e-9)
+        {
+            f0 = 1.0;
+        }
+    }
+    // The labels must be evenly spaced at that frequency, or they are not an index.
+    if (std::abs((t1 - t0) * f0 - (last - first)) > 1e-6)
+    {
+        return index;
+    }
+    index.start = t0;
+    index.end = t1;
+    index.frequency = f0;
+    index.known = true;
+    return index;
+}
 
 DataSet readDelimited(const QString &path)
 {

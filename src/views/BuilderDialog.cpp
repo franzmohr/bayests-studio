@@ -212,13 +212,32 @@ QWidget *BuilderDialog::buildSpecBox()
     auto *box = new QGroupBox(tr("Specification"));
     auto *form = new QFormLayout(box);
 
-    form->addRow(new QLabel(tr("Model")), new QLabel(tr("Vector autoregression (VAR)")));
-    form->addRow(QString(), hint(tr("VEC, factor, quantile, discounted and unobserved components "
-                                     "models follow.")));
+    familyVar_ = new QRadioButton(tr("Vector autoregression (VAR)"));
+    familyVec_ = new QRadioButton(tr("Vector error correction (VEC)"));
+    familyVec_->setObjectName(QStringLiteral("familyVec"));
+    familyVar_->setChecked(true);
+    auto *familyGroup = new QButtonGroup(box);
+    familyGroup->addButton(familyVar_);
+    familyGroup->addButton(familyVec_);
+    auto *family = new QHBoxLayout;
+    family->addWidget(familyVar_);
+    family->addWidget(familyVec_);
+    family->addStretch(1);
+    form->addRow(tr("Model"), family);
+    form->addRow(QString(), hint(tr("A VEC takes the variables in levels, is estimated in differences "
+                                     "and forecast in levels. Factor, quantile, discounted and "
+                                     "unobserved components models follow.")));
+
+    rank_ = new QSpinBox;
+    rank_->setRange(1, 1);
+    rank_->setValue(1);
+    form->addRow(tr("Cointegration rank (r)"), rank_);
 
     p_ = new QSpinBox;
     p_->setRange(1, 24);
     p_->setValue(2);
+    p_->setToolTip(tr("For a VEC this is the order of the VAR in levels, so a VEC of order 1 "
+                      "has no lagged differences."));
     form->addRow(tr("Lags (p)"), p_);
 
     constant_ = new QCheckBox(tr("Constant"));
@@ -229,6 +248,11 @@ QWidget *BuilderDialog::buildSpecBox()
     det->addWidget(trend_);
     det->addStretch(1);
     form->addRow(tr("Deterministic terms"), det);
+    restrictConstant_ = new QCheckBox(tr("Constant inside the cointegration space"));
+    restrictTrend_ = new QCheckBox(tr("Trend inside the cointegration space"));
+    restrictTrend_->setChecked(true);
+    form->addRow(QString(), restrictConstant_);
+    form->addRow(QString(), restrictTrend_);
 
     coefConstant_ = new QRadioButton(tr("Constant"));
     coefTvp_ = new QRadioButton(tr("Time-varying (random walk)"));
@@ -283,7 +307,9 @@ QWidget *BuilderDialog::buildSpecBox()
     form->addRow(QString(), selectDet_);
     form->addRow(QString(), selectCovar_);
 
-    for (QAbstractButton *b : {static_cast<QAbstractButton *>(coefConstant_), static_cast<QAbstractButton *>(coefTvp_),
+    for (QAbstractButton *b : {static_cast<QAbstractButton *>(familyVar_), static_cast<QAbstractButton *>(familyVec_),
+                               static_cast<QAbstractButton *>(constant_), static_cast<QAbstractButton *>(trend_),
+                               static_cast<QAbstractButton *>(coefConstant_), static_cast<QAbstractButton *>(coefTvp_),
                                static_cast<QAbstractButton *>(errWishart_), static_cast<QAbstractButton *>(errGamma_),
                                static_cast<QAbstractButton *>(errSv_), static_cast<QAbstractButton *>(covar_),
                                static_cast<QAbstractButton *>(structural_)})
@@ -315,6 +341,19 @@ QWidget *BuilderDialog::buildPriorBox()
     coef->addRow(tr("κ₄ deterministic"), kappa4_);
     layout->addLayout(coef);
     connect(minnesota_, &QCheckBox::toggled, this, &BuilderDialog::updateEnabled);
+
+    cointBox_ = new QGroupBox(tr("Cointegration space"));
+    auto *coint = new QFormLayout(cointBox_);
+    cointShrinkage_ = number(0.1, 0.0, 1e6, 4);
+    cointShrinkage_->setToolTip(tr("v of Koop, León-González and Strachan (2010); zero is the flat "
+                                   "prior on the loadings with a uniform prior on the space."));
+    cointPTauInv_ = number(1.0, 1e-6, 1e6, 4);
+    cointRho_ = number(0.999, 0.0, 0.999999, 6);
+    cointRho_->setSingleStep(0.001);
+    coint->addRow(tr("Shrinkage v (constant space)"), cointShrinkage_);
+    coint->addRow(tr("P_τ⁻¹ (× identity)"), cointPTauInv_);
+    coint->addRow(tr("Autocorrelation ρ (time-varying space)"), cointRho_);
+    layout->addWidget(cointBox_);
 
     stateBox_ = new QGroupBox(tr("Random walks of the coefficients"));
     auto *state = new QFormLayout(stateBox_);
@@ -441,6 +480,17 @@ void BuilderDialog::updateEnabled()
     }
 
     // The refusals of algorithms.md, as disabled controls.
+    const bool vec = familyVec_->isChecked();
+    rank_->setEnabled(vec);
+    rank_->setMaximum(std::max(1, k));
+    restrictConstant_->setVisible(vec);
+    restrictTrend_->setVisible(vec);
+    restrictConstant_->setEnabled(vec && constant_->isChecked());
+    restrictTrend_->setEnabled(vec && trend_->isChecked());
+    cointBox_->setVisible(vec);
+    cointShrinkage_->setEnabled(!tvp);
+    cointPTauInv_->setEnabled(!tvp);
+    cointRho_->setEnabled(tvp);
     nonCentred_->setEnabled(tvp);
     covar_->setEnabled(!wishart && k > 1 && !structural_->isChecked());
     if (!covar_->isEnabled())
@@ -502,6 +552,13 @@ VarBuilderSpec BuilderDialog::readForm() const
     }
     s.firstRow = first_->currentIndex();
     s.lastRow = last_->currentIndex();
+    s.family = familyVec_->isChecked() ? VarBuilderSpec::Family::Vec : VarBuilderSpec::Family::Var;
+    s.rank = rank_->value();
+    s.restrictConstant = restrictConstant_->isChecked();
+    s.restrictTrend = restrictTrend_->isChecked();
+    s.cointShrinkage = cointShrinkage_->value();
+    s.cointPTauInv = cointPTauInv_->value();
+    s.cointRho = cointRho_->value();
     s.p = p_->value();
     s.constant = constant_->isChecked();
     s.trend = trend_->isChecked();
@@ -558,12 +615,14 @@ void BuilderDialog::runCheck()
     const VarBuilderSpec spec = readForm();
     const VarBuilderSummary summary = summarise(spec);
     algorithm_->setText(spec.algorithm());
-    dimensions_->setText(tr("%1 variables · %2 periods · %3 regressors per equation · %4 coefficients%5")
+    dimensions_->setText(tr("%1 variables · %2 periods · %3 regressors per equation · %4 coefficients%5%6")
                              .arg(summary.k)
                              .arg(summary.periods)
                              .arg(summary.nx)
                              .arg(summary.nparams)
-                             .arg(summary.npsi > 0 ? tr(" · %1 covariances").arg(summary.npsi) : QString()));
+                             .arg(summary.npsi > 0 ? tr(" · %1 covariances").arg(summary.npsi) : QString())
+                             .arg(spec.vec() ? tr(" · rank %1, %2 rows of β").arg(spec.rank).arg(summary.kBeta)
+                                             : QString()));
 
     QString status;
     bool ok = false;
@@ -604,6 +663,10 @@ QString BuilderDialog::suggestedName() const
 {
     const VarBuilderSpec s = readForm();
     QString name = QStringLiteral("%1-p%2").arg(s.algorithm()).arg(s.p);
+    if (s.vec())
+    {
+        name += QStringLiteral("-r%1").arg(s.rank);
+    }
     if (s.covar)
     {
         name += QStringLiteral("-covar");
