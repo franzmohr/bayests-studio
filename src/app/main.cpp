@@ -9,6 +9,7 @@
 #include <QCommandLineParser>
 #include <QElapsedTimer>
 #include <QPushButton>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QTableWidget>
 #include <QTabWidget>
@@ -153,6 +154,21 @@ int main(int argc, char *argv[])
                     }
                     settle(2000);
                     window.grab().save(QStringLiteral("%1-multipliers-transitory.png").arg(QString::fromLocal8Bit(prefix)));
+                    app->setCurrentIndex(1);
+                }
+                // STUDIO_SMOKE_HD=1: the historical decomposition, with and
+                // without the baseline.
+                if (!qgetenv("STUDIO_SMOKE_HD").isEmpty())
+                {
+                    app->setCurrentIndex(4);
+                    settle(4000);
+                    window.grab().save(QStringLiteral("%1-hd.png").arg(QString::fromLocal8Bit(prefix)));
+                    for (QCheckBox *b : app->widget(4)->findChildren<QCheckBox *>())
+                    {
+                        b->setChecked(true);
+                    }
+                    settle(500);
+                    window.grab().save(QStringLiteral("%1-hd-baseline.png").arg(QString::fromLocal8Bit(prefix)));
                     app->setCurrentIndex(1);
                 }
                 // STUDIO_SMOKE_SPILLOVER=1: every tab of the spillovers.

@@ -200,6 +200,24 @@ components it uses.
   VARX at period 20, within 6e-15. The sign and zero restrictions now read a
   VEC with exogenous variables in the same level layout.
 
+- **Historical decompositions** (Application › Historical decomposition):
+  bvartools' `historical_decomposition()` -- each draw's structural shocks
+  e_t = P⁻¹u_t, Choleski or sign-identified, propagated through the sample,
+  M_t = Σ A_l M_{t−l} + P diag(e_t), and the baseline whatever of the data
+  they leave (deterministic terms, exogenous variables, initial
+  conditions). Drawn as bvartools' `plot.bvarhd()` draws it: the posterior
+  mean or median contribution of each shock stacked as bars, positive parts
+  above zero and negative below, their sum as a line, the baseline on
+  request (and the line is then the data). A VEC is decomposed in levels,
+  from the levels its differences and error correction term imply. Constant
+  coefficients and covariance only, and no structural model, as bvartools.
+
+  Verified in `test/structural_test.cpp` against bvartools
+  (`test/hd_reference.R`), every period's mean, median and 90 % bounds of
+  every contribution and the baseline: the VAR(2), its sign identification,
+  the VEC, the VARX and the VECX, within 4e-13; and again from z alone, the
+  only regressors a file of the builder carries, identically.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted

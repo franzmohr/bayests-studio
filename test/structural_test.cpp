@@ -9,6 +9,7 @@
 #include "engine/ModelFileTree.h"
 #include "engine/CoefficientSummary.h"
 #include "engine/DataSet.h"
+#include "engine/HistoricalDecomposition.h"
 #include "engine/Multipliers.h"
 #include "engine/VarBuilder.h"
 #include "engine/SignZero.h"
@@ -16,6 +17,9 @@
 #include "engine/Structural.h"
 
 #include <QDir>
+
+#include <highfive/highfive.hpp>
+
 #include <QFile>
 #include <QTemporaryDir>
 #include <QString>
@@ -343,6 +347,69 @@ void compareBuilderData(const QString &dir, const QString &model, const QString 
     failures += ok ? 0 : 1;
 }
 
+/// The historical decomposition against bvartools'
+/// historical_decomposition(): every period's posterior mean, median and 90%
+/// bounds of each shock's contribution and the baseline.
+void compareHd(const QString &dir, const QString &name, const QString &model, const QString &response,
+               HdType type = HdType::Oir)
+{
+    const QString mean = QStringLiteral("%1/hd_%2_mean.csv").arg(dir, name);
+    if (!QFile::exists(mean))
+    {
+        std::printf("skip  historical decomposition %s: run test/hd_reference.R first\n", name.toStdString().c_str());
+        return;
+    }
+    const QString file = dir + "/" + model + ".h5";
+    const HdSupport support = hdSupport(file);
+    if (!support.ok)
+    {
+        std::printf("FAIL  historical decomposition %s: %s\n", name.toStdString().c_str(),
+                    support.reason.toStdString().c_str());
+        ++failures;
+        return;
+    }
+    HdRequest request;
+    request.type = type;
+    request.response = static_cast<int>(support.variables.indexOf(response));
+    const HistoricalDecomposition hd = historicalDecomposition(file, request);
+    request.median = true;
+    const HistoricalDecomposition med = historicalDecomposition(file, request);
+    double worst = 0.0;
+    bool shapes = true;
+    for (const auto &[suffix, ours] : {std::pair<const char *, const arma::mat *>{"mean", &hd.centre},
+                                       {"lower", &hd.lower}, {"upper", &hd.upper}, {"median", &med.centre}})
+    {
+        const arma::mat reference = readCsv(QStringLiteral("%1/hd_%2_%3.csv").arg(dir, name, suffix));
+        if (reference.n_rows != ours->n_rows || reference.n_cols != ours->n_cols)
+        {
+            shapes = false;
+            continue;
+        }
+        worst = std::max(worst, arma::abs(reference - *ours).max());
+    }
+    const bool ok = shapes && worst < 1e-8;
+    std::printf("%s  historical decomposition %s: %u periods, %d draws, max difference %.2e\n", ok ? "ok  " : "FAIL",
+                name.toStdString().c_str(), static_cast<unsigned>(hd.centre.n_rows), hd.draws, worst);
+    failures += ok ? 0 : 1;
+
+    // The route a builder's file takes: no compact x, the regressors read off
+    // z. Without /data/train/x the decomposition must not change.
+    QTemporaryDir tmp;
+    const QString copy = tmp.filePath(QStringLiteral("no-x.h5"));
+    QFile::copy(file, copy);
+    {
+        HighFive::File h5(copy.toStdString(), HighFive::File::ReadWrite);
+        h5.unlink("/data/train/x");
+    }
+    request.median = false;
+    const HistoricalDecomposition fromZ = historicalDecomposition(copy, request);
+    const double gap = arma::abs(fromZ.centre - hd.centre).max();
+    const bool zOk = gap < 1e-10;
+    std::printf("%s  historical decomposition %s from z alone: max difference %.2e\n", zOk ? "ok  " : "FAIL",
+                name.toStdString().c_str(), gap);
+    failures += zOk ? 0 : 1;
+}
+
 /// The studio's own rotation search on the VAR bvartools estimated: every
 /// accepted rotation orthonormal and satisfying every restriction, and the
 /// identified responses distributed as bvartools' -- both draw uniformly on
@@ -634,6 +701,11 @@ int main(int argc, char *argv[])
         compareMultipliers(dir, "varx", "cons", {"invest", "income"});
         compareMultipliers(dir, "vecx", "g", {"R", "Dp"});
         compareMultipliers(dir, "tvpx", "cons", {"income"}, 20);
+        compareHd(dir, "var2_cons", "var2", "cons");
+        compareHd(dir, "sign_cons", "sign", "cons", HdType::Sign);
+        compareHd(dir, "vec_R", "vec", "R");
+        compareHd(dir, "varx_income", "varx", "income");
+        compareHd(dir, "vecx_Dp", "vecx", "Dp");
         ownIdentification(dir);
         signZeroChecks(dir);
         // The round trip: bvartools reading the studio's identification. The

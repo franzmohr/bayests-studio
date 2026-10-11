@@ -8,6 +8,8 @@ add_library(studio_engine STATIC
     engine/Criteria.h
     engine/DataSet.cpp
     engine/DataSet.h
+    engine/HistoricalDecomposition.cpp
+    engine/HistoricalDecomposition.h
     engine/ModelFileTree.cpp
     engine/Multipliers.cpp
     engine/Multipliers.h
@@ -50,6 +52,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/BuilderDialog.h
     views/DiagnosticsView.cpp
     views/DiagnosticsView.h
+    views/HistoricalDecompositionView.cpp
+    views/HistoricalDecompositionView.h
     views/LiveBandsView.cpp
     views/LiveBandsView.h
     views/MultipliersView.cpp

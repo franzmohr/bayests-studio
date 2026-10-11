@@ -23,6 +23,7 @@ class SummaryPlotView;
 class ModelFileTree;
 class OverviewView;
 class SeriesPlot;
+class HistoricalDecompositionView;
 class MultipliersView;
 class SpilloverView;
 class StructuralView;
@@ -174,6 +175,7 @@ private:
     StructuralView *structural_;
     SpilloverView *spillover_;
     MultipliersView *multipliers_;
+    HistoricalDecompositionView *historical_;
 };
 
 } // namespace studio
