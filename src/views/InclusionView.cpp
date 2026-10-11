@@ -1,8 +1,11 @@
 #include "views/InclusionView.h"
 
 #include "views/PlotStyle.h"
+#include "views/TableExport.h"
 
+#include <QHBoxLayout>
 #include <QHeaderView>
+#include <QPushButton>
 #include <QLabel>
 #include <QScrollArea>
 #include <QTableWidget>
@@ -42,6 +45,7 @@ QTableWidgetItem *cell(double p, bool selected, const QString &notSelected)
     {
         item->setText(std::isfinite(p) ? QString::number(p, 'f', 0) : QStringLiteral("–"));
         item->setForeground(QColor(140, 140, 140));
+        item->setData(TableMutedRole, true);
         item->setToolTip(notSelected);
         return item;
     }
@@ -70,6 +74,7 @@ QTableWidget *table(int rows, int columns, const QStringList &rowNames, const QS
     t->verticalHeader()->setDefaultSectionSize(30);
     t->setFixedHeight(t->horizontalHeader()->sizeHint().height() + 30 * rows + 2 * t->frameWidth() + 2);
     t->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    attachTableExport(t);
     return t;
 }
 
@@ -87,9 +92,24 @@ InclusionView::InclusionView(QWidget *parent) : QWidget(parent)
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
 
+    exportAll_ = new QPushButton(tr("Export All Tables…"));
+    exportAll_->setToolTip(tr("Every table of this page in one file: LaTeX, CSV or Markdown."));
+    exportAll_->setEnabled(false);
+    connect(exportAll_, &QPushButton::clicked, this, [this]() {
+        std::vector<TableContent> contents;
+        for (QTableWidget *t : exported_)
+        {
+            contents.push_back(tableContent(t));
+        }
+        saveTables(this, contents, QStringLiteral("inclusion-probabilities"));
+    });
+    auto *top = new QHBoxLayout;
+    top->addWidget(status_, 1);
+    top->addWidget(exportAll_, 0, Qt::AlignTop);
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 8, 0, 0);
-    layout->addWidget(status_);
+    layout->addLayout(top);
     layout->addWidget(scroll, 1);
 
     watcher_ = new QFutureWatcher<Result>(this);
@@ -107,6 +127,8 @@ InclusionView::InclusionView(QWidget *parent) : QWidget(parent)
 
 void InclusionView::clearTables()
 {
+    exported_.clear();
+    exportAll_->setEnabled(false);
     while (QLayoutItem *item = tables_->takeAt(0))
     {
         delete item->widget();
@@ -182,6 +204,23 @@ void InclusionView::show(const Result &result)
                          .arg(kept)
                          .arg(selected));
 
+    const QString notes =
+        tr("%1, prior inclusion probability %2, %3 draws. Bold: at least one half, the median probability "
+           "model. Grey: not subject to selection.")
+            .arg(scheme)
+            .arg(std::isfinite(s.priorInclusion) ? QString::number(s.priorInclusion, 'g', 3) : tr("—"))
+            .arg(s.draws);
+    // A section title with the table's export button beside it.
+    const auto heading = [this](const QString &title, QTableWidget *t) {
+        auto *row = new QWidget;
+        auto *h = new QHBoxLayout(row);
+        h->setContentsMargins(0, 0, 0, 0);
+        h->addWidget(section(title));
+        h->addStretch(1);
+        h->addWidget(tableExportButton(t));
+        tables_->addWidget(row);
+        exported_.push_back(t);
+    };
     const auto k = static_cast<int>(s.equations.size());
     for (const CoefficientBlock &b : s.blocks)
     {
@@ -192,8 +231,9 @@ void InclusionView::show(const Result &result)
         const int columns = static_cast<int>(b.columns.size());
         const bool loadings = b.title == QObject::tr("Cointegration matrix");
         const bool contemporaneous = b.title == QObject::tr("Contemporaneous endogenous variables");
-        tables_->addWidget(section(b.title));
         auto *t = table(k, columns, s.equations, b.columns);
+        setTableExportInfo(t, tr("Posterior inclusion probabilities: %1").arg(b.title.toLower()), notes);
+        heading(b.title, t);
         for (int j = 0; j < columns; ++j)
         {
             for (int i = 0; i < k; ++i)
@@ -210,10 +250,14 @@ void InclusionView::show(const Result &result)
     }
     if (s.psiInclusion.n_elem > 0)
     {
-        tables_->addWidget(section(tr("Covariance block (Ψ)")));
+        auto *t = table(k, k, s.equations, s.equations);
+        setTableExportInfo(t, tr("Posterior inclusion probabilities: covariance block Ψ"),
+                           notes + QLatin1Char(' ') +
+                               tr("Row i, column j: the element of the unit lower triangular Ψ relating the "
+                                  "error of i to that of j."));
+        heading(tr("Covariance block (Ψ)"), t);
         tables_->addWidget(subtle(tr("Row i, column j: the element of the unit lower triangular Ψ that relates "
                                      "the error of i to that of j.")));
-        auto *t = table(k, k, s.equations, s.equations);
         for (int i = 0; i < k; ++i)
         {
             for (int j = 0; j < k; ++j)
@@ -227,6 +271,7 @@ void InclusionView::show(const Result &result)
         tables_->addWidget(t);
     }
     tables_->addStretch(1);
+    exportAll_->setEnabled(!exported_.empty());
 }
 
 } // namespace studio

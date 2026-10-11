@@ -4,10 +4,13 @@
 #include <QWidget>
 
 #include <memory>
+#include <vector>
 
 #include "engine/CoefficientSummary.h"
 
 class QLabel;
+class QPushButton;
+class QTableWidget;
 class QVBoxLayout;
 
 namespace studio
@@ -43,6 +46,8 @@ private:
     QFutureWatcher<Result> *watcher_;
     bool pending_ = false;
     QLabel *status_;
+    QPushButton *exportAll_;
+    std::vector<QTableWidget *> exported_;
     QWidget *host_;
     QVBoxLayout *tables_;
 };

@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 #include "app/Theme.h"
 #include "views/BuilderDialog.h"
+#include "views/TableExport.h"
 
 #include <QAbstractButton>
 #include <QDir>
@@ -11,6 +12,7 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFile>
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QKeyEvent>
@@ -252,6 +254,22 @@ int main(int argc, char *argv[])
                             settle(qgetenv("STUDIO_SMOKE_SIGN") == "zero" ? 6000 : 3000);
                             window.grab().save(QStringLiteral("%1-sign.png").arg(QString::fromLocal8Bit(prefix)));
                             break;
+                        }
+                    }
+                }
+            }
+            // STUDIO_SMOKE_EXPORT=<file.tex>: every exportable table of the
+            // window, as its Export menu writes it, in one LaTeX file.
+            if (const QByteArray out = qgetenv("STUDIO_SMOKE_EXPORT"); !out.isEmpty())
+            {
+                QFile tex(QString::fromLocal8Bit(out));
+                if (tex.open(QIODevice::WriteOnly))
+                {
+                    for (QTableWidget *t : window.findChildren<QTableWidget *>())
+                    {
+                        if (!t->property("exportCaption").toString().isEmpty())
+                        {
+                            tex.write(studio::toLatex(studio::tableContent(t)).toUtf8() + "\n");
                         }
                     }
                 }

@@ -19,3 +19,9 @@ else()
     message(STATUS "test/reference missing: structural.bvartools_reference not registered "
                    "(Rscript test/structural_reference.R test/reference)")
 endif()
+
+# The table exports: CSV read back, LaTeX escaped and compiled with pdflatex
+# where one is on PATH.
+add_executable(studio_table_test table_test.cpp)
+target_link_libraries(studio_table_test PRIVATE studio_engine)
+add_test(NAME table.exports COMMAND studio_table_test)

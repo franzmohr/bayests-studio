@@ -233,6 +233,20 @@ components it uses.
   covariance block, BVS on a structural VAR and on a VEC, every probability
   exactly.
 
+- **Table export**: every results table -- the model comparison, the
+  inclusion probabilities, the connectedness and net pairwise spillover
+  tables -- has an Export button and a context menu (and Ctrl+C). Copy puts
+  it on the clipboard as tab separated text and HTML, so Excel or Word
+  pastes a table; Copy as LaTeX and Copy as Markdown give the source; Save
+  writes CSV (UTF-8 with a byte order mark, for Excel), LaTeX or Markdown,
+  and the inclusion page saves all its tables in one file. The LaTeX is a
+  booktabs table with caption, label and the view's notes beneath:
+  numeric columns set right, numbers' minus signs as minus signs, the bold
+  and grey of the view kept, LaTeX's special characters escaped and the
+  Greek letters, arrows, subscripts and stars the views print set as math.
+  `test/table_test.cpp` reads the CSV back cell for cell and compiles the
+  LaTeX with pdflatex where one is on PATH.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted
@@ -241,8 +255,7 @@ components it uses.
    file opens as a bvartools object.
 2. Analysis: the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
-3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the
-   session.
+3. Export: figures (SVG, PDF, PNG) and a script reproducing the session.
 4. Packaging: signed installers per platform (Windows MSI, macOS notarised
    DMG, Linux AppImage), licence activation.
 

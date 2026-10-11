@@ -25,6 +25,8 @@ add_library(studio_engine STATIC
     engine/Spillover.h
     engine/Structural.cpp
     engine/Structural.h
+    engine/TableFormat.cpp
+    engine/TableFormat.h
     engine/VarBuilder.cpp
     engine/VarBuilder.h
 )
@@ -69,6 +71,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/SignDialog.cpp
     views/SignDialog.h
     views/StagePages.cpp
+    views/TableExport.cpp
+    views/TableExport.h
     views/SpilloverView.cpp
     views/SpilloverView.h
     views/SummaryPlotView.cpp

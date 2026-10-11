@@ -11,6 +11,7 @@
 #include "views/MultipliersView.h"
 #include "views/SpilloverView.h"
 #include "views/SummaryPlotView.h"
+#include "views/TableExport.h"
 #include "views/InclusionView.h"
 #include "views/StructuralView.h"
 
@@ -480,6 +481,8 @@ EvaluationPage::EvaluationPage(QWidget *parent) : StagePage(parent)
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSortingEnabled(true);
     table_->setAlternatingRowColors(true);
+    attachTableExport(table_);
+    bar->addWidget(tableExportButton(table_));
     layout->addWidget(table_, 1);
 }
 
@@ -547,6 +550,9 @@ void EvaluationPage::showModel(const ModelContext &context)
         table_->item(bestRow, 5)->setToolTip(tr("Smallest WAIC in the project"));
     }
     table_->setSortingEnabled(true);
+    setTableExportInfo(table_, tr("Model comparison"),
+                       tr("WAIC = −2 (lppd − p_WAIC), smaller is better; the log predictive score sums the log "
+                          "predictive density of the held-out periods, larger is better. ★: the smallest WAIC."));
     table_->resizeColumnsToContents();
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
 }

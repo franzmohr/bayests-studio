@@ -3,6 +3,7 @@
 #include "engine/ModelFileTree.h"
 #include "views/PlotStyle.h"
 #include "views/SeriesPlot.h"
+#include "views/TableExport.h"
 
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -91,6 +92,7 @@ QTableWidget *makeTable()
     t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     t->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     t->setFocusPolicy(Qt::NoFocus);
+    attachTableExport(t);
     return t;
 }
 
@@ -168,6 +170,12 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
                             "receives from the others, the last row what it transmits to them, and the "
                             "corner the total spillover index.")));
     table_ = makeTable();
+    {
+        auto *bar = new QHBoxLayout;
+        bar->addStretch(1);
+        bar->addWidget(tableExportButton(table_));
+        tl->addLayout(bar);
+    }
     tl->addWidget(table_, 1);
 
     // Directional measures with their intervals.
@@ -198,6 +206,12 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
                             "posterior mean. Positive (green) where the column variable is the net "
                             "transmitter of the pair.")));
     pairwise_ = makeTable();
+    {
+        auto *bar = new QHBoxLayout;
+        bar->addStretch(1);
+        bar->addWidget(tableExportButton(pairwise_));
+        pl->addLayout(bar);
+    }
     pl->addWidget(pairwise_, 1);
 
     // The index over the sample.
@@ -413,6 +427,17 @@ void SpilloverView::show(const Result &result)
     corner->setToolTip(tr("The total spillover index, posterior mean. Median %1, 90% interval %2 to %3")
                            .arg(percent(total.median), percent(total.low), percent(total.high)));
     table_->setItem(k, k, corner);
+    const QString spec = tr("%1, H = %2, posterior mean over %3 draws%4")
+                             .arg(spilloverTypeName(req.type))
+                             .arg(req.horizon)
+                             .arg(m.total.n_elem)
+                             .arg(support_.moving ? tr(", period %1").arg(m.period) : QString());
+    setTableExportInfo(table_, tr("Connectedness table"),
+                       tr("Row j, column k: the share of the forecast error variance of j due to shocks to k, in "
+                          "percent. From others: what each variable receives; to others: what it transmits; the "
+                          "corner is the total spillover index, %1 (90% interval %2 to %3). %4.")
+                           .arg(percent(total.median), percent(total.low), percent(total.high), spec),
+                       {k});
 
     // Net pairwise.
     pairwise_->clear();
@@ -436,6 +461,9 @@ void SpilloverView::show(const Result &result)
                                cell(i == j ? QStringLiteral("–") : QString::number(v, 'f', 2), shade));
         }
     }
+    setTableExportInfo(pairwise_, tr("Net pairwise spillovers"),
+                       tr("Row j, column k: what k transmits to j less what j transmits to k, in percent. %1.")
+                           .arg(spec));
 
     showDirectional();
 
