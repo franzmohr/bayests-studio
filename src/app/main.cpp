@@ -12,6 +12,7 @@
 #include <QComboBox>
 #include <QTableWidget>
 #include <QTabWidget>
+#include <QKeyEvent>
 #include <QTimer>
 
 #include <cstdlib>
@@ -136,21 +137,17 @@ int main(int argc, char *argv[])
                                 {
                                     return;
                                 }
-                                // =zero: investment shock zero on income and
-                                // positive on investment at impact.
+                                // =zero: the first shock zero on the second
+                                // variable at impact, typed into the grid as a
+                                // user would, beside the + the dialog starts with.
                                 if (qgetenv("STUDIO_SMOKE_SIGN") == "zero")
                                 {
-                                    for (QPushButton *ab : dialog->findChildren<QPushButton *>())
+                                    if (auto *grid = dialog->findChild<QTableWidget *>(QStringLiteral("signGrid")))
                                     {
-                                        if (ab->text() == QStringLiteral("Add Restriction"))
-                                        {
-                                            ab->click();
-                                        }
-                                    }
-                                    if (auto *table = dialog->findChild<QTableWidget *>())
-                                    {
-                                        qobject_cast<QComboBox *>(table->cellWidget(0, 1))->setCurrentIndex(1);
-                                        qobject_cast<QComboBox *>(table->cellWidget(0, 2))->setCurrentIndex(2);
+                                        grid->setFocus();
+                                        grid->setCurrentCell(1, 0);
+                                        QKeyEvent press(QEvent::KeyPress, Qt::Key_0, Qt::NoModifier, QStringLiteral("0"));
+                                        QCoreApplication::sendEvent(grid, &press);
                                     }
                                     QCoreApplication::processEvents();
                                 }

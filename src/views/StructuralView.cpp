@@ -73,6 +73,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
 
     type_ = new QComboBox;
     type_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    type_->setMinimumContentsLength(20);
     impulse_ = new QComboBox;
     impulse_->setMinimumContentsLength(10);
     impulse_->setSizeAdjustPolicy(QComboBox::AdjustToContents);

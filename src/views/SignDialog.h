@@ -4,6 +4,8 @@
 #include <QFutureWatcher>
 
 #include <atomic>
+#include <map>
+#include <vector>
 
 #include "engine/SignZero.h"
 #include "engine/Structural.h"
@@ -15,14 +17,16 @@ class QCheckBox;
 class QGroupBox;
 class QLineEdit;
 class QSpinBox;
+class QTabBar;
 class QTableWidget;
 
 namespace studio
 {
 
-/// Identifies a model by sign restrictions: a table of restrictions on the
-/// responses to each shock, a budget of tries per draw, and the search run on
-/// a worker thread. What it writes is bvartools' layout, so R reads the
+/// Identifies a model by sign restrictions: a grid per horizon of the
+/// responses (rows) to each shock (columns), each cell left free or set to
+/// +, - or 0, a budget of tries per draw, and the search run on a worker
+/// thread. What it writes is bvartools' layout, so R reads the
 /// identification back with the model.
 class SignDialog : public QDialog
 {
@@ -49,7 +53,17 @@ private:
         SignZeroResult signZero;
     };
 
-    void addRow(const SignRestriction &r);
+    /// A cell's sign: +1, -1, 0, or Free.
+    static constexpr int Free = 2;
+
+    void setSign(int horizon, int response, int shock, int sign);
+    void rebuildTabs(int select);
+    void showGrid();
+    void paintCell(int response, int shock);
+    int currentHorizon() const;
+    void addHorizon();
+    void removeHorizon();
+    bool eventFilter(QObject *watched, QEvent *event) override;
     SignIdentification readTable() const;
     void identify();
     void updateMode();
@@ -57,7 +71,11 @@ private:
 
     QString file_;
     StructuralSupport support_;
-    QTableWidget *table_;
+    QTabBar *horizons_;
+    QTableWidget *grid_;
+    QLabel *summary_;
+    /// Horizon (-1 the long run) to the k x k signs, row-major by response.
+    std::map<int, std::vector<int>> signs_;
     QSpinBox *maxTries_;
     QSpinBox *period_;
     QGroupBox *arwBox_;

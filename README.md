@@ -87,9 +87,10 @@ components it uses.
   decompositions (gir, sgir) are left out until the open question of their
   normalisation in bvartools is settled.
 
-- **Sign restrictions** (Structural analysis › Sign Restrictions…): a table
-  of restrictions -- shock, response, sign, horizon -- and a budget of tries
-  per draw; for every draw a rotation of the Choleski factor is drawn
+- **Sign restrictions** (Structural analysis › Sign Restrictions…): a grid
+  per horizon -- responses in rows, shocks in columns, a tab each for impact,
+  any horizon added and the long run -- whose cells are clicked or typed to
+  +, − or 0 and left blank where free; and a budget of tries per draw; for every draw a rotation of the Choleski factor is drawn
   uniformly until the restrictions hold (bvartools'
   `add_sign_restrictions()`: QR of a normal matrix, R's signs moved into Q,
   a failing shock retried with its column negated). The identification is
@@ -108,8 +109,8 @@ components it uses.
   of the 68 % band); and bvartools, reading the studio's identification,
   reproduces the studio's responses within 5e-15.
 
-- **Sign and zero restrictions** (the same dialog, with a sign of "0 zero"
-  and a horizon of "long run"): Arias, Rubio-Ramírez and Waggoner (2018) as
+- **Sign and zero restrictions** (the same dialog, with a 0 in a cell or a
+  long-run tab): Arias, Rubio-Ramírez and Waggoner (2018) as
   bvartools' `add_sign_zero_restrictions()` implements it -- each draw's
   rotation built column by column on the null space of its zero
   restrictions (Algorithm 2), weighted by the ratio of the closed-form and

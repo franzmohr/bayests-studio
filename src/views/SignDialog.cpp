@@ -4,8 +4,14 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCursor>
+#include <QInputDialog>
+#include <QKeyEvent>
+#include <QMenu>
+#include <QTabBar>
 #include <QDir>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -33,14 +39,6 @@ namespace studio
 
 namespace
 {
-
-enum Column
-{
-    Shock,
-    Response,
-    Sign,
-    Horizon,
-};
 
 /// /model/seed, or nothing: the search is then seeded at random.
 std::optional<std::uint64_t> modelSeed(const QString &file)
@@ -71,45 +69,75 @@ SignDialog::SignDialog(const QString &file, const StructuralSupport &support, QW
     : QDialog(parent), file_(file), support_(support)
 {
     setWindowTitle(tr("Sign Restrictions"));
-    resize(720, 520);
+    resize(860, 720);
 
     auto *intro = new QLabel(tr(
-        "Each row restricts one response to one shock at one horizon: positive, negative or exactly zero. "
-        "With signs alone, a rotation of the Choleski factor is drawn for every posterior draw until the "
-        "signs hold (Rubio-Ramírez, Waggoner and Zha 2010). A zero restriction needs the importance "
-        "sampler of Arias, Rubio-Ramírez and Waggoner (2018), whose result is a reweighted resample of "
-        "the posterior and is written to a new model file. Only restricted shocks have an interpretation."));
+        "Restrict the response of each variable (rows) to each shock (columns) at a horizon: click a cell "
+        "to step it through +, − and 0, or type +, - or 0 (Space steps, Delete frees it). With signs alone, "
+        "a rotation of the Choleski factor is drawn for every posterior draw until the signs hold "
+        "(Rubio-Ramírez, Waggoner and Zha 2010). A zero needs the importance sampler of Arias, "
+        "Rubio-Ramírez and Waggoner (2018), whose result is a reweighted resample of the posterior and "
+        "is written to a new model file. Only restricted shocks have an interpretation."));
     intro->setWordWrap(true);
     intro->setObjectName(QStringLiteral("subtle"));
 
-    table_ = new QTableWidget(0, 4);
-    table_->setHorizontalHeaderLabels({tr("Shock"), tr("Response"), tr("Sign"), tr("Horizon")});
-    table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    table_->verticalHeader()->setVisible(false);
-    table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    // One grid per horizon, a tab each.
+    horizons_ = new QTabBar;
+    horizons_->setObjectName(QStringLiteral("signHorizons"));
+    horizons_->setExpanding(false);
+    horizons_->setDrawBase(false);
+    connect(horizons_, &QTabBar::currentChanged, this, &SignDialog::showGrid);
+    auto *addHorizon = new QPushButton(tr("Add Horizon…"));
+    auto *removeHorizon = new QPushButton(tr("Remove Horizon"));
+    connect(addHorizon, &QPushButton::clicked, this, &SignDialog::addHorizon);
+    connect(removeHorizon, &QPushButton::clicked, this, &SignDialog::removeHorizon);
+    auto *horizonBar = new QHBoxLayout;
+    horizonBar->addWidget(horizons_, 1);
+    horizonBar->addWidget(addHorizon);
+    horizonBar->addWidget(removeHorizon);
 
-    auto *add = new QPushButton(tr("Add Restriction"));
-    auto *remove = new QPushButton(tr("Remove"));
-    connect(add, &QPushButton::clicked, this, [this]() {
-        const int last = table_->rowCount() - 1;
-        SignRestriction r;
-        if (last >= 0)
+    const int k = support.k;
+    grid_ = new QTableWidget(k, k);
+    grid_->setObjectName(QStringLiteral("signGrid"));
+    QStringList shocks;
+    for (const QString &v : support.variables)
+    {
+        shocks << tr("%1 shock").arg(v);
+    }
+    grid_->setHorizontalHeaderLabels(shocks);
+    grid_->setVerticalHeaderLabels(support.variables);
+    grid_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    grid_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    grid_->verticalHeader()->setDefaultSectionSize(40);
+    grid_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    grid_->setSelectionMode(QAbstractItemView::NoSelection);
+    // No selection, so a cell's colour always shows; the focus frame marks
+    // the current cell for the keys. As tall as its rows, up to eight.
+    const int visibleRows = std::min(k, 8);
+    grid_->setFixedHeight(grid_->horizontalHeader()->sizeHint().height() + 40 * visibleRows + 2 * grid_->frameWidth() + 2);
+    for (int r = 0; r < k; ++r)
+    {
+        for (int c = 0; c < k; ++c)
         {
-            r.impulse = qobject_cast<QComboBox *>(table_->cellWidget(last, Shock))->currentIndex();
+            auto *item = new QTableWidgetItem;
+            item->setTextAlignment(Qt::AlignCenter);
+            item->setToolTip(tr("Response of %1 to the %2 shock: click to step through +, − and 0")
+                                 .arg(support.variables.value(r), support.variables.value(c)));
+            grid_->setItem(r, c, item);
         }
-        addRow(r);
+    }
+    grid_->installEventFilter(this);
+    connect(grid_, &QTableWidget::cellClicked, this, [this](int r, int c) {
+        const int now = signs_[currentHorizon()][static_cast<std::size_t>(r * support_.k + c)];
+        // Free -> + -> - -> 0 -> free.
+        const int next = now == Free ? 1 : (now == 1 ? -1 : (now == -1 ? 0 : Free));
+        setSign(currentHorizon(), r, c, next);
     });
-    connect(remove, &QPushButton::clicked, this, [this]() {
-        const int row = table_->currentRow();
-        if (row >= 0)
-        {
-            table_->removeRow(row);
-        }
-    });
-    auto *rowButtons = new QHBoxLayout;
-    rowButtons->addWidget(add);
-    rowButtons->addWidget(remove);
-    rowButtons->addStretch(1);
+    auto *axes = new QLabel(tr("Rows: responses · Columns: shocks"));
+    axes->setObjectName(QStringLiteral("subtle"));
+    summary_ = new QLabel;
+    summary_->setObjectName(QStringLiteral("subtle"));
+    summary_->setWordWrap(true);
 
     maxTries_ = new QSpinBox;
     maxTries_->setRange(1, 1000000);
@@ -172,13 +200,16 @@ SignDialog::SignDialog(const QString &file, const StructuralSupport &support, QW
 
     auto *layout = new QVBoxLayout(this);
     layout->addWidget(intro);
-    layout->addWidget(table_, 1);
-    layout->addLayout(rowButtons);
+    layout->addLayout(horizonBar);
+    layout->addWidget(grid_);
+    layout->addWidget(axes);
+    layout->addWidget(summary_);
     layout->addLayout(settings);
     layout->addWidget(mode_);
     layout->addWidget(arwBox_);
     layout->addWidget(progress_);
     layout->addWidget(status_);
+    layout->addStretch(1);
     layout->addWidget(buttons);
 
     watcher_ = new QFutureWatcher<Outcome>(this);
@@ -225,12 +256,13 @@ SignDialog::SignDialog(const QString &file, const StructuralSupport &support, QW
         accept();
     });
 
-    // What the model carries already, or a first row to start from.
+    // What the model carries already, or impact with the first variable's
+    // own response positive to start from.
     if (support.sign)
     {
         for (const SignRestriction &r : support.sign->restrictions)
         {
-            addRow(r);
+            setSign(r.horizon < 0 ? -1 : r.horizon, r.response, r.impulse, r.sign);
         }
         maxTries_->setValue(support.sign->maxTries);
         if (support.sign->period > 0)
@@ -242,9 +274,15 @@ SignDialog::SignDialog(const QString &file, const StructuralSupport &support, QW
                              .arg(support.sign->accepted)
                              .arg(support.sign->draws));
     }
-    else
+    else if (support.k > 0)
     {
-        addRow(SignRestriction{});
+        setSign(0, 0, 0, 1);
+    }
+    rebuildTabs(signs_.count(0) ? 0 : (signs_.empty() ? 0 : signs_.begin()->first));
+    if (signs_.empty())
+    {
+        signs_[0].assign(static_cast<std::size_t>(support.k * support.k), Free);
+        rebuildTabs(0);
     }
 }
 
@@ -258,39 +296,239 @@ void SignDialog::reject()
     QDialog::reject();
 }
 
-void SignDialog::addRow(const SignRestriction &r)
+namespace
 {
-    const int row = table_->rowCount();
-    table_->insertRow(row);
-    auto *shock = new QComboBox;
-    shock->addItems(support_.variables);
-    shock->setCurrentIndex(r.impulse);
-    auto *response = new QComboBox;
-    response->addItems(support_.variables);
-    response->setCurrentIndex(r.response);
-    auto *sign = new QComboBox;
-    sign->addItem(tr("+  positive"), 1);
-    sign->addItem(tr("−  negative"), -1);
-    sign->addItem(tr("0  zero"), 0);
-    sign->setCurrentIndex(r.sign > 0 ? 0 : (r.sign < 0 ? 1 : 2));
-    auto *horizon = new QSpinBox;
-    horizon->setRange(-1, 200);
-    horizon->setSpecialValueText(tr("long run"));
-    horizon->setValue(r.horizon);
-    connect(sign, &QComboBox::currentIndexChanged, this, &SignDialog::updateMode);
-    connect(horizon, &QSpinBox::valueChanged, this, &SignDialog::updateMode);
-    table_->setCellWidget(row, Shock, shock);
-    table_->setCellWidget(row, Response, response);
-    table_->setCellWidget(row, Sign, sign);
-    table_->setCellWidget(row, Horizon, horizon);
+
+/// Impact first, then the horizons in order, the long run (-1) last.
+std::vector<int> horizonOrder(const std::map<int, std::vector<int>> &signs)
+{
+    std::vector<int> order;
+    for (const auto &[h, cells] : signs)
+    {
+        if (h >= 0)
+        {
+            order.push_back(h);
+        }
+    }
+    if (signs.count(-1))
+    {
+        order.push_back(-1);
+    }
+    return order;
+}
+
+QString horizonLabel(int h)
+{
+    if (h < 0)
+    {
+        return QObject::tr("Long run");
+    }
+    return h == 0 ? QObject::tr("Impact") : QObject::tr("Horizon %1").arg(h);
+}
+
+} // namespace
+
+void SignDialog::setSign(int horizon, int response, int shock, int sign)
+{
+    const int k = support_.k;
+    if (response < 0 || response >= k || shock < 0 || shock >= k)
+    {
+        return;
+    }
+    std::vector<int> &cells = signs_[horizon];
+    if (cells.empty())
+    {
+        cells.assign(static_cast<std::size_t>(k * k), Free);
+    }
+    cells[static_cast<std::size_t>(response * k + shock)] = sign;
+    if (horizon == currentHorizon())
+    {
+        paintCell(response, shock);
+    }
+    // The tab counts its restrictions.
+    for (int t = 0; t < horizons_->count(); ++t)
+    {
+        const int h = horizons_->tabData(t).toInt();
+        const auto n = std::count_if(signs_[h].begin(), signs_[h].end(), [](int v) { return v != Free; });
+        horizons_->setTabText(t, n > 0 ? tr("%1 (%2)").arg(horizonLabel(h)).arg(n) : horizonLabel(h));
+    }
     updateMode();
+}
+
+void SignDialog::rebuildTabs(int select)
+{
+    const QSignalBlocker block(horizons_);
+    while (horizons_->count() > 0)
+    {
+        horizons_->removeTab(0);
+    }
+    int current = 0;
+    for (const int h : horizonOrder(signs_))
+    {
+        const int t = horizons_->addTab(horizonLabel(h));
+        horizons_->setTabData(t, h);
+        if (h == select)
+        {
+            current = t;
+        }
+    }
+    horizons_->setCurrentIndex(current);
+    for (int t = 0; t < horizons_->count(); ++t)
+    {
+        const int h = horizons_->tabData(t).toInt();
+        const auto n = std::count_if(signs_[h].begin(), signs_[h].end(), [](int v) { return v != Free; });
+        horizons_->setTabText(t, n > 0 ? tr("%1 (%2)").arg(horizonLabel(h)).arg(n) : horizonLabel(h));
+    }
+    showGrid();
+}
+
+int SignDialog::currentHorizon() const
+{
+    const int t = horizons_->currentIndex();
+    return t < 0 ? 0 : horizons_->tabData(t).toInt();
+}
+
+void SignDialog::showGrid()
+{
+    for (int r = 0; r < support_.k; ++r)
+    {
+        for (int c = 0; c < support_.k; ++c)
+        {
+            paintCell(r, c);
+        }
+    }
+}
+
+void SignDialog::paintCell(int response, int shock)
+{
+    QTableWidgetItem *item = grid_->item(response, shock);
+    const auto it = signs_.find(currentHorizon());
+    if (item == nullptr || it == signs_.end() || it->second.empty())
+    {
+        return;
+    }
+    const int v = it->second[static_cast<std::size_t>(response * support_.k + shock)];
+    QFont f = item->font();
+    f.setBold(true);
+    f.setPointSizeF(QFont().pointSizeF() * 1.35);
+    item->setFont(f);
+    switch (v)
+    {
+    case 1:
+        item->setText(QStringLiteral("+"));
+        item->setBackground(QColor(30, 123, 74, 70));
+        break;
+    case -1:
+        item->setText(QStringLiteral("−"));
+        item->setBackground(QColor(179, 38, 30, 70));
+        break;
+    case 0:
+        item->setText(QStringLiteral("0"));
+        item->setBackground(QColor(90, 110, 140, 70));
+        break;
+    default:
+        item->setText(QString());
+        item->setBackground(QBrush());
+        break;
+    }
+}
+
+void SignDialog::addHorizon()
+{
+    QMenu menu(this);
+    QAction *at = menu.addAction(tr("At a horizon…"));
+    QAction *longRun = menu.addAction(tr("In the long run"));
+    longRun->setEnabled(signs_.count(-1) == 0);
+    longRun->setToolTip(tr("A long-run restriction needs the sign and zero sampler."));
+    QAction *chosen = menu.exec(QCursor::pos());
+    int h = 0;
+    if (chosen == longRun)
+    {
+        h = -1;
+    }
+    else if (chosen == at)
+    {
+        int next = 1;
+        while (signs_.count(next))
+        {
+            ++next;
+        }
+        bool ok = false;
+        h = QInputDialog::getInt(this, tr("Add Horizon"), tr("Periods after impact"), next, 0, 200, 1, &ok);
+        if (!ok)
+        {
+            return;
+        }
+    }
+    else
+    {
+        return;
+    }
+    if (!signs_.count(h))
+    {
+        signs_[h].assign(static_cast<std::size_t>(support_.k * support_.k), Free);
+    }
+    rebuildTabs(h);
+}
+
+void SignDialog::removeHorizon()
+{
+    signs_.erase(currentHorizon());
+    if (signs_.empty())
+    {
+        signs_[0].assign(static_cast<std::size_t>(support_.k * support_.k), Free);
+    }
+    rebuildTabs(signs_.begin()->first >= 0 ? signs_.begin()->first : -1);
+    updateMode();
+}
+
+bool SignDialog::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == grid_ && event->type() == QEvent::KeyPress)
+    {
+        const auto *key = static_cast<QKeyEvent *>(event);
+        const int r = grid_->currentRow();
+        const int c = grid_->currentColumn();
+        if (r >= 0 && c >= 0)
+        {
+            const QString text = key->text();
+            int sign = 3;   // no change
+            if (text == QLatin1String("+") || text == QLatin1String("p"))
+            {
+                sign = 1;
+            }
+            else if (text == QLatin1String("-") || text == QStringLiteral("−") || text == QLatin1String("n"))
+            {
+                sign = -1;
+            }
+            else if (text == QLatin1String("0"))
+            {
+                sign = 0;
+            }
+            else if (key->key() == Qt::Key_Delete || key->key() == Qt::Key_Backspace)
+            {
+                sign = Free;
+            }
+            else if (key->key() == Qt::Key_Space)
+            {
+                emit grid_->cellClicked(r, c);
+                return true;
+            }
+            if (sign != 3)
+            {
+                setSign(currentHorizon(), r, c, sign);
+                return true;
+            }
+        }
+    }
+    return QDialog::eventFilter(watched, event);
 }
 
 bool SignDialog::hasZero() const
 {
-    for (int row = 0; row < table_->rowCount(); ++row)
+    for (const auto &[h, cells] : signs_)
     {
-        if (qobject_cast<QComboBox *>(table_->cellWidget(row, Sign))->currentData().toInt() == 0)
+        if (std::find(cells.begin(), cells.end(), 0) != cells.end())
         {
             return true;
         }
@@ -305,19 +543,46 @@ void SignDialog::updateMode()
     maxTries_->setEnabled(!zero);
     mode_->setText(zero ? tr("A zero restriction: the importance sampler, into a new model file.")
                         : tr("Signs alone: rotations tried per draw, written into this model."));
+    const SignIdentification id = readTable();
+    QStringList restricted;
+    for (int shock = 0; shock < support_.k; ++shock)
+    {
+        for (const SignRestriction &r : id.restrictions)
+        {
+            if (r.impulse == shock)
+            {
+                restricted << support_.variables.value(shock);
+                break;
+            }
+        }
+    }
+    summary_->setText(id.restrictions.empty()
+                          ? tr("No restriction set yet.")
+                          : tr("%n restriction(s); identified shocks: %1.", nullptr,
+                               static_cast<int>(id.restrictions.size()))
+                                .arg(restricted.join(QStringLiteral(", "))));
 }
 
 SignIdentification SignDialog::readTable() const
 {
     SignIdentification id;
-    for (int row = 0; row < table_->rowCount(); ++row)
+    const int k = support_.k;
+    // Shock by shock, then horizon and response: the order bvartools' table
+    // lists a shock's restrictions in.
+    for (int shock = 0; shock < k; ++shock)
     {
-        SignRestriction r;
-        r.impulse = qobject_cast<QComboBox *>(table_->cellWidget(row, Shock))->currentIndex();
-        r.response = qobject_cast<QComboBox *>(table_->cellWidget(row, Response))->currentIndex();
-        r.sign = qobject_cast<QComboBox *>(table_->cellWidget(row, Sign))->currentData().toInt();
-        r.horizon = qobject_cast<QSpinBox *>(table_->cellWidget(row, Horizon))->value();
-        id.restrictions.push_back(r);
+        for (const int h : horizonOrder(signs_))
+        {
+            const std::vector<int> &cells = signs_.at(h);
+            for (int response = 0; response < k; ++response)
+            {
+                const int v = cells.empty() ? Free : cells[static_cast<std::size_t>(response * k + shock)];
+                if (v != Free)
+                {
+                    id.restrictions.push_back({shock, response, v, h});
+                }
+            }
+        }
     }
     id.maxTries = maxTries_->value();
     id.period = support_.moving ? period_->value() : -1;
@@ -327,6 +592,12 @@ SignIdentification SignDialog::readTable() const
 void SignDialog::identify()
 {
     const SignIdentification spec = readTable();
+    if (spec.restrictions.empty())
+    {
+        status_->setText(tr("✗  Set at least one cell to +, − or 0."));
+        status_->setStyleSheet(QStringLiteral("color: #B3261E;"));
+        return;
+    }
     const bool zero = hasZero();
     for (const SignRestriction &r : spec.restrictions)
     {
