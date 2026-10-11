@@ -164,6 +164,10 @@ void ModelRunner::start(const QString &file, const QString &group, const std::ve
 
     QtReporter *reporter = reporter_;
     QThread *thread = QThread::create([this, reporter, file, group, stages]() {
+        // The HDF5 library is built without thread safety: while the sampler
+        // reads and writes the file, nothing else may be inside it. A reader on
+        // the interface's thread waits here rather than corrupting its state.
+        const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
         bool ok = true;
         bool cancelled = false;
         QString error;

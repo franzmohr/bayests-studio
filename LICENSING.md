@@ -19,6 +19,22 @@ advice: have it reviewed before the first sale.
 | HighFive | Boost 1.0 | Yes | None for binaries |
 | GCC runtime (libstdc++, libgomp, libgfortran) | GPL 3 + GCC Runtime Library Exception | Yes | None for binaries built with GCC |
 
+## Colour palettes
+
+The palettes of View › Colour Palette are colour values only, generated into
+`src/views/PaletteData.inc` by `tools/make_palettes.py` from the packages
+below; colour values carry no code, but each source asks for its notice, so
+the About box and the shipped licence file reproduce them.
+
+| Palettes | Source | Licence | Obligation |
+| --- | --- | --- | --- |
+| Hue (ggplot2's default) | scales (R), `hue_pal()` | MIT | Ship the copyright notice |
+| Set1, Set2, Dark2, Paired | ColorBrewer by Cynthia A. Brewer, via RColorBrewer | Apache 2.0 | Ship the licence and the attribution "Colors from www.ColorBrewer.org by Cynthia A. Brewer, Geography, Pennsylvania State University" |
+| tab10, tab20, tab20b, tab20c, petroff10 | matplotlib | Matplotlib licence (PSF-style, BSD-compatible) | Retain "Copyright (c) 2012- Matplotlib Development Team" and the licence |
+| viridis, magma, inferno, plasma, cividis | viridisLite (R); the first four by Nathaniel Smith, Stéfan van der Walt and Eric Firing, released CC0; cividis by Nuñez, Anderton and Renslow (2018) | MIT (viridisLite) | Ship the copyright notice |
+
+None restricts closed-source or commercial use.
+
 ## Qt
 
 Under the LGPL the application may stay closed, provided that:

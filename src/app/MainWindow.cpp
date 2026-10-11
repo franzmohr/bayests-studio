@@ -3,6 +3,9 @@
 #include "engine/ModelFileTree.h"
 #include "engine/QtReporter.h"
 #include "views/BuilderDialog.h"
+#include "views/PaletteDialog.h"
+#include "views/Palettes.h"
+#include "views/SignDialog.h"
 
 #include <QAction>
 #include <QApplication>
@@ -25,6 +28,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTabWidget>
 #include <QToolBar>
 
 #include <algorithm>
@@ -181,12 +185,38 @@ void MainWindow::buildActions()
         connect(a, &QAction::triggered, this, [this, i]() { showStage(static_cast<StageId>(i)); });
     }
 
+    QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
+    viewMenu->addAction(tr("Colour &Palette…"), this, [this]() {
+        PaletteDialog dialog(this);
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            setCustomColours(dialog.custom());
+            setCurrentPalette(dialog.chosen());
+            // Every view draws again, in the new colours.
+            reloadProject();
+        }
+    });
+
     QMenu *runMenu = menuBar()->addMenu(tr("&Run"));
     runMenu->addAction(runAll_);
     runMenu->addSeparator();
     runMenu->addAction(runCoefficients_);
     runMenu->addAction(runForecast_);
     runMenu->addAction(runLoglik_);
+
+    QMenu *assistant = menuBar()->addMenu(tr("A&ssistant"));
+    for (const Workflow &w : workflows())
+    {
+        assistant->addAction(tr("%1…").arg(w.title), this, [this, id = w.id]() {
+            assistantDock_->show();
+            assistant_->start(id);
+        });
+    }
+    assistant->addSeparator();
+    assistant->addAction(tr("Choose a Workflow or an Example…"), this, [this]() {
+        assistantDock_->show();
+        assistant_->showChooser();
+    });
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
     help->addAction(tr("&About %1").arg(QApplication::applicationDisplayName()), this,
@@ -273,6 +303,15 @@ void MainWindow::buildLayout()
     addDockWidget(Qt::BottomDockWidgetArea, logDock);
     resizeDocks({logDock}, {120}, Qt::Vertical);
 
+    // The assistant, beside the pages.
+    assistant_ = new AssistantPanel(this);
+    assistantDock_ = new QDockWidget(tr("Assistant"), this);
+    assistantDock_->setObjectName(QStringLiteral("assistantDock"));
+    assistantDock_->setWidget(assistant_);
+    assistantDock_->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
+    addDockWidget(Qt::RightDockWidgetArea, assistantDock_);
+    resizeDocks({assistantDock_}, {380}, Qt::Horizontal);
+
     stageLabel_ = new QLabel;
     progress_ = new QProgressBar;
     progress_->setMaximumWidth(320);
@@ -321,9 +360,16 @@ void MainWindow::openPath(const QString &path)
         // Every model file below the folder, as `bayests` walks a tree.
         QDirIterator it(projectDir_, {QStringLiteral("*.h5"), QStringLiteral("*.hdf5")}, QDir::Files,
                         QDirIterator::Subdirectories);
+        // A horse race's windows are the race's, scored on its own tab:
+        // hundreds of them would bury the project's models.
+        const QString race = QDir(projectDir_).filePath(QStringLiteral("horse-race")) + QLatin1Char('/');
         while (it.hasNext())
         {
-            projectFiles_ << it.next();
+            const QString next = it.next();
+            if (!next.startsWith(race))
+            {
+                projectFiles_ << next;
+            }
         }
         std::sort(projectFiles_.begin(), projectFiles_.end());
         log(tr("Opened project %1: %2 model files")
@@ -400,12 +446,16 @@ void MainWindow::refresh()
         tree_->clear();
     }
 
-    const ModelContext context{file_, tree_, report_, projectFiles_};
+    const ModelContext context{file_, tree_, report_, projectFiles_, projectDir_};
     for (StagePage *page : pages_)
     {
         page->showModel(context);
     }
     updateStageMarks();
+    if (assistant_ != nullptr)
+    {
+        assistant_->projectChanged();
+    }
 
     setWindowTitle(file_.isEmpty()
                        ? QApplication::applicationDisplayName()
@@ -510,6 +560,77 @@ void MainWindow::importFrom(const QString &file)
     static_cast<DataPage *>(pages_[static_cast<std::size_t>(StageId::Data)])->showDataSet(data_);
     static_cast<SetupPage *>(pages_[static_cast<std::size_t>(StageId::Setup)])->setDataAvailable(true);
     showStage(StageId::Data);
+    if (assistant_ != nullptr)
+    {
+        assistant_->projectChanged();
+    }
+}
+
+bool MainWindow::isRunning() const
+{
+    return runner_->isRunning();
+}
+
+void MainWindow::showStageTab(WorkflowStage stage, const QString &tab)
+{
+    const auto id = static_cast<StageId>(static_cast<int>(stage));
+    showStage(id);
+    if (tab.isEmpty())
+    {
+        return;
+    }
+    // The tab by its title, in whichever tab widget of the page holds it.
+    for (QTabWidget *tabs : pages_[static_cast<std::size_t>(id)]->findChildren<QTabWidget *>())
+    {
+        for (int i = 0; i < tabs->count(); ++i)
+        {
+            if (tabs->tabText(i).remove(QLatin1Char('&')) == tab)
+            {
+                tabs->setCurrentIndex(i);
+            }
+        }
+    }
+}
+
+void MainWindow::openSignRestrictions(const std::vector<SignRestriction> &preset)
+{
+    if (file_.isEmpty())
+    {
+        return;
+    }
+    const StructuralSupport support = structuralSupport(file_);
+    if (!support.ok || !support.signAllowed)
+    {
+        QMessageBox::information(this, tr("Sign Restrictions"),
+                                 support.ok ? support.signRefusal : support.reason);
+        return;
+    }
+    SignDialog dialog(file_, support, this);
+    dialog.preset(preset);
+    if (dialog.exec() == QDialog::Accepted)
+    {
+        if (!dialog.createdFile().isEmpty())
+        {
+            addDerivedModel(dialog.createdFile());
+            return;
+        }
+        refresh();
+    }
+}
+
+void MainWindow::reloadProject()
+{
+    if (projectDir_.isEmpty())
+    {
+        refresh();
+        return;
+    }
+    const QString keep = file_;
+    openPath(projectDir_);
+    if (!keep.isEmpty())
+    {
+        selectModel(keep);
+    }
 }
 
 void MainWindow::newModel()
@@ -576,6 +697,15 @@ void MainWindow::showLicences()
         "<li><b>OpenBLAS</b> — BSD 3-Clause</li>"
         "<li><b>HDF5</b> — BSD-style (The HDF Group)</li>"
         "<li><b>HighFive</b> — Boost Software License 1.0</li>"
+        "</ul><p>The colour palettes:</p><ul>"
+        "<li><b>ggplot2's hue palette</b> — from scales, Copyright (c) 2025 scales authors; MIT</li>"
+        "<li><b>Set1, Set2, Dark2, Paired</b> — Colors from www.ColorBrewer.org by Cynthia A. Brewer, "
+        "Geography, Pennsylvania State University; Apache License 2.0</li>"
+        "<li><b>tab10, tab20, tab20b, tab20c, petroff10</b> — from matplotlib, Copyright (c) 2012- "
+        "Matplotlib Development Team; All Rights Reserved; matplotlib licence</li>"
+        "<li><b>viridis, magma, inferno, plasma, cividis</b> — from viridisLite, Copyright (c) 2015 Simon Garnier; "
+        "MIT. The maps by Nathaniel Smith, Stéfan van der Walt and Eric Firing (CC0) and, cividis, Jamie R. "
+        "Nuñez, Christopher R. Anderton and Ryan S. Renslow</li>"
         "</ul><p>Full licence texts are installed in the <i>licenses</i> folder.</p>"));
     box.exec();
 }

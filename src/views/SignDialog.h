@@ -44,6 +44,10 @@ public:
     /// which is written into the model itself.
     QString createdFile() const { return created_; }
 
+    /// Fills the grids with `restrictions` -- a worked example's, for the user
+    /// to read and run -- in place of what the dialog started with.
+    void preset(const std::vector<SignRestriction> &restrictions);
+
 private:
     struct Outcome
     {

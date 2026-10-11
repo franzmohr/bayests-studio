@@ -466,7 +466,7 @@ void StructuralView::show(const Result &result)
             band.append({double(h), QwtInterval(lower(hh), top)});
             lower(hh) = top;
         }
-        auto *area = tube(support_.variables.value(j), seriesColor(j, 200));
+        auto *area = tube(support_.variables.value(j), seriesColor(j, 200, support_.k));
         area->setSamples(band);
         area->attach(fevd_);
     }

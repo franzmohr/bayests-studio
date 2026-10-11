@@ -259,6 +259,56 @@ components it uses.
   application's theme. Numbers everywhere, on screen too, now use a
   decimal point and no group separator, as the tables and R do.
 
+- **Colour palettes** (View › Colour Palette…): the series of every plot and
+  every exported figure in the studio's Okabe–Ito default, the five most
+  used palettes of ggplot2 (its hue palette; ColorBrewer's Set1, Set2, Dark2
+  and Paired), of matplotlib (tab10, tab20, tab20b, tab20c, petroff10) and
+  of the viridis family (viridis, magma, inferno, plasma, cividis) -- or
+  colours of your own. The values are generated from the packages
+  themselves by `tools/make_palettes.py`; their licences, none restrictive,
+  are in LICENSING.md and the Third-party Licences box.
+
+- **Assistant** (the dock on the right; Assistant menu): a workflow as
+  steps, each with what to do, why and the usual choices with their
+  references, buttons that do it, and the stage it concerns opened beside
+  it. A step ticks itself off when the project shows it done -- data
+  imported, a model estimated, a log likelihood written -- or when you
+  confirm a judgement only you can make, and the assistant moves on. What it
+  did is kept in the project's `assistant.json`, so a project reopens where
+  it was left.
+  - **Master thesis: a structural BVAR** -- research question and data, a
+    look at the data, a baseline BVAR (Minnesota prior, a year of lags, a
+    fixed seed), estimation, convergence, the lag order compared by WAIC
+    (the alternatives made and estimated for you), identification,
+    impulse responses and variance decompositions, robustness checks (the
+    reverse order, a looser and a tighter prior, the later sample, made and
+    estimated for you), and the write-up: every figure as PDF, every table
+    as LaTeX, a draft methods paragraph stating the model, sample, prior,
+    sampler and identification, and a `results.tex` that inputs them all.
+  - **Forecast horse race** -- data, the design (variables, the windows,
+    forecast origins, horizon, and the field: a Minnesota BVAR benchmark,
+    the same with stochastic volatility, a TVP-VAR, variable selection, a
+    VAR(1), a VEC for levels), the run, the league table and when a model
+    wins, and the report. Every model is estimated at every origin on an
+    expanding window, the runs as `bayests` processes several at a time
+    (a stopped race resumes), and scored by the RMSE of the posterior mean
+    forecast relative to the benchmark and the log predictive score, whose
+    cumulative difference over the origins the Evaluation stage's Horse race
+    tab plots. `test/horserace_test.cpp` runs a race end to end and
+    `test/horserace_reference.R` recomputes every score with bvartools from
+    the same files: 1.8e-15.
+  - **Worked examples**, from the reproductions in
+    `D:\projects\reproduction-projects` (located once, then remembered): the
+    assistant prepares the paper's data from its replication files, fills in
+    its specification and identification, and says at every step what the
+    paper does there and what to expect -- Arias, Rubio-Ramírez and
+    Waggoner (2018) and Nam and Wang (2018) for the thesis workflow,
+    forecasting through the pandemic on Lenza and Primiceri's (2022) data
+    for the horse race. The papers the studio cannot yet implement step by
+    step -- Jarociński and Karadi (2020), Pinchetti (2026), ESRB (2026), the
+    volatility break of Lenza and Primiceri -- are listed with what they
+    need.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted

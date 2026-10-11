@@ -13,6 +13,7 @@
 #include "views/SummaryPlotView.h"
 #include "views/TableExport.h"
 #include "views/InclusionView.h"
+#include "views/HorseRaceView.h"
 #include "views/StructuralView.h"
 
 #include <QComboBox>
@@ -457,8 +458,18 @@ void PosteriorPage::runFinished()
 
 EvaluationPage::EvaluationPage(QWidget *parent) : StagePage(parent)
 {
-    auto *layout = pageLayout(this);
-    layout->addWidget(pageTitle(tr("Evaluation")));
+    auto *outer = pageLayout(this);
+    outer->addWidget(pageTitle(tr("Evaluation")));
+    auto *comparison = new QWidget;
+    auto *layout = new QVBoxLayout(comparison);
+    layout->setContentsMargins(0, 8, 0, 0);
+    race_ = new HorseRaceView;
+    tabs_ = new QTabWidget;
+    tabs_->setDocumentMode(true);
+    tabs_->setObjectName(QStringLiteral("evaluationTabs"));
+    tabs_->addTab(comparison, tr("Model comparison"));
+    tabs_->addTab(race_, tr("Horse race"));
+    outer->addWidget(tabs_, 1);
     explanation_ = subtle(tr(
         "Information criteria from the pointwise log likelihood, for every model of the project. "
         "WAIC = −2 (lppd − p_WAIC); smaller is better. The log predictive score sums the log "
@@ -488,6 +499,11 @@ EvaluationPage::EvaluationPage(QWidget *parent) : StagePage(parent)
 
 void EvaluationPage::showModel(const ModelContext &context)
 {
+    if (context.projectDir != raceFolder_)
+    {
+        raceFolder_ = context.projectDir;
+        race_->setFolder(raceFolder_);
+    }
     loglik_->setEnabled(!context.file.isEmpty() && context.report.hasPosterior);
 
     table_->setSortingEnabled(false);

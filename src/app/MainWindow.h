@@ -7,9 +7,11 @@
 
 #include "engine/DataSet.h"
 #include "engine/ModelRunner.h"
+#include "views/AssistantPanel.h"
 #include "views/StagePages.h"
 
 class QAction;
+class QDockWidget;
 class QLabel;
 class QListWidget;
 class QPlainTextEdit;
@@ -26,7 +28,7 @@ class ModelFileTree;
 /// article: a project of models on the left, the five stages -- data, model
 /// set-up, posterior simulation, evaluation, application -- as a bar beside
 /// it, and the page of the selected stage in the middle.
-class MainWindow : public QMainWindow
+class MainWindow : public QMainWindow, public AssistantHost
 {
     Q_OBJECT
 
@@ -65,7 +67,25 @@ public:
     /// Adds a model derived from the selected one -- a sign and zero
     /// identification's resample -- and opens its structural analysis.
     void addDerivedModel(const QString &file);
-    const DataSet &workingData() const { return data_; }
+    const DataSet &workingData() const override { return data_; }
+
+    // The assistant's host.
+    QWidget *hostWindow() override { return this; }
+    QString projectFolder() const override { return projectDir_; }
+    QStringList projectModels() const override { return projectFiles_; }
+    QString currentModel() const override { return file_; }
+    void openProject(const QString &folder) override { openPath(folder); }
+    void importDataFile(const QString &file) override { importFrom(file); }
+    void chooseDataFile() override { importData(); }
+    void openBuilder() override { newModel(); }
+    void addModel(const QString &file) override { addCreatedModel(file); }
+    void selectModelFile(const QString &file) override { selectModel(file); }
+    void runAllStages() override { runAll(); }
+    bool isRunning() const override;
+    void showStageTab(WorkflowStage stage, const QString &tab) override;
+    void openSignRestrictions(const std::vector<SignRestriction> &preset) override;
+    void reloadProject() override;
+    AssistantPanel *assistant() const { return assistant_; }
 
 private:
     void newModel();
@@ -83,6 +103,8 @@ private:
     QStackedWidget *pagesStack_;
     std::array<StagePage *, 5> pages_{};
     PosteriorPage *posterior_ = nullptr;
+    AssistantPanel *assistant_ = nullptr;
+    QDockWidget *assistantDock_ = nullptr;
     QPlainTextEdit *log_;
 
     QLabel *stageLabel_;

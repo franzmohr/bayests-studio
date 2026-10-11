@@ -2,6 +2,8 @@
 #include "app/Theme.h"
 #include "views/BuilderDialog.h"
 #include "views/FigureExport.h"
+#include "views/PaletteDialog.h"
+#include "views/Palettes.h"
 #include "views/TableExport.h"
 
 #include <QAbstractButton>
@@ -32,6 +34,11 @@
 extern "C"
 {
 void openblas_set_num_threads(int num_threads);
+}
+
+namespace studio
+{
+void runAssistantSmoke(MainWindow &window, const QString &which, const QString &folder);
 }
 
 int main(int argc, char *argv[])
@@ -74,6 +81,36 @@ int main(int argc, char *argv[])
     if (!parser.positionalArguments().isEmpty())
     {
         window.openPath(parser.positionalArguments().constFirst());
+    }
+
+    // Development aid: STUDIO_SMOKE_PALETTE=<id> draws in that palette.
+    if (const QByteArray palette = qgetenv("STUDIO_SMOKE_PALETTE"); !palette.isEmpty())
+    {
+        studio::setCurrentPalette(QString::fromLatin1(palette), false);
+    }
+
+    // Development aid: STUDIO_SMOKE_PALETTE_DIALOG=<png> draws the palette
+    // dialog, in the palette chosen above, and exits.
+    if (const QByteArray png = qgetenv("STUDIO_SMOKE_PALETTE_DIALOG"); !png.isEmpty())
+    {
+        studio::PaletteDialog dialog;
+        dialog.show();
+        QApplication::processEvents();
+        const bool ok = dialog.grab().save(QString::fromLocal8Bit(png));
+        std::printf("smoke: palette dialog %s\n", ok ? "saved" : "NOT saved");
+        return ok ? 0 : 1;
+    }
+
+    // Development aid: STUDIO_SMOKE_ASSISTANT drives the assistant through a
+    // workflow (AssistantSmoke.cpp).
+    if (const QByteArray which = qgetenv("STUDIO_SMOKE_ASSISTANT"); !which.isEmpty())
+    {
+        window.resize(1700, 1000);
+        const QString folder = QString::fromLocal8Bit(qgetenv("STUDIO_SMOKE_FOLDER"));
+        QTimer::singleShot(300, &window, [&window, which, folder]() {
+            studio::runAssistantSmoke(window, QString::fromLocal8Bit(which), folder);
+        });
+        return app.exec();
     }
 
     // Development aid, not a feature: STUDIO_SMOKE_CAPTURE=<prefix> runs every

@@ -330,6 +330,50 @@ int main()
         }
     }
 
+    // -- The Minnesota prior centred on random walks: one at every own first
+    // lag and nowhere else, accepted, and refused beside SSVS.
+    {
+        VarBuilderSpec s;
+        s.data = levels;
+        s.columns = {0, 1, 2};
+        s.p = 2;
+        s.minnesota = true;
+        s.randomWalkMean = true;
+        s.iterations = 60;
+        s.burnin = 20;
+        s.seed = 5;
+        s.horizon = 4;
+        const QString file = dir.filePath(QStringLiteral("random-walk.h5"));
+        writeVarModel(s, file);
+        const arma::vec mu = arma::vectorise(readDraws(file, "/priors/a/mu"));
+        bool right = mu.n_elem == 21;   // 3 equations x (6 lags + constant)
+        for (arma::uword q = 0; right && q < mu.n_elem; ++q)
+        {
+            const arma::uword regressor = q / 3, equation = q % 3;
+            right = mu(q) == (regressor == equation ? 1.0 : 0.0);
+        }
+        if (!right)
+        {
+            fail("the random walk prior is not one at the own first lags and zero elsewhere");
+        }
+        const CheckReport report = ModelRunner::check(file, QString());
+        if (!report.ok || !report.warnings.isEmpty())
+        {
+            fail("check does not accept the random walk prior cleanly");
+        }
+        runAll(file, 5);
+        if (!exists(file, "/posterior/forecast/forecasts"))
+        {
+            fail("the random walk prior model does not run");
+        }
+        s.selection = Selection::Ssvs;
+        if (summarise(s).refusal.isEmpty())
+        {
+            fail("SSVS beside the random walk prior is not refused");
+        }
+        std::printf("ok    the Minnesota prior centred on random walks\n");
+    }
+
     // -- Refusals that are the builder's own: a variable on both sides, a
     // VEC's exogenous level order of zero, a forecast past the exogenous data.
     {

@@ -1,4 +1,5 @@
 #include "views/PlotStyle.h"
+#include "views/Palettes.h"
 
 #include <QApplication>
 #include <QFont>
@@ -14,15 +15,9 @@
 namespace studio
 {
 
-QColor seriesColor(int index, int alpha)
+QColor seriesColor(int index, int alpha, int count)
 {
-    // Distinguishable in both themes and under the common colour-vision
-    // deficiencies (Okabe–Ito ordering, blue first).
-    static const std::array<QColor, 6> palette = {
-        QColor(0x2F, 0x6D, 0xB5), QColor(0xD5, 0x5E, 0x00), QColor(0x00, 0x9E, 0x73),
-        QColor(0xCC, 0x79, 0xA7), QColor(0xE6, 0x9F, 0x00), QColor(0x56, 0xB4, 0xE9),
-    };
-    QColor c = palette[static_cast<std::size_t>(index) % palette.size()];
+    QColor c = currentPalette().colour(index, count);
     c.setAlpha(alpha);
     return c;
 }

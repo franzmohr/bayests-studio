@@ -2,6 +2,8 @@
 # that draws. A library of its own so the tests in test/ link exactly what the
 # application runs.
 add_library(studio_engine STATIC
+    engine/BatchRunner.cpp
+    engine/BatchRunner.h
     engine/CoefficientSummary.cpp
     engine/CoefficientSummary.h
     engine/Criteria.cpp
@@ -10,6 +12,10 @@ add_library(studio_engine STATIC
     engine/DataSet.h
     engine/HistoricalDecomposition.cpp
     engine/HistoricalDecomposition.h
+    engine/Examples.cpp
+    engine/Examples.h
+    engine/HorseRace.cpp
+    engine/HorseRace.h
     engine/ModelFileTree.cpp
     engine/Multipliers.cpp
     engine/Multipliers.h
@@ -29,6 +35,8 @@ add_library(studio_engine STATIC
     engine/TableFormat.h
     engine/VarBuilder.cpp
     engine/VarBuilder.h
+    engine/Workflow.cpp
+    engine/Workflow.h
 )
 target_include_directories(studio_engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(studio_engine PUBLIC
@@ -45,11 +53,16 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
+    app/AssistantSmoke.cpp
     app/main.cpp
     app/MainWindow.cpp
     app/MainWindow.h
     app/Theme.cpp
     app/Theme.h
+    views/AssistantDialogs.cpp
+    views/AssistantDialogs.h
+    views/AssistantPanel.cpp
+    views/AssistantPanel.h
     views/BuilderDialog.cpp
     views/BuilderDialog.h
     views/DiagnosticsView.cpp
@@ -58,6 +71,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/FigureExport.h
     views/HistoricalDecompositionView.cpp
     views/HistoricalDecompositionView.h
+    views/HorseRaceView.cpp
+    views/HorseRaceView.h
     views/InclusionView.cpp
     views/InclusionView.h
     views/LiveBandsView.cpp
@@ -66,6 +81,11 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/MultipliersView.h
     views/OverviewView.cpp
     views/OverviewView.h
+    views/Palettes.cpp
+    views/Palettes.h
+    views/PaletteData.inc
+    views/PaletteDialog.cpp
+    views/PaletteDialog.h
     views/PlotStyle.cpp
     views/PlotStyle.h
     views/SeriesPlot.cpp
@@ -97,4 +117,13 @@ target_link_libraries(bayests-studio PRIVATE
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(studio_engine PRIVATE -Wall -Wextra)
     target_compile_options(bayests-studio PRIVATE -Wall -Wextra)
+endif()
+
+# The batch runner of a horse race runs the bayests command line, one process
+# per model; it is looked for beside the application.
+if(TARGET bayests)
+    add_dependencies(bayests-studio bayests)
+    add_custom_command(TARGET bayests-studio POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:bayests> $<TARGET_FILE_DIR:bayests-studio>
+        COMMENT "Copying bayests beside the studio")
 endif()

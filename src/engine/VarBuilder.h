@@ -53,6 +53,10 @@ struct VarBuilderSpec
 
     // Coefficient prior
     bool minnesota = false;
+    /// Minnesota: centre each variable's own first lag on one, a random walk,
+    /// for series in levels (Litterman 1986); zero, white noise, otherwise.
+    /// A VAR's only -- a VEC's differences need no centring.
+    bool randomWalkMean = false;
     double coefPrecision = 1.0;       ///< v_i
     double detPrecision = 0.1;        ///< v_i_det
     double kappa1 = 0.2, kappa2 = 0.5, kappa4 = 100.0; ///< Minnesota: overall, cross, deterministic

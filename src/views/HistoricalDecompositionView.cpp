@@ -52,7 +52,7 @@ QwtPlotMultiBarChart *stack(const QList<QwtText> &titles, const QVector<QwtSetSa
     for (int j = 0; j < titles.size(); ++j)
     {
         auto *symbol = new QwtColumnSymbol(QwtColumnSymbol::Box);
-        symbol->setPalette(QPalette(seriesColor(j, 210)));
+        symbol->setPalette(QPalette(seriesColor(j, 210, static_cast<int>(titles.size()))));
         symbol->setFrameStyle(QwtColumnSymbol::NoFrame);
         chart->setSymbol(j, symbol);
     }

@@ -97,6 +97,7 @@ private:
     QDoubleSpinBox *kappa1_;
     QDoubleSpinBox *kappa2_;
     QDoubleSpinBox *kappa4_;
+    QCheckBox *randomWalk_;
     QGroupBox *cointBox_;
     QDoubleSpinBox *cointShrinkage_;
     QDoubleSpinBox *cointPTauInv_;

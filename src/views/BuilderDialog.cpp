@@ -391,6 +391,11 @@ QWidget *BuilderDialog::buildPriorBox()
     coef->addRow(tr("κ₁ overall tightness"), kappa1_);
     coef->addRow(tr("κ₂ other lags"), kappa2_);
     coef->addRow(tr("κ₄ deterministic"), kappa4_);
+    randomWalk_ = new QCheckBox(tr("Centre own first lags on one (random walk), for series in levels"));
+    randomWalk_->setObjectName(QStringLiteral("randomWalk"));
+    randomWalk_->setToolTip(tr("Litterman's prior for variables in levels; leave it off for growth rates and "
+                               "other stationary series, which it centres on white noise."));
+    coef->addRow(QString(), randomWalk_);
     layout->addLayout(coef);
     connect(minnesota_, &QCheckBox::toggled, this, &BuilderDialog::updateEnabled);
 
@@ -581,6 +586,7 @@ void BuilderDialog::updateEnabled()
     selectCovar_->setEnabled(selecting && covar_->isChecked());
 
     const bool minn = minnesota_->isChecked();
+    randomWalk_->setEnabled(minn && !familyVec_->isChecked());
     coefPrecision_->setEnabled(!minn);
     detPrecision_->setEnabled(!minn);
     kappa1_->setEnabled(minn);
@@ -668,6 +674,7 @@ VarBuilderSpec BuilderDialog::readForm() const
     s.selectCovariances = selectCovar_->isChecked();
 
     s.minnesota = minnesota_->isChecked();
+    s.randomWalkMean = s.minnesota && randomWalk_->isChecked();
     s.coefPrecision = coefPrecision_->value();
     s.detPrecision = detPrecision_->value();
     s.kappa1 = kappa1_->value();

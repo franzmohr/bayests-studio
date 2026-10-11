@@ -10,8 +10,8 @@
 class QComboBox;
 class QLabel;
 class QPushButton;
-class QTableWidget;
 class QTabWidget;
+class QTableWidget;
 class QTreeView;
 
 namespace studio
@@ -21,6 +21,7 @@ class DiagnosticsView;
 class LiveBandsView;
 class SummaryPlotView;
 class InclusionView;
+class HorseRaceView;
 class ModelFileTree;
 class OverviewView;
 class SeriesPlot;
@@ -48,6 +49,7 @@ struct ModelContext
     const ModelFileTree *tree = nullptr;
     CheckReport report;
     QStringList projectFiles;  ///< every model of the project, for comparisons
+    QString projectDir;        ///< the project folder; empty for a single file
 };
 
 class StagePage : public QWidget
@@ -153,6 +155,9 @@ private:
     QPushButton *loglik_;
     QTableWidget *table_;
     QLabel *explanation_;
+    QTabWidget *tabs_;
+    HorseRaceView *race_;
+    QString raceFolder_;
 };
 
 /// 5. Application: forecasting, structural analysis and spillovers.

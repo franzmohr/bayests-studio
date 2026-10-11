@@ -524,6 +524,21 @@ bool SignDialog::eventFilter(QObject *watched, QEvent *event)
     return QDialog::eventFilter(watched, event);
 }
 
+void SignDialog::preset(const std::vector<SignRestriction> &restrictions)
+{
+    signs_.clear();
+    for (const SignRestriction &r : restrictions)
+    {
+        setSign(r.horizon < 0 ? -1 : r.horizon, r.response, r.impulse, r.sign);
+    }
+    if (signs_.empty())
+    {
+        signs_[0].assign(static_cast<std::size_t>(support_.k * support_.k), Free);
+    }
+    rebuildTabs(signs_.begin()->first);
+    updateMode();
+}
+
 bool SignDialog::hasZero() const
 {
     for (const auto &[h, cells] : signs_)

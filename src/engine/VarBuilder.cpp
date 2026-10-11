@@ -386,6 +386,13 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
         out.refusal = QObject::tr("A structural model cannot be scored against held-out periods; "
                                   "set the holdout to 0.");
     }
+    else if (s.selection == Selection::Ssvs && s.minnesota && s.randomWalkMean && !l.vec)
+    {
+        // George, Sun and Ni's sweep scores each coefficient against a
+        // spike at zero; BayesTS refuses a prior mean elsewhere.
+        out.refusal = QObject::tr("SSVS needs prior means of zero; the random walk prior centres own lags on one. "
+                                  "Use BVS, or centre on zero.");
+    }
     else if (s.selection == Selection::Ssvs && (s.timeVarying || s.errors == Errors::Stochvol))
     {
         out.refusal = QObject::tr("SSVS is not available with time-varying coefficients or "
@@ -827,7 +834,16 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     // Coefficient prior and starting values. A constant VEC's loadings must be
     // zero-centred and uncoupled (their block is rebuilt from /priors/beta every
     // draw), which a zero mean and a diagonal precision are.
-    writeRow(file, "/priors/a/mu", arma::vec(nparams, arma::fill::zeros));
+    arma::vec mu(nparams, arma::fill::zeros);
+    if (s.minnesota && s.randomWalkMean && !l.vec)
+    {
+        // Equation i's coefficient on its own first lag: regressor i.
+        for (arma::uword i = 0; i < k; ++i)
+        {
+            mu(nAlpha + i * k + i) = 1.0;
+        }
+    }
+    writeRow(file, "/priors/a/mu", mu);
     writeMat(file, "/priors/a/v_inv", arma::diagmat(precision));
     if (s.timeVarying)
     {

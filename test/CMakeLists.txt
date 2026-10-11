@@ -25,3 +25,22 @@ endif()
 add_executable(studio_table_test table_test.cpp)
 target_link_libraries(studio_table_test PRIVATE studio_engine)
 add_test(NAME table.exports COMMAND studio_table_test)
+
+# A horse race end to end: written, run by the batch runner as bayests
+# processes, and scored. Needs the bayests executable beside the test.
+add_executable(studio_horserace_test horserace_test.cpp)
+target_link_libraries(studio_horserace_test PRIVATE studio_engine BayesTS::openblas)
+if(TARGET bayests)
+    add_dependencies(studio_horserace_test bayests)
+endif()
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/reference/e1.csv")
+    add_test(NAME horserace.end_to_end
+             COMMAND studio_horserace_test "${CMAKE_CURRENT_SOURCE_DIR}/reference")
+    set_tests_properties(horserace.end_to_end PROPERTIES
+        ENVIRONMENT "STUDIO_BAYESTS=$<TARGET_FILE:bayests>")
+endif()
+
+# The assistant's workflows, specifications, variants and methods paragraph.
+add_executable(studio_workflow_test workflow_test.cpp)
+target_link_libraries(studio_workflow_test PRIVATE studio_engine BayesTS::openblas)
+add_test(NAME workflow.assistant COMMAND studio_workflow_test "${CMAKE_CURRENT_SOURCE_DIR}/reference")
