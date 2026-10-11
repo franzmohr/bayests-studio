@@ -224,7 +224,7 @@ components it uses.
    models, `VecKlgs2010`, factor models and FAVARs, unobserved components;
    seasonal dummies; Excel import; an R-side reader (`rclass`) so a studio
    file opens as a bvartools object.
-2. Analysis: historical decompositions, inclusion probabilities, the Savage–Dickey test
+2. Analysis: inclusion probabilities, the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
 3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the
    session.
