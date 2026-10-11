@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QElapsedTimer>
+#include <QTabWidget>
 #include <QTimer>
 
 #include <cstdlib>
@@ -78,6 +79,28 @@ int main(int argc, char *argv[])
                 window.showStage(static_cast<studio::StageId>(stage));
                 QCoreApplication::processEvents();
                 window.grab().save(QStringLiteral("%1-stage%2.png").arg(QString::fromLocal8Bit(prefix)).arg(stage + 1));
+            }
+            // The structural analysis: impulse responses, then the
+            // variance decomposition, each once its worker has finished.
+            const auto settle = [](int ms) {
+                QElapsedTimer t;
+                t.start();
+                while (t.elapsed() < ms)
+                {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+                }
+            };
+            if (auto *app = window.findChild<QTabWidget *>(QStringLiteral("applicationTabs")))
+            {
+                app->setCurrentIndex(1);
+                settle(3000);
+                window.grab().save(QStringLiteral("%1-irf.png").arg(QString::fromLocal8Bit(prefix)));
+                if (auto *st = window.findChild<QTabWidget *>(QStringLiteral("structuralTabs")))
+                {
+                    st->setCurrentIndex(1);
+                    settle(500);
+                    window.grab().save(QStringLiteral("%1-fevd.png").arg(QString::fromLocal8Bit(prefix)));
+                }
             }
             QCoreApplication::exit(ok ? 0 : 1);
         });

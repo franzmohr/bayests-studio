@@ -34,6 +34,11 @@ struct CheckReport
     bool hasPosterior = false;
     int periods = 0;
     int k = 0;                ///< endogenous variables
+    int p = 0;                ///< lags (a level order for a VEC)
+    int rank = 0;             ///< a VEC's cointegration rank, 0 otherwise
+    int kBeta = 0;            ///< rows of a VEC's beta
+    bool structural = false;
+    int factors = 0;          ///< unobserved factors, 0 for a VAR or VEC
     int horizon = 0;          ///< forecast horizon, 0 for none
     int iterations = 0, burnin = 0, thin = 1;
     QString seed;             ///< empty when the file names none

@@ -95,6 +95,11 @@ CheckReport ModelRunner::check(const QString &file, const QString &group)
         report.hasPosterior = result.has_posterior;
         report.periods = static_cast<int>(result.periods);
         report.k = spec.k;
+        report.p = spec.p;
+        report.rank = spec.rank;
+        report.kBeta = spec.k_beta;
+        report.structural = spec.structural;
+        report.factors = spec.n_factors;
         report.horizon = spec.h;
         report.iterations = spec.iterations;
         report.burnin = spec.burnin;

@@ -12,6 +12,8 @@ add_library(studio_engine STATIC
     engine/ModelRunner.h
     engine/QtReporter.cpp
     engine/QtReporter.h
+    engine/Structural.cpp
+    engine/Structural.h
     engine/VarBuilder.cpp
     engine/VarBuilder.h
 )
@@ -48,6 +50,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/SeriesPlot.cpp
     views/SeriesPlot.h
     views/StagePages.cpp
+    views/StructuralView.cpp
+    views/StructuralView.h
     views/StagePages.h
 )
 

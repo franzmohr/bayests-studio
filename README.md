@@ -68,15 +68,34 @@ components it uses.
   a VEC to the simulated cointegration space (β normalised: 1, −1.003, 0.003
   against 1, −1, 0) with a forecast in levels.
 
+- **Structural analysis** (Application › Structural analysis): impulse
+  responses of every variable to a chosen shock -- forecast error,
+  orthogonalised and generalised for a reduced form model, structural and
+  structural generalised for a structural one, as bvartools allows them --
+  with median and 68 % / 90 % bands, cumulative or not, at a chosen period
+  where coefficients or volatilities move; and the forecast error variance
+  decomposition of a chosen variable for orthogonal shocks (oir, sir), as the
+  posterior mean share of each shock. VECs are rewritten as the level VAR
+  their draws imply. Computed on a worker thread.
+
+  The definitions are bvartools' (`irf()`, `fevd()`, `src/ir.cpp`,
+  `src/vardecomp.cpp`, `R/collect_draws.R`). `test/structural_test.cpp`
+  holds the studio to them draw by draw on files bvartools estimated and
+  wrote (`test/structural_reference.R`): a VAR(2), a structural VAR, the
+  article's VEC on e6 and a TVP-VAR with stochastic volatility -- every
+  response draw and every decomposition within 5e-15. The generalised
+  decompositions (gir, sgir) are left out until the open question of their
+  normalisation in bvartools is settled.
+
 ## Roadmap
 
 1. The builder for the remaining families: the quantile and discounted
    models, `VecKlgs2010`, factor models and FAVARs, unobserved components;
    exogenous variables and seasonal dummies; Excel import; an R-side reader
    (`rclass`) so a studio file opens as a bvartools object.
-2. Analysis: forecasts with fan charts, impulse responses, FEVD, inclusion
-   probabilities, the Savage–Dickey test for time variation, model comparison
-   by WAIC / PSIS-LOO across several files.
+2. Analysis: sign restrictions, spillover indices, dynamic multipliers,
+   historical decompositions, inclusion probabilities, the Savage–Dickey test
+   for time variation, PSIS-LOO, expanding windows.
 3. Export: figures (SVG, PDF, PNG), tables, and a script reproducing the
    session.
 4. Packaging: signed installers per platform (Windows MSI, macOS notarised

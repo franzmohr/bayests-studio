@@ -1,11 +1,13 @@
 #include "views/StagePages.h"
 
 #include "engine/Criteria.h"
+#include "engine/Structural.h"
 #include "engine/ModelFileTree.h"
 #include "views/DiagnosticsView.h"
 #include "views/LiveBandsView.h"
 #include "views/OverviewView.h"
 #include "views/SeriesPlot.h"
+#include "views/StructuralView.h"
 
 #include <QComboBox>
 #include <QFileInfo>
@@ -566,18 +568,13 @@ ApplicationPage::ApplicationPage(QWidget *parent) : StagePage(parent)
     fl->addWidget(fan_, 1);
 
     // Structural analysis
-    auto *structural = new QWidget;
-    auto *sl = new QVBoxLayout(structural);
-    sl->addWidget(subtle(tr(
-        "Impulse responses (forecast error, orthogonalised, structural, generalised, sign-restricted), "
-        "forecast error variance decompositions, spillover indices and dynamic multipliers are "
-        "computed from the posterior draws in the file. They are the next stage to be built here.")));
-    sl->addStretch(1);
+    structural_ = new StructuralView;
 
     tabs_ = new QTabWidget;
     tabs_->setDocumentMode(true);
     tabs_->addTab(forecasting, tr("Forecasting"));
-    tabs_->addTab(structural, tr("Structural analysis"));
+    tabs_->addTab(structural_, tr("Structural analysis"));
+    tabs_->setObjectName(QStringLiteral("applicationTabs"));
     layout->addWidget(tabs_, 1);
 }
 
@@ -586,10 +583,11 @@ void ApplicationPage::showModel(const ModelContext &context)
     context_ = context;
     const CheckReport &r = context.report;
     forecast_->setEnabled(!context.file.isEmpty() && r.hasPosterior && r.horizon > 0);
+    structural_->setModel(r.hasPosterior ? context.file : QString());
 
     const QSignalBlocker block(variable_);
     variable_->clear();
-    const QStringList names = context.file.isEmpty() ? QStringList() : variableNames(context.file);
+    const QStringList names = context.file.isEmpty() ? QStringList() : levelNames(context.file);
     for (int i = 0; i < r.k; ++i)
     {
         variable_->addItem(i < names.size() ? names[i] : tr("Variable %1").arg(i + 1));

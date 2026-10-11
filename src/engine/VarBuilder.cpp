@@ -647,7 +647,16 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     // Data: the response as a time series, the SUR regressors with a name per
     // column, and a VEC's error correction term with a name per row of beta.
     const TimeIndex sample = timeIndex(s.data, l.estFirst, l.estLast);
-    writeSeries(file, "/data/train/y", response, vars, sample);
+    // A VEC's response is the differences, which bvartools labels "d.<name>".
+    std::vector<std::string> responseNames = vars;
+    if (l.vec)
+    {
+        for (auto &n : responseNames)
+        {
+            n = "d." + n;
+        }
+    }
+    writeSeries(file, "/data/train/y", response, responseNames, sample);
     writeMat(file, "/data/train/z", z);
     writeDatasetAttribute(file, "/data/train/z", "coefficients", names);
     if (l.vec)

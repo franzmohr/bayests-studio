@@ -22,6 +22,7 @@ class LiveBandsView;
 class ModelFileTree;
 class OverviewView;
 class SeriesPlot;
+class StructuralView;
 
 /// The stages of the workflow in Mohr's bvartools article (Section 3,
 /// Figure 1): data, model set-up, posterior simulation, evaluation and
@@ -163,6 +164,7 @@ private:
     QComboBox *variable_;
     QLabel *forecastNote_;
     SeriesPlot *fan_;
+    StructuralView *structural_;
 };
 
 } // namespace studio
