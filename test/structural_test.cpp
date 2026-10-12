@@ -728,6 +728,30 @@ int main(int argc, char *argv[])
         compareSpillover(dir, "vec_gir", "vec", SpilloverType::Gir, 10);
         compareSpillover(dir, "tvp_gir_last", "tvp", SpilloverType::Gir, 10);
         compareSpillover(dir, "tvp_gir_10", "tvp", SpilloverType::Gir, 10, 10);
+        if (const QString csv = dir + "/spillover_tvp_gir_10_table.csv"; QFile::exists(csv))
+        {
+            // The table over the sample, period 10's entries as bvartools'
+            // table there, and every entry's percentiles in order.
+            SpilloverRequest request;
+            request.horizon = 10;
+            request.maxDraws = 1 << 30;
+            const SpilloverPath path = spilloverPath(dir + "/tvp.h5", request);
+            const arma::mat table = readCsv(csv);
+            const arma::uword k = path.table.n_rows;
+            const double worst = arma::abs(path.table.slice(9) - table.submat(0, 0, k - 1, k - 1)).max();
+            bool ordered = path.entries.size() == k * k;
+            for (const arma::mat &e : path.entries)
+            {
+                for (arma::uword q = 1; q < 5; ++q)
+                {
+                    ordered = ordered && arma::all(e.col(q) >= e.col(q - 1)) && e.min() >= 0.0 && e.max() <= 100.0;
+                }
+            }
+            const bool ok = worst < 1e-9 && ordered && path.table.n_slices == path.time.size();
+            std::printf("%s  spillover path tvp: the table over %u periods, period 10 within %.2e of bvartools'\n",
+                        ok ? "ok  " : "FAIL", static_cast<unsigned>(path.table.n_slices), worst);
+            failures += ok ? 0 : 1;
+        }
         compareSummary(dir, "var2");
         compareSummary(dir, "vec");
         compareSummary(dir, "svar");

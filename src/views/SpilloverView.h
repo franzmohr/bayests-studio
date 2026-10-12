@@ -4,9 +4,14 @@
 #include <QWidget>
 
 #include "engine/Spillover.h"
+#include "views/FigureExport.h"
+
+#include <vector>
 
 class QComboBox;
+class QGridLayout;
 class QLabel;
+class QScrollArea;
 class QSpinBox;
 class QTabWidget;
 class QTableWidget;
@@ -20,7 +25,8 @@ namespace studio
 /// the table with its from and to margins and the total index, the
 /// directional measures with their credible intervals, the net pairwise
 /// spillovers and -- for a model whose coefficients or covariance move -- the
-/// total index over the sample. The numbers are bvartools' spillover();
+/// table over the sample, as the matrix of the structural analysis (a column
+/// per shock, a row per variable), or the total index. The numbers are bvartools' spillover();
 /// test/structural_test.cpp holds the two together draw by draw.
 class SpilloverView : public QWidget
 {
@@ -45,6 +51,10 @@ private:
     void compute();
     void show(const Result &result);
     void showDirectional();
+    void showPath();
+    void rebuildPathGrid();
+    /// The table over time, rather than the total index.
+    bool pathMatrix() const;
 
     QString file_;
     SpilloverSupport support_;
@@ -64,7 +74,13 @@ private:
     QwtPlot *bars_;
     QTableWidget *pairwise_;
     QLabel *pathNote_;
+    QComboBox *pathShow_;
     QwtPlot *path_;
+    QScrollArea *pathScroll_;
+    QGridLayout *pathGrid_;
+    std::vector<QwtPlot *> pathPlots_;   ///< variable j, shock l at j * k + l
+    std::vector<QWidget *> pathHeaders_;
+    FigureProvider pathFigure_;
 };
 
 } // namespace studio

@@ -10,6 +10,8 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QGridLayout>
+#include <QScrollArea>
 #include <QPen>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -231,10 +233,20 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     }
     pl->addWidget(pairwise_, 1);
 
-    // The index over the sample.
+    // The table, or the index, over the sample.
     auto *pathPage = new QWidget;
     auto *ol = new QVBoxLayout(pathPage);
     ol->setContentsMargins(0, 8, 0, 0);
+    pathShow_ = new QComboBox;
+    pathShow_->setObjectName(QStringLiteral("spilloverPathShow"));
+    pathShow_->addItem(tr("Connectedness table"));
+    pathShow_->addItem(tr("Total spillover index"));
+    pathShow_->setToolTip(tr("Over the sample: every entry of the connectedness table -- a column per shock, a row per variable, as the impulse responses -- or the total index alone."));
+    auto *showRow = new QHBoxLayout;
+    showRow->addWidget(new QLabel(tr("Show")));
+    showRow->addWidget(pathShow_);
+    showRow->addStretch(1);
+    ol->addLayout(showRow);
     pathNote_ = subtle();
     ol->addWidget(pathNote_);
     path_ = new QwtPlot;
@@ -243,11 +255,33 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     path_->setToolTip(tr("The total spillover index in every period of the sample, for a model whose system moves. Right-click to copy or save the figure."));
     {
         const FigureProvider figure = [this]() {
+            if (pathMatrix())
+            {
+                // As on screen: a column per shock, a row per variable.
+                FigureSpec spec;
+                spec.title = tr("Connectedness over time");
+                spec.subtitle = tr("%1, H = %2: median, 68% and 90% bands, percent")
+                                    .arg(type_->currentText())
+                                    .arg(horizon_->value());
+                spec.columns = support_.k;
+                for (QwtPlot *p : pathPlots_)
+                {
+                    spec.cells.push_back({p, {}});
+                }
+                for (int l = 0; l < support_.k; ++l)
+                {
+                    spec.columnLabels << tr("Shock to %1").arg(support_.variables.value(l));
+                }
+                spec.rowLabels = support_.variables;
+                spec.name = QStringLiteral("spillover-table-over-time");
+                return spec;
+            }
             FigureSpec spec = singleFigure(path_, tr("Total spillover index"), QStringLiteral("spillover-index"));
             spec.subtitle = tr("Median, 68% and 90% bands");
             spec.heightMm = 80.0;
             return spec;
         };
+        pathFigure_ = figure;
         auto *row = new QHBoxLayout;
         row->addStretch(1);
         row->addWidget(figureExportButton(figure));
@@ -255,6 +289,18 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
         attachFigureExport(path_, figure);
     }
     ol->addWidget(path_, 1);
+    auto *pathHost = new QWidget;
+    pathGrid_ = new QGridLayout(pathHost);
+    pathGrid_->setSpacing(12);
+    pathScroll_ = new QScrollArea;
+    pathScroll_->setWidget(pathHost);
+    pathScroll_->setWidgetResizable(true);
+    pathScroll_->setFrameShape(QFrame::NoFrame);
+    ol->addWidget(pathScroll_, 1);
+    connect(pathShow_, &QComboBox::currentIndexChanged, this, [this]() {
+        rebuildPathGrid();
+        showPath();
+    });
 
     tabs_ = new QTabWidget;
     tabs_->setDocumentMode(true);
@@ -333,6 +379,13 @@ void SpilloverView::setModel(const QString &file)
     }
     period_->setVisible(support_.moving);
     periodLabel_->setVisible(support_.moving);
+    {
+        // The table over time while it stays legible, as the structural analysis.
+        const QSignalBlocker b(pathShow_);
+        pathShow_->setCurrentIndex(support_.k <= 6 ? 0 : 1);
+    }
+    last_ = Result{};
+    rebuildPathGrid();
     bars_->setAxisScaleDraw(QwtPlot::xBottom, new NameScaleDraw(support_.variables));
     schedule();
 }
@@ -497,10 +550,94 @@ void SpilloverView::show(const Result &result)
                            .arg(spec));
 
     showDirectional();
+    showPath();
+}
 
+bool SpilloverView::pathMatrix() const
+{
+    return pathShow_->currentIndex() == 0;
+}
+
+void SpilloverView::rebuildPathGrid()
+{
+    for (QWidget *w : std::vector<QWidget *>(pathPlots_.begin(), pathPlots_.end()))
+    {
+        pathGrid_->removeWidget(w);
+        w->hide();
+        w->deleteLater();
+    }
+    pathPlots_.clear();
+    for (QWidget *h : pathHeaders_)
+    {
+        pathGrid_->removeWidget(h);
+        h->hide();
+        h->deleteLater();
+    }
+    pathHeaders_.clear();
+    const bool matrix = pathMatrix() && support_.ok && support_.moving;
+    pathShow_->setEnabled(support_.ok && support_.moving);
+    path_->setVisible(!matrix);
+    pathScroll_->setVisible(matrix);
+    if (!matrix)
+    {
+        return;
+    }
+    // Shock l's column, variable j's row: theta_jl over the sample.
+    const int k = support_.k;
+    QFont bold = font();
+    bold.setBold(true);
+    for (int l = 0; l < k; ++l)
+    {
+        auto *head = new QLabel(tr("Shock to %1").arg(support_.variables.value(l)));
+        head->setAlignment(Qt::AlignCenter);
+        head->setFont(bold);
+        head->setWordWrap(true);
+        pathGrid_->addWidget(head, 0, l + 1);
+        pathHeaders_.push_back(head);
+    }
+    for (int j = 0; j < k; ++j)
+    {
+        auto *row = new QLabel(support_.variables.value(j));
+        row->setAlignment(Qt::AlignCenter);
+        row->setFont(bold);
+        row->setMinimumWidth(70);
+        row->setToolTip(tr("The forecast error variance of %1 over the sample, split into the shares of the shocks along the row.")
+                            .arg(support_.variables.value(j)));
+        pathGrid_->addWidget(row, j + 1, 0);
+        pathHeaders_.push_back(row);
+        for (int l = 0; l < k; ++l)
+        {
+            auto *plot = new QwtPlot;
+            attachFigureExport(plot, pathFigure_);
+            plot->setToolTip((j == l ? tr("The share of %1's own shock in its H step forecast error variance in every period: median with 68% and 90% bands, percent. Right-click to copy or save the figure.")
+                                           .arg(support_.variables.value(j))
+                                     : tr("The spillover from %2 to %1 in every period -- the share of a shock to %2 in the H step forecast error variance of %1: median with 68% and 90% bands, percent. Right-click to copy or save the figure.")
+                                           .arg(support_.variables.value(j), support_.variables.value(l))));
+            plot->setMinimumHeight(170);
+            styleAxes(plot, j + 1 == k ? (support_.frequency > 1 ? tr("Year") : tr("Period")) : QString(), QString());
+            pathGrid_->addWidget(plot, j + 1, l + 1);
+            pathPlots_.push_back(plot);
+        }
+    }
+}
+
+void SpilloverView::showPath()
+{
+    const Result &result = last_;
     // The index over the sample.
     path_->detachItems(QwtPlotItem::Rtti_PlotCurve, true);
     path_->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
+    for (QwtPlot *p : pathPlots_)
+    {
+        p->detachItems(QwtPlotItem::Rtti_PlotCurve, true);
+        p->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
+        p->replot();
+    }
+    if (!result.error.isEmpty())
+    {
+        path_->replot();
+        return;
+    }
     if (!support_.moving)
     {
         pathNote_->setText(tr("Neither the coefficients nor the covariance of this model move, so neither "
@@ -511,6 +648,46 @@ void SpilloverView::show(const Result &result)
     {
         pathNote_->setText(result.pathError + QLatin1Char(' ') +
                            tr("Choose the generalised or the orthogonalised decomposition to see the path."));
+    }
+    else if (pathMatrix())
+    {
+        const SpilloverPath &p = result.path;
+        pathNote_->setText(tr("The connectedness table in every period of the sample, as the model estimates the "
+                              "system there: row j, column l the share of the H step forecast error variance of j "
+                              "due to a shock to l, median with 68% and 90% bands over %1 draws, percent.")
+                               .arg(p.draws));
+        const auto k = static_cast<std::size_t>(support_.k);
+        for (std::size_t c = 0; c < pathPlots_.size() && c < p.entries.size() && k > 0; ++c)
+        {
+            const arma::mat &e = p.entries[c];
+            QwtPlot *plot = pathPlots_[c];
+            QVector<QwtIntervalSample> b90, b68;
+            QVector<QPointF> med;
+            for (std::size_t t = 0; t < p.time.size(); ++t)
+            {
+                const auto tu = static_cast<arma::uword>(t);
+                b90.append({p.time[t], QwtInterval(e(tu, 0), e(tu, 4))});
+                b68.append({p.time[t], QwtInterval(e(tu, 1), e(tu, 3))});
+                med.append({p.time[t], e(tu, 2)});
+            }
+            auto *t90 = tube(tr("90%"), seriesColor(0, 50));
+            t90->setSamples(b90);
+            t90->attach(plot);
+            auto *t68 = tube(tr("68%"), seriesColor(0, 95));
+            t68->setSamples(b68);
+            t68->attach(plot);
+            auto *line = new QwtPlotCurve(tr("Median"));
+            line->setPen(seriesColor(0), 1.6);
+            line->setRenderHint(QwtPlotItem::RenderAntialiased);
+            line->setSamples(med);
+            line->attach(plot);
+            if (!p.time.empty())
+            {
+                plot->setAxisScale(QwtPlot::xBottom, p.time.front(), p.time.back());
+            }
+            plot->setAxisScale(QwtPlot::yLeft, 0.0, 100.0);
+            plot->replot();
+        }
     }
     else
     {

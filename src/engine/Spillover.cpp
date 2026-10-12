@@ -278,21 +278,44 @@ SpilloverPath spilloverPath(const QString &file, const SpilloverRequest &request
     const double kd = static_cast<double>(post.k());
     const double probs[] = {0.05, 0.16, 0.5, 0.84, 0.95};
 
+    const auto k = static_cast<arma::uword>(post.k());
     SpilloverPath out;
     out.draws = static_cast<int>(pick.size());
     out.quantiles.set_size(static_cast<arma::uword>(periods), 5);
+    out.entries.assign(static_cast<std::size_t>(k * k), arma::mat(static_cast<arma::uword>(periods), 5));
+    out.table.zeros(k, k, static_cast<arma::uword>(periods));
     std::vector<double> total(pick.size());
+    std::vector<arma::mat> thetas(pick.size());
+    std::vector<double> entry(pick.size());
     for (int t = 1; t <= periods; ++t)
     {
+        const auto row = static_cast<arma::uword>(t - 1);
         for (std::size_t i = 0; i < pick.size(); ++i)
         {
-            const arma::mat theta = drawTable(file, post, pick[i], t, request);
-            total[i] = 100.0 * (arma::accu(theta) - arma::trace(theta)) / kd;
+            thetas[i] = drawTable(file, post, pick[i], t, request);
+            total[i] = 100.0 * (arma::accu(thetas[i]) - arma::trace(thetas[i])) / kd;
+            out.table.slice(row) += 100.0 * thetas[i];
         }
+        out.table.slice(row) /= static_cast<double>(pick.size());
         std::sort(total.begin(), total.end());
         for (arma::uword q = 0; q < 5; ++q)
         {
-            out.quantiles(static_cast<arma::uword>(t - 1), q) = sortedQuantile(total, probs[q]);
+            out.quantiles(row, q) = sortedQuantile(total, probs[q]);
+        }
+        for (arma::uword j = 0; j < k; ++j)
+        {
+            for (arma::uword l = 0; l < k; ++l)
+            {
+                for (std::size_t i = 0; i < pick.size(); ++i)
+                {
+                    entry[i] = 100.0 * thetas[i](j, l);
+                }
+                std::sort(entry.begin(), entry.end());
+                for (arma::uword q = 0; q < 5; ++q)
+                {
+                    out.entries[j * k + l](row, q) = sortedQuantile(entry, probs[q]);
+                }
+            }
         }
         out.time.push_back(support.start + (t - 1) / support.frequency);
         if (progress && !progress(t, periods))

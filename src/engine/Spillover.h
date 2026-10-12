@@ -86,10 +86,17 @@ Spillovers spillovers(const QString &file, const SpilloverRequest &request);
 /// windows and a time-varying model gives from one estimation. quantiles is
 /// periods x 5 -- the 5, 16, 50, 84 and 95 percentiles. Refused for a sign
 /// identification, whose rotations identify one period only.
+///
+/// The table's entries over the sample come with it: entries[j * k + l] is
+/// periods x 5, the same percentiles of theta_jl(H) in percent -- the share of
+/// the forecast error variance of j due to a shock to l -- and table.slice(t)
+/// the posterior mean table of period t + 1, which is Spillovers::table there.
 struct SpilloverPath
 {
     std::vector<double> time;
     arma::mat quantiles;
+    std::vector<arma::mat> entries;
+    arma::cube table;
     int draws = 0;
 };
 
