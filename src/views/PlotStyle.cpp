@@ -1,4 +1,5 @@
 #include "views/PlotStyle.h"
+#include "views/Fonts.h"
 #include "views/Palettes.h"
 
 #include <QApplication>
@@ -34,8 +35,8 @@ void styleAxes(QwtPlot *plot, const QString &xTitle, const QString &yTitle)
     plot->setAutoFillBackground(true);
     plot->setPalette(pal);
 
-    QFont axisFont = plot->font();
-    axisFont.setPointSizeF(axisFont.pointSizeF() * 0.9);
+    // The figure font's family, at the size the interface reads at.
+    const QFont axisFont = figureFont(plot->font().pointSizeF() * 0.9);
     for (const auto axis : {QwtPlot::xBottom, QwtPlot::yLeft})
     {
         plot->setAxisFont(axis, axisFont);

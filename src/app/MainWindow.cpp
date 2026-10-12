@@ -3,6 +3,7 @@
 #include "engine/ModelFileTree.h"
 #include "engine/QtReporter.h"
 #include "views/BuilderDialog.h"
+#include "views/FontDialog.h"
 #include "views/PaletteDialog.h"
 #include "views/Palettes.h"
 #include "views/SignDialog.h"
@@ -193,6 +194,15 @@ void MainWindow::buildActions()
             setCustomColours(dialog.custom());
             setCurrentPalette(dialog.chosen());
             // Every view draws again, in the new colours.
+            reloadProject();
+        }
+    });
+    viewMenu->addAction(tr("&Font…"), this, [this]() {
+        FontDialog dialog(this);
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            setFonts(dialog.chosen());
+            // The plots set their axis fonts when they are drawn.
             reloadProject();
         }
     });

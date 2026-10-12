@@ -1,4 +1,5 @@
 #include "views/FigureExport.h"
+#include "views/Fonts.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -258,8 +259,7 @@ void renderFigure(QPainter &painter, const QRectF &rect, const FigureSpec &spec)
 {
     painter.save();
     painter.fillRect(rect, Qt::white);
-    QFont font = QApplication::font();
-    font.setPointSizeF(9.0);
+    QFont font = figureFont(figureFontSize());
     painter.setFont(font);
     painter.setPen(Qt::black);
     QRectF area = rect.adjusted(2, 2, -2, -2);
@@ -269,7 +269,7 @@ void renderFigure(QPainter &painter, const QRectF &rect, const FigureSpec &spec)
     {
         QFont bold = font;
         bold.setBold(true);
-        bold.setPointSizeF(10.0);
+        bold.setPointSizeF(figureFontSize() + 1.0);
         painter.setFont(bold);
         const double h = QFontMetricsF(bold).height() + 4;
         painter.drawText(QRectF(area.left(), area.top(), area.width(), h), Qt::AlignCenter, spec.title);

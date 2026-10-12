@@ -84,6 +84,10 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/Palettes.cpp
     views/Palettes.h
     views/PaletteData.inc
+    views/FontDialog.cpp
+    views/FontDialog.h
+    views/Fonts.cpp
+    views/Fonts.h
     views/PaletteDialog.cpp
     views/PaletteDialog.h
     views/PlotStyle.cpp
