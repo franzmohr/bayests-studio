@@ -8,6 +8,11 @@ project(BayesTSStudio
     DESCRIPTION "Desktop application for specifying, estimating and analysing BayesTS models"
 )
 
+# The executable's icon is a Windows resource.
+if(WIN32)
+    enable_language(RC)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

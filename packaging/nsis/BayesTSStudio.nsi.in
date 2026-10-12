@@ -51,6 +51,9 @@ VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "${APP_PUBLISHER}"
 
 !define MUI_ABORTWARNING
+; The application's icon (tools/make_icon.py), on the setup and the uninstaller.
+!define MUI_ICON "@STUDIO_ICON_FILE@"
+!define MUI_UNICON "@STUDIO_ICON_FILE@"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
 !define MUI_FINISHPAGE_RUN_TEXT "Start ${APP_NAME}"
 

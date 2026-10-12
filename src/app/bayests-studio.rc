@@ -1,0 +1,3 @@
+// The executable's icon, which Explorer, the taskbar and shortcuts show.
+// tools/make_icon.py draws it.
+IDI_ICON1 ICON "icons/bayests-studio.ico"

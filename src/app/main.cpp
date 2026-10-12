@@ -32,6 +32,7 @@
 #include <QRadioButton>
 #include <QSpinBox>
 #include <QTimer>
+#include <QIcon>
 #include <QSettings>
 #include <QMenuBar>
 #include <QToolBar>
@@ -95,6 +96,16 @@ int main(int argc, char *argv[])
     }
 
     studio::applyTheme(app);
+    {
+        // The window icon in each size drawn for it (tools/make_icon.py), so
+        // a title bar gets the 16-pixel drawing rather than a reduction.
+        QIcon icon;
+        for (const int n : {16, 24, 32, 48, 64, 128, 256})
+        {
+            icon.addFile(QStringLiteral(":/icons/bayests-studio-%1.png").arg(n), QSize(n, n));
+        }
+        QApplication::setWindowIcon(icon);
+    }
     studio::applySavedFonts();
     // The extensions' examples and palettes, before anything lists either.
     studio::loadExtensions(studio::defaultExtensionFiles());
@@ -220,6 +231,13 @@ int main(int argc, char *argv[])
         {
             studio::MainWindow w;
             audit(&w, "views", true);
+        }
+        // And the window icon, every size of it from the resources.
+        const int iconSizes = static_cast<int>(QApplication::windowIcon().availableSizes().size());
+        if (iconSizes != 7)
+        {
+            std::printf("window icon: %d of 7 sizes\n", iconSizes);
+            ++missing;
         }
         std::printf("smoke: %d of %d inputs without a tooltip\n", missing, inputs);
         return missing == 0 ? 0 : 1;

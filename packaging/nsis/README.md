@@ -47,6 +47,4 @@ warning a student has to click through ("More info › Run anyway").
 
 ## Still to do
 
-- An application icon: the setup and the shortcuts show the defaults until
-  there is one.
 - A licence agreement page, once the studio has its end-user licence.

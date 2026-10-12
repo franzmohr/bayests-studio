@@ -107,6 +107,6 @@ version. Without it, IT distributes each version itself (Intune, or
 
 ## Assets
 
-`Assets/*.png` are placeholder logos drawn by `Assets/make-placeholders.ps1`.
-Replace them with the real artwork under the same names and sizes (50, 44
-and 150 pixels square).
+`Assets/*.png` are the application's icon at the sizes the manifest names
+(50, 44 and 150 pixels square), drawn with every other size of it by
+`tools/make_icon.py`; change the icon there, not here.

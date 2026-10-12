@@ -57,6 +57,7 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
+    $<$<PLATFORM_ID:Windows>:app/bayests-studio.rc>
     app/AssistantSmoke.cpp
     app/main.cpp
     app/MainWindow.cpp
@@ -117,6 +118,21 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
 )
 
 target_compile_definitions(bayests-studio PRIVATE STUDIO_VERSION="${PROJECT_VERSION}")
+
+# The window icon, in every size tools/make_icon.py draws; the .rc above
+# gives the executable the same one.
+qt_add_resources(bayests-studio "icons"
+    PREFIX "/icons"
+    BASE app/icons
+    FILES
+        app/icons/bayests-studio-16.png
+        app/icons/bayests-studio-24.png
+        app/icons/bayests-studio-32.png
+        app/icons/bayests-studio-48.png
+        app/icons/bayests-studio-64.png
+        app/icons/bayests-studio-128.png
+        app/icons/bayests-studio-256.png
+)
 
 target_link_libraries(bayests-studio PRIVATE
     studio_engine
