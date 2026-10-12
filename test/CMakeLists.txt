@@ -53,3 +53,11 @@ if(TARGET bayests-studio)
     set_tests_properties(ui.tooltips PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;STUDIO_SMOKE_TOOLTIPS=${CMAKE_CURRENT_SOURCE_DIR}/data/tooltips.csv")
 endif()
+
+# The user's own palettes, in settings of the test's own: an earlier version's
+# single palette migrated, several kept, the current one kept across a reload.
+if(TARGET bayests-studio)
+    add_test(NAME ui.palettes COMMAND bayests-studio)
+    set_tests_properties(ui.palettes PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;STUDIO_SMOKE_OWN_PALETTES=1;STUDIO_SETTINGS=${CMAKE_CURRENT_BINARY_DIR}/palettes-settings")
+endif()

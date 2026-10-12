@@ -32,6 +32,7 @@
 #include <QRadioButton>
 #include <QSpinBox>
 #include <QTimer>
+#include <QSettings>
 #include <QMenuBar>
 #include <QToolBar>
 #include <qwt_text.h>
@@ -84,6 +85,14 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName(QStringLiteral("BayesTS Studio"));
     QApplication::setApplicationDisplayName(QStringLiteral("BayesTS Studio"));
     QApplication::setApplicationVersion(QStringLiteral(STUDIO_VERSION));
+    // STUDIO_SETTINGS=<folder> keeps the settings in an INI file there rather
+    // than the registry: a portable install, or a test that must not touch
+    // the user's own.
+    if (const QString dir = qEnvironmentVariable("STUDIO_SETTINGS"); !dir.isEmpty())
+    {
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir);
+    }
 
     studio::applyTheme(app);
     studio::applySavedFonts();
@@ -224,6 +233,51 @@ int main(int argc, char *argv[])
         const bool ok = dialog.grab().save(QString::fromLocal8Bit(png));
         std::printf("smoke: font dialog %s\n", ok ? "saved" : "NOT saved");
         return ok ? 0 : 1;
+    }
+    // Development aid: STUDIO_SMOKE_OWN_PALETTES=1 checks the user's own
+    // palettes (with STUDIO_SETTINGS, so as not to touch the real ones): an
+    // earlier version's single palette is migrated, several are kept and
+    // listed, and the current one survives the list being built again.
+    if (!qgetenv("STUDIO_SMOKE_OWN_PALETTES").isEmpty())
+    {
+        if (qEnvironmentVariable("STUDIO_SETTINGS").isEmpty())
+        {
+            std::printf("smoke: own palettes need STUDIO_SETTINGS\n");
+            return 2;
+        }
+        int bad = 0;
+        const auto check = [&bad](bool ok, const char *what) {
+            std::printf("%s  %s\n", ok ? "ok  " : "FAIL", what);
+            bad += ok ? 0 : 1;
+        };
+        {
+            QSettings settings;
+            settings.clear();
+            settings.setValue(QStringLiteral("plots/customPalette"), QStringList{QStringLiteral("#112233"), QStringLiteral("#445566")});
+            settings.setValue(QStringLiteral("plots/palette"), QStringLiteral("custom"));
+        }
+        const std::vector<studio::OwnPalette> old = studio::ownPalettes();
+        check(old.size() == 1 && old[0].colours.size() == 2 && old[0].colours[1] == QColor(0x44, 0x55, 0x66),
+              "an earlier version's palette becomes the first of one's own");
+        studio::setOwnPalettes({{QStringLiteral("House style"), {QColor(Qt::red), QColor(Qt::blue)}},
+                                {QStringLiteral("Journal"), {QColor(Qt::black), QColor(Qt::gray), QColor(Qt::white)}}});
+        int own = 0;
+        for (const studio::Palette &p : studio::palettes())
+        {
+            own += p.family == studio::ownPaletteFamily() ? 1 : 0;
+        }
+        check(own == 2 && studio::ownPalettes().size() == 2 && !QSettings().contains(QStringLiteral("plots/customPalette")),
+              "two of one's own kept and listed under My organisation's colours");
+        studio::setCurrentPalette(studio::ownPaletteId(QStringLiteral("Journal")));
+        studio::reloadPalettes();
+        check(studio::currentPalette().id == studio::ownPaletteId(QStringLiteral("Journal")) &&
+                  studio::currentPalette().colours.size() == 3,
+              "the current palette survives the list being built again");
+        studio::setOwnPalettes({{QStringLiteral("House style"), {QColor(Qt::red), QColor(Qt::blue)}}});
+        check(studio::currentPalette().id == QStringLiteral("studio"),
+              "deleting the current one falls back to the studio's default");
+        std::printf(bad == 0 ? "PASS\n" : "%d FAILURES\n", bad);
+        return bad == 0 ? 0 : 1;
     }
     // Development aid: STUDIO_SMOKE_EXTENSIONS_DIALOG=<png> draws Help >
     // Extensions as the start-up load left it, and exits.

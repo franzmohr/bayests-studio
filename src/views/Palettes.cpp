@@ -106,14 +106,6 @@ std::vector<Palette> builtin()
             x.colours = colours(*data);
             p.push_back(std::move(x));
         }
-
-        Palette custom;
-        custom.id = QStringLiteral("custom");
-        custom.name = QObject::tr("My palette");
-        custom.family = QStringLiteral("Custom");
-        custom.source = QObject::tr("Your own colours");
-        custom.kind = Palette::Kind::Qualitative;
-        p.push_back(std::move(custom));
         return p;
     }
 }
@@ -169,8 +161,6 @@ QStringList &problems()
 std::vector<Palette> compose()
 {
     std::vector<Palette> p = builtin();
-    Palette custom = std::move(p.back());
-    p.pop_back();
     problems().clear();
     for (const ExtensionPalette &e : extensionPalettes())
     {
@@ -182,7 +172,7 @@ std::vector<Palette> compose()
             continue;
         }
         const auto same = std::find_if(p.begin(), p.end(), [&](const Palette &b) { return b.id == x->id; });
-        if (same != p.end() || x->id == QLatin1String("custom"))
+        if (same != p.end() || x->id.startsWith(QLatin1String("own:")))
         {
             problems() << QStringLiteral("%1: %2").arg(QFileInfo(e.file).fileName(),
                                                       QObject::tr("palette \"%1\" is already taken").arg(x->id));
@@ -190,7 +180,17 @@ std::vector<Palette> compose()
         }
         p.push_back(std::move(*x));
     }
-    p.push_back(std::move(custom));
+    for (const OwnPalette &own : ownPalettes())
+    {
+        Palette x;
+        x.id = ownPaletteId(own.name);
+        x.name = own.name;
+        x.family = ownPaletteFamily();
+        x.source = QObject::tr("Your own colours");
+        x.kind = Palette::Kind::Qualitative;
+        x.colours = own.colours;
+        p.push_back(std::move(x));
+    }
     return p;
 }
 
@@ -203,7 +203,13 @@ std::vector<Palette> &registry()
 int &currentIndex()
 {
     static int index = [] {
-        const QString id = QSettings().value(QStringLiteral("plots/palette"), QStringLiteral("studio")).toString();
+        QString id = QSettings().value(QStringLiteral("plots/palette"), QStringLiteral("studio")).toString();
+        if (id == QLatin1String("custom"))
+        {
+            // The single own palette of before is the first of the list now.
+            const std::vector<OwnPalette> own = ownPalettes();
+            id = own.empty() ? QStringLiteral("studio") : ownPaletteId(own.front().name);
+        }
         const auto &all = registry();
         for (std::size_t i = 0; i < all.size(); ++i)
         {
@@ -272,9 +278,7 @@ QColor Palette::colour(int index, int count) const
 
 const std::vector<Palette> &palettes()
 {
-    auto &all = registry();
-    all.back().colours = customColours();
-    return all;
+    return registry();
 }
 
 const Palette &currentPalette()
@@ -298,27 +302,76 @@ void setCurrentPalette(const QString &id, bool persist)
     }
 }
 
-std::vector<QColor> customColours()
+QString ownPaletteFamily()
 {
-    std::vector<QColor> out;
-    for (const QString &c : QSettings().value(QStringLiteral("plots/customPalette")).toStringList())
+    return QObject::tr("My organisation's colours");
+}
+
+QString ownPaletteId(const QString &name)
+{
+    return QStringLiteral("own:") + name;
+}
+
+std::vector<OwnPalette> ownPalettes()
+{
+    const QSettings settings;
+    std::vector<OwnPalette> out;
+    if (settings.contains(QStringLiteral("plots/ownPalettes")))
+    {
+        // One entry per palette: its name, a tab, its colours by comma.
+        for (const QString &entry : settings.value(QStringLiteral("plots/ownPalettes")).toStringList())
+        {
+            OwnPalette p;
+            p.name = entry.section(QLatin1Char('\t'), 0, 0);
+            for (const QString &c : entry.section(QLatin1Char('\t'), 1).split(QLatin1Char(','), Qt::SkipEmptyParts))
+            {
+                if (QColor(c).isValid())
+                {
+                    p.colours.emplace_back(c);
+                }
+            }
+            if (!p.name.isEmpty() && !p.colours.empty())
+            {
+                out.push_back(std::move(p));
+            }
+        }
+        return out;
+    }
+    // Before there were several: the one "My palette", or Okabe and Ito's
+    // colours to start from.
+    OwnPalette p;
+    p.name = QObject::tr("My palette");
+    for (const QString &c : settings.value(QStringLiteral("plots/customPalette")).toStringList())
     {
         if (QColor(c).isValid())
         {
-            out.emplace_back(c);
+            p.colours.emplace_back(c);
         }
     }
-    return out.empty() ? okabeIto() : out;
+    if (p.colours.empty())
+    {
+        p.colours = okabeIto();
+    }
+    out.push_back(std::move(p));
+    return out;
 }
 
-void setCustomColours(const std::vector<QColor> &colours)
+void setOwnPalettes(const std::vector<OwnPalette> &own)
 {
-    QStringList names;
-    for (const QColor &c : colours)
+    QStringList entries;
+    for (const OwnPalette &p : own)
     {
-        names << c.name();
+        QStringList names;
+        for (const QColor &c : p.colours)
+        {
+            names << c.name();
+        }
+        entries << p.name + QLatin1Char('\t') + names.join(QLatin1Char(','));
     }
-    QSettings().setValue(QStringLiteral("plots/customPalette"), names);
+    QSettings settings;
+    settings.setValue(QStringLiteral("plots/ownPalettes"), entries);
+    settings.remove(QStringLiteral("plots/customPalette"));
+    reloadPalettes();
 }
 
 } // namespace studio

@@ -266,8 +266,12 @@ components it uses.
   every exported figure in the studio's Okabe–Ito default, the five most
   used palettes of ggplot2 (its hue palette; ColorBrewer's Set1, Set2, Dark2
   and Paired), of matplotlib (tab10, tab20, tab20b, tab20c, petroff10) and
-  of the viridis family (viridis, magma, inferno, plasma, cividis) -- or
-  colours of your own. The values are generated from the packages
+  of the viridis family (viridis, magma, inferno, plasma, cividis), an
+  extension's -- or, under My organisation's colours, as many palettes of your
+  own as there are house styles to follow, each made from the one selected,
+  renamed, deleted and edited there (an earlier version's single palette is
+  the first of them). `STUDIO_SETTINGS=<folder>` keeps the settings in an
+  INI file there instead of the registry, for a portable install. The values are generated from the packages
   themselves by `tools/make_palettes.py`; their licences, none restrictive,
   are in LICENSING.md and the Third-party Licences box.
 

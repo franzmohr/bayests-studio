@@ -192,7 +192,7 @@ void MainWindow::buildActions()
         PaletteDialog dialog(this);
         if (dialog.exec() == QDialog::Accepted)
         {
-            setCustomColours(dialog.custom());
+            setOwnPalettes(dialog.own());
             setCurrentPalette(dialog.chosen());
             // Every view draws again, in the new colours.
             reloadProject();

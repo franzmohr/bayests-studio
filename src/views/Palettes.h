@@ -48,8 +48,23 @@ const Palette &currentPalette();
 /// Kept in the settings unless `persist` is false.
 void setCurrentPalette(const QString &id, bool persist = true);
 
-/// The user's own palette, kept in the settings.
-std::vector<QColor> customColours();
-void setCustomColours(const std::vector<QColor> &colours);
+/// One of the user's own palettes, listed under "My organisation's colours":
+/// a house style, a university's, a journal's.
+struct OwnPalette
+{
+    QString name;
+    std::vector<QColor> colours;
+};
+
+/// The user's own palettes, kept in the settings. Until the user changes
+/// them, one: "My palette", in what an earlier version kept, or Okabe and
+/// Ito's colours.
+std::vector<OwnPalette> ownPalettes();
+/// Keeps them and builds the list again, the current palette kept where it
+/// is still there.
+void setOwnPalettes(const std::vector<OwnPalette> &own);
+/// The heading they are listed under, and the id of one: "own:" + its name.
+QString ownPaletteFamily();
+QString ownPaletteId(const QString &name);
 
 } // namespace studio
