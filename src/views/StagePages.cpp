@@ -16,6 +16,7 @@
 #include "views/SummaryPlotView.h"
 #include "views/TableExport.h"
 #include "views/InclusionView.h"
+#include "views/StateVarianceView.h"
 #include "views/VolatilityBreakView.h"
 #include "engine/VolatilityBreak.h"
 #include "views/HorseRaceView.h"
@@ -331,6 +332,8 @@ PosteriorPage::PosteriorPage(QtReporter *reporter, QWidget *parent) : StagePage(
     tabs_->addTab(inclusion_, tr("Inclusion probabilities"));
     volatility_ = new VolatilityBreakView;
     volatilityTab_ = tabs_->addTab(volatility_, tr("Volatility break"));
+    stateVariance_ = new StateVarianceView;
+    stateVarianceTab_ = tabs_->addTab(stateVariance_, tr("State variance"));
     tabs_->setObjectName(QStringLiteral("posteriorTabs"));
     layout->addWidget(tabs_, 1);
 }
@@ -379,6 +382,13 @@ void PosteriorPage::showModel(const ModelContext &context)
     const bool vbreak = have && r.hasPosterior && hasVolatilityBreak(context.file);
     volatility_->setModel(vbreak ? context.file : QString());
     tabs_->setTabEnabled(volatilityTab_, vbreak);
+    const bool tvp = have && r.timeVarying;
+    stateVariance_->setModel(tvp ? context.file : QString(), names);
+    tabs_->setTabEnabled(stateVarianceTab_, tvp);
+    if (!tvp && tabs_->currentIndex() == stateVarianceTab_)
+    {
+        tabs_->setCurrentIndex(1);
+    }
     if (!vbreak && tabs_->currentIndex() == volatilityTab_)
     {
         tabs_->setCurrentIndex(1);

@@ -34,6 +34,8 @@ add_library(studio_engine STATIC
     engine/Spillover.h
     engine/Extensions.cpp
     engine/Extensions.h
+    engine/StateVariance.cpp
+    engine/StateVariance.h
     engine/VolatilityBreak.cpp
     engine/VolatilityBreak.h
     engine/Structural.cpp
@@ -106,6 +108,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/Fonts.cpp
     views/Fonts.h
     views/PaletteDialog.cpp
+    views/StateVarianceView.cpp
+    views/StateVarianceView.h
     views/VolatilityBreakView.cpp
     views/VolatilityBreakView.h
     views/PaletteDialog.h

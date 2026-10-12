@@ -144,6 +144,8 @@ private:
     InclusionView *inclusion_;
     class VolatilityBreakView *volatility_;
     int volatilityTab_ = -1;
+    class StateVarianceView *stateVariance_;
+    int stateVarianceTab_ = -1;
 };
 
 /// 4. Evaluation: information criteria and forecast performance, across all
