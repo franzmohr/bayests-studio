@@ -30,6 +30,7 @@
 #include <qwt_text.h>
 
 #include <algorithm>
+#include <functional>
 
 namespace studio
 {
@@ -55,6 +56,11 @@ QwtPlotIntervalCurve *tube(const QString &title, const QColor &color)
     return curve;
 }
 
+/// The posterior median of `value(d, h)` over the draws with its 68% and 90%
+/// bands, horizon by horizon, replacing what the plot showed.
+void drawBands(QwtPlot *plot, int horizons, int draws, const std::function<double(std::size_t, arma::uword)> &value,
+               bool zero);
+
 void zeroLine(QwtPlot *plot)
 {
     auto *zero = new QwtPlotMarker;
@@ -64,6 +70,45 @@ void zeroLine(QwtPlot *plot)
     c.setAlpha(110);
     zero->setLinePen(c, 1.0);
     zero->attach(plot);
+}
+
+void drawBands(QwtPlot *plot, int horizons, int draws, const std::function<double(std::size_t, arma::uword)> &value,
+               bool zero)
+{
+    plot->detachItems(QwtPlotItem::Rtti_PlotCurve, true);
+    plot->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
+    plot->detachItems(QwtPlotItem::Rtti_PlotMarker, true);
+    if (zero)
+    {
+        zeroLine(plot);
+    }
+    QVector<QwtIntervalSample> b90, b68;
+    QVector<QPointF> med;
+    std::vector<double> column(static_cast<std::size_t>(draws));
+    for (int h = 0; h < horizons; ++h)
+    {
+        for (int d = 0; d < draws; ++d)
+        {
+            column[static_cast<std::size_t>(d)] = value(static_cast<std::size_t>(d), static_cast<arma::uword>(h));
+        }
+        std::sort(column.begin(), column.end());
+        b90.append({double(h), QwtInterval(sortedQuantile(column, 0.05), sortedQuantile(column, 0.95))});
+        b68.append({double(h), QwtInterval(sortedQuantile(column, 0.16), sortedQuantile(column, 0.84))});
+        med.append({double(h), sortedQuantile(column, 0.5)});
+    }
+    auto *t90 = tube(QObject::tr("90%"), seriesColor(0, 50));
+    t90->setSamples(b90);
+    t90->attach(plot);
+    auto *t68 = tube(QObject::tr("68%"), seriesColor(0, 95));
+    t68->setSamples(b68);
+    t68->attach(plot);
+    auto *line = new QwtPlotCurve(QObject::tr("Median"));
+    line->setPen(seriesColor(0), 2.0);
+    line->setRenderHint(QwtPlotItem::RenderAntialiased);
+    line->setSamples(med);
+    line->attach(plot);
+    plot->setAxisScale(QwtPlot::xBottom, 0.0, std::max(1.0, double(horizons - 1)));
+    plot->replot();
 }
 
 } // namespace
@@ -116,6 +161,24 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     const FigureProvider figure = [this]() {
         FigureSpec spec;
         const ResponseRequest req = request();
+        if (tabs_->currentIndex() == 1 && fevdMatrix_)
+        {
+            // As on screen: a column per shock, a row per variable decomposed.
+            spec.title = tr("Forecast error variance decomposition");
+            spec.subtitle = fevdNote_->text();
+            spec.columns = support_.k;
+            for (QwtPlot *p : fevdPlots_)
+            {
+                spec.cells.push_back({p, {}});
+            }
+            for (int j = 0; j < support_.k; ++j)
+            {
+                spec.columnLabels << tr("Shock to %1").arg(impulse_->itemText(j + 1));
+            }
+            spec.rowLabels = support_.variables;
+            spec.name = QStringLiteral("fevd-all");
+            return spec;
+        }
         if (tabs_->currentIndex() == 1)
         {
             spec = singleFigure(fevd_, tr("Forecast error variance decomposition of %1").arg(response_->currentText()),
@@ -194,6 +257,15 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     fevd_->insertLegend(new QwtLegend, QwtPlot::RightLegend);
     fevd_->setToolTip(tr("The share of the forecast error variance at each horizon due to each shock: posterior means, adding to one. Right-click to copy or save the figure."));
     fevdLayout->addWidget(fevd_, 1);
+    fevdGridHost_ = new QWidget;
+    fevdGrid_ = new QGridLayout(fevdGridHost_);
+    fevdGrid_->setSpacing(12);
+    auto *fevdScroll = new QScrollArea;
+    fevdScroll->setWidget(fevdGridHost_);
+    fevdScroll->setWidgetResizable(true);
+    fevdScroll->setFrameShape(QFrame::NoFrame);
+    fevdLayout->addWidget(fevdScroll, 1);
+    fevdScroll_ = fevdScroll;
 
     tabs_ = new QTabWidget;
     tabs_->setDocumentMode(true);
@@ -262,6 +334,19 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
                 l->setText(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
             }
         }
+        for (int j = 0; fevdMatrix_ && j < support_.k && j < static_cast<int>(fevdHeaders_.size()); ++j)
+        {
+            if (auto *l = qobject_cast<QLabel *>(fevdHeaders_[static_cast<std::size_t>(j)]))
+            {
+                l->setText(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
+            }
+        }
+    });
+    connect(response_, &QComboBox::currentIndexChanged, this, [this]() {
+        if (support_.ok && allResponses() != fevdMatrix_)
+        {
+            rebuildFevdGrid(support_.k);
+        }
     });
     // All shocks and one need grids of their own.
     connect(impulse_, &QComboBox::currentIndexChanged, this, [this]() {
@@ -291,6 +376,7 @@ void StructuralView::setModel(const QString &file)
         status_->setText(file.isEmpty() ? tr("Select a model of the project.")
                                         : tr("Not available for this model: %1").arg(support_.reason));
         rebuildGrid(0);
+        rebuildFevdGrid(0);
         return;
     }
 
@@ -323,7 +409,9 @@ void StructuralView::setModel(const QString &file)
         // The whole matrix while it stays legible; for a larger model the
         // first shock, the matrix a choice away.
         impulse_->setCurrentIndex(support_.k <= 6 ? 0 : 1);
+        response_->addItem(tr("All variables"));
         response_->addItems(support_.variables);
+        response_->setCurrentIndex(support_.k <= 6 ? 0 : 1);
         period_->setMaximum(std::max(1, support_.periods));
         period_->setValue(std::max(1, support_.periods));
     }
@@ -335,6 +423,7 @@ void StructuralView::setModel(const QString &file)
     periodLabel_->setVisible(support_.moving);
     standardDeviation_->setEnabled(support_.structural);
     rebuildGrid(support_.k);
+    rebuildFevdGrid(support_.k);
     schedule();
 }
 
@@ -383,8 +472,19 @@ void StructuralView::compute()
     {
         shocks.push_back(impulse_->currentIndex() - 1);
     }
-    const int response = response_->currentIndex();
-    watcher_->setFuture(QtConcurrent::run([file, req, shocks, response]() {
+    std::vector<int> decomposed;
+    if (allResponses())
+    {
+        for (int i = 0; i < support_.k; ++i)
+        {
+            decomposed.push_back(i);
+        }
+    }
+    else
+    {
+        decomposed.push_back(response_->currentIndex() - 1);
+    }
+    watcher_->setFuture(QtConcurrent::run([file, req, shocks, decomposed]() {
         const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
         Result r;
         try
@@ -396,7 +496,11 @@ void StructuralView::compute()
             }
             if (req.type == ResponseType::Oir || req.type == ResponseType::Sir || req.type == ResponseType::Sign)
             {
-                r.shares = varianceDecomposition(file, req, response);
+                r.decomposed = decomposed;
+                for (const int i : decomposed)
+                {
+                    r.shares.push_back(varianceDecomposition(file, req, i));
+                }
             }
         }
         catch (const std::exception &e)
@@ -481,6 +585,68 @@ void StructuralView::rebuildGrid(int k)
     }
 }
 
+bool StructuralView::allResponses() const
+{
+    return response_->currentIndex() == 0;
+}
+
+void StructuralView::rebuildFevdGrid(int k)
+{
+    for (QwtPlot *p : fevdPlots_)
+    {
+        p->deleteLater();
+    }
+    fevdPlots_.clear();
+    for (QWidget *h : fevdHeaders_)
+    {
+        h->deleteLater();
+    }
+    fevdHeaders_.clear();
+    fevdMatrix_ = k > 0 && allResponses();
+    fevd_->setVisible(!fevdMatrix_);
+    fevdScroll_->setVisible(fevdMatrix_);
+    if (!fevdMatrix_)
+    {
+        return;
+    }
+    // The responses' matrix: shock j's column, the variable decomposed in
+    // row i, so that each row adds up to one.
+    QFont bold = font();
+    bold.setBold(true);
+    for (int j = 0; j < k; ++j)
+    {
+        auto *head = new QLabel(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
+        head->setAlignment(Qt::AlignCenter);
+        head->setFont(bold);
+        head->setWordWrap(true);
+        fevdGrid_->addWidget(head, 0, j + 1);
+        fevdHeaders_.push_back(head);
+    }
+    for (int i = 0; i < k; ++i)
+    {
+        auto *row = new QLabel(support_.variables.value(i));
+        row->setAlignment(Qt::AlignCenter);
+        row->setFont(bold);
+        row->setMinimumWidth(70);
+        row->setToolTip(tr("The forecast error variance of %1, split into the shares of the shocks along the row; they add up to one.")
+                            .arg(support_.variables.value(i)));
+        fevdGrid_->addWidget(row, i + 1, 0);
+        fevdHeaders_.push_back(row);
+        for (int j = 0; j < k; ++j)
+        {
+            auto *plot = new QwtPlot;
+            attachFigureExport(plot, figure_);
+            plot->setToolTip(tr("The share of the shock to %2 in the forecast error variance of %1 at each horizon: the posterior median with 68% and 90% bands. Right-click to copy or save the figure.")
+                                 .arg(support_.variables.value(i), support_.variables.value(j)));
+            plot->setMinimumHeight(170);
+            styleAxes(plot, i + 1 == k ? tr("Horizon") : QString(), QString());
+            plot->setAxisScale(QwtPlot::yLeft, 0.0, 1.0);
+            fevdGrid_->addWidget(plot, i + 1, j + 1);
+            fevdPlots_.push_back(plot);
+        }
+    }
+}
+
 void StructuralView::show(const Result &result)
 {
     if (!result.error.isEmpty())
@@ -518,64 +684,64 @@ void StructuralView::show(const Result &result)
             continue;
         }
         const std::vector<arma::mat> &shock = result.responses[s];
-        QwtPlot *plot = plots_[p];
-        plot->detachItems(QwtPlotItem::Rtti_PlotCurve, true);
-        plot->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
-        plot->detachItems(QwtPlotItem::Rtti_PlotMarker, true);
-        zeroLine(plot);
-        QVector<QwtIntervalSample> b90, b68;
-        QVector<QPointF> med;
-        std::vector<double> column(static_cast<std::size_t>(draws));
-        for (int h = 0; h < horizons; ++h)
-        {
-            for (int d = 0; d < draws; ++d)
-            {
-                column[static_cast<std::size_t>(d)] =
-                    shock[static_cast<std::size_t>(d)](static_cast<arma::uword>(h), static_cast<arma::uword>(v));
-            }
-            std::sort(column.begin(), column.end());
-            b90.append({double(h), QwtInterval(sortedQuantile(column, 0.05), sortedQuantile(column, 0.95))});
-            b68.append({double(h), QwtInterval(sortedQuantile(column, 0.16), sortedQuantile(column, 0.84))});
-            med.append({double(h), sortedQuantile(column, 0.5)});
-        }
-        auto *t90 = tube(tr("90%"), seriesColor(0, 50));
-        t90->setSamples(b90);
-        t90->attach(plot);
-        auto *t68 = tube(tr("68%"), seriesColor(0, 95));
-        t68->setSamples(b68);
-        t68->attach(plot);
-        auto *line = new QwtPlotCurve(tr("Median"));
-        line->setPen(seriesColor(0), 2.0);
-        line->setRenderHint(QwtPlotItem::RenderAntialiased);
-        line->setSamples(med);
-        line->attach(plot);
-        plot->setAxisScale(QwtPlot::xBottom, 0.0, std::max(1.0, double(req.horizon)));
-        plot->replot();
+        drawBands(
+            plots_[p], horizons, draws, [&](std::size_t d, arma::uword h) { return shock[d](h, v); }, true);
     }
 
-    // Variance decomposition: the posterior mean share of each shock, stacked.
+    // Variance decomposition: the matrix of every variable's, or the
+    // posterior mean share of each shock in one variable's, stacked.
     fevd_->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
     if (result.shares.empty())
     {
         fevdNote_->setText(tr("The variance decomposition is shown for orthogonal shocks (oir, sir, sign "
                               "restrictions), whose shares add up to one; choose one of those."));
+        for (QwtPlot *p : fevdPlots_)
+        {
+            p->detachItems(QwtPlotItem::Rtti_PlotCurve, true);
+            p->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
+            p->replot();
+        }
         fevd_->replot();
         return;
     }
+    if ((result.shares.size() > 1) != (fevdMatrix_ && support_.k > 1))
+    {
+        return;
+    }
+    const QString kind = req.type == ResponseType::Sir    ? tr("structural")
+                         : req.type == ResponseType::Sign ? tr("sign-identified")
+                                                          : tr("orthogonalised");
+    const QString over = req.type == ResponseType::Sign
+                             ? tr(", over the %1 identified draws").arg(result.shares.front().size())
+                             : QString();
+    if (fevdMatrix_)
+    {
+        fevdNote_->setText(tr("The share of each %1 shock (columns) in the forecast error variance of each variable "
+                              "(rows): median, 68% and 90% bands; each row adds up to one%2.")
+                               .arg(kind, over));
+        for (std::size_t p = 0; p < fevdPlots_.size(); ++p)
+        {
+            const std::size_t i = p / k, j = p % k;
+            if (i >= result.shares.size())
+            {
+                continue;
+            }
+            const std::vector<arma::mat> &variable = result.shares[i];
+            drawBands(
+                fevdPlots_[p], horizons, static_cast<int>(variable.size()),
+                [&](std::size_t d, arma::uword h) { return variable[d](h, j); }, false);
+        }
+        return;
+    }
     fevdNote_->setText(tr("Posterior mean share of each %1 shock in the forecast error variance of %2%3.")
-                           .arg(req.type == ResponseType::Sir    ? tr("structural")
-                                : req.type == ResponseType::Sign ? tr("sign-identified")
-                                                                 : tr("orthogonalised"),
-                                response_->currentText(),
-                                req.type == ResponseType::Sign
-                                    ? tr(", over the %1 identified draws").arg(result.shares.size())
-                                    : QString()));
+                           .arg(kind, response_->currentText(), over));
+    const std::vector<arma::mat> &shares = result.shares.front();
     arma::mat mean(static_cast<arma::uword>(horizons), static_cast<arma::uword>(support_.k), arma::fill::zeros);
-    for (const auto &d : result.shares)
+    for (const auto &d : shares)
     {
         mean += d;
     }
-    mean /= static_cast<double>(result.shares.size());
+    mean /= static_cast<double>(shares.size());
     arma::vec lower(static_cast<arma::uword>(horizons), arma::fill::zeros);
     for (int j = 0; j < support_.k; ++j)
     {

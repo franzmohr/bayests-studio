@@ -24,7 +24,8 @@ namespace studio
 /// The structural analysis of the Application stage: impulse responses of
 /// every variable to every shock -- a matrix laid out as the covariance
 /// matrix, a column per shock and a row per response -- or to one shock, and
-/// the forecast error variance decomposition of one variable, from the posterior draws in the file. The numbers are
+/// the forecast error variance decomposition of every variable -- the same
+/// matrix, a row per variable decomposed -- or of one, from the posterior draws in the file. The numbers are
 /// bvartools' -- test/structural_test.cpp holds the two together draw by draw.
 ///
 /// Recomputed a moment after any control changes, on a worker thread.
@@ -49,7 +50,8 @@ private:
         QString error;
         std::vector<int> shocks;            // the shocks computed
         std::vector<std::vector<arma::mat>> responses;   // per shock, per draw: horizons x responses
-        std::vector<arma::mat> shares;      // per draw: horizons x shocks
+        std::vector<int> decomposed;        // the variables decomposed
+        std::vector<std::vector<arma::mat>> shares;   // per variable, per draw: horizons x shocks
     };
 
     ResponseRequest request() const;
@@ -59,6 +61,9 @@ private:
     void rebuildGrid(int k);
     /// Every shock at once, in the matrix, rather than the one chosen.
     bool allShocks() const;
+    void rebuildFevdGrid(int k);
+    /// Every variable's decomposition at once, in the matrix.
+    bool allResponses() const;
 
     QString file_;
     StructuralSupport support_;
@@ -84,6 +89,12 @@ private:
     bool matrix_ = false;            // what the grid was built for
     QwtPlot *fevd_;
     QLabel *fevdNote_;
+    QWidget *fevdScroll_;
+    QWidget *fevdGridHost_;
+    QGridLayout *fevdGrid_;
+    std::vector<QwtPlot *> fevdPlots_;   // variable i, shock j at i * k + j
+    std::vector<QWidget *> fevdHeaders_; // the k shock headers first
+    bool fevdMatrix_ = false;
     int columns_ = 1;
     FigureProvider figure_;
 };
