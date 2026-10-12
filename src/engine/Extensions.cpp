@@ -247,6 +247,10 @@ QJsonObject exampleToJson(const WorkflowExample &e)
             columns.append(QJsonObject{{QStringLiteral("source"), from}, {QStringLiteral("name"), name}});
         }
         d[QStringLiteral("columns")] = columns;
+        if (e.recipe.transform == DataRecipe::Transform::LogDifference)
+        {
+            d[QStringLiteral("transform")] = QStringLiteral("log-difference");
+        }
         if (e.recipe.scale != 1.0)
         {
             d[QStringLiteral("scale")] = e.recipe.scale;
@@ -284,6 +288,10 @@ QJsonObject exampleToJson(const WorkflowExample &e)
     m[QStringLiteral("coefPrecision")] = e.coefPrecision;
     m[QStringLiteral("detPrecision")] = e.detPrecision;
     m[QStringLiteral("wishartScale")] = e.wishartScale;
+    if (e.wishartDf > 0)
+    {
+        m[QStringLiteral("wishartDf")] = e.wishartDf;
+    }
     m[QStringLiteral("iterations")] = e.iterations;
     m[QStringLiteral("burnin")] = e.burnin;
     m[QStringLiteral("seed")] = static_cast<double>(e.seed);
@@ -374,7 +382,8 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         const QString at = where + QObject::tr(", data");
         unknownKeys(d,
                     {QStringLiteral("file"), QStringLiteral("dateColumn"), QStringLiteral("dates"),
-                     QStringLiteral("columns"), QStringLiteral("scale"), QStringLiteral("first"),
+                     QStringLiteral("columns"), QStringLiteral("transform"), QStringLiteral("scale"),
+                     QStringLiteral("first"),
                      QStringLiteral("last"), QStringLiteral("dropIncomplete")},
                     at, warnings);
         e.recipe.file = text(d, QStringLiteral("file"), at, true);
@@ -405,6 +414,19 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
             const QString name = text(col, QStringLiteral("name"), at + QObject::tr(", column"));
             e.recipe.columns.emplace_back(source, name.isEmpty() ? source : name);
         }
+        const QString transform = text(d, QStringLiteral("transform"), at);
+        if (transform.isEmpty() || transform == QLatin1String("none"))
+        {
+            e.recipe.transform = DataRecipe::Transform::None;
+        }
+        else if (transform == QLatin1String("log-difference"))
+        {
+            e.recipe.transform = DataRecipe::Transform::LogDifference;
+        }
+        else
+        {
+            refuse(QObject::tr("%1: \"transform\" must be \"none\" or \"log-difference\", not \"%2\"").arg(at, transform));
+        }
         e.recipe.scale = number(d, QStringLiteral("scale"), 1.0, at);
         e.recipe.first = text(d, QStringLiteral("first"), at);
         e.recipe.last = text(d, QStringLiteral("last"), at);
@@ -424,7 +446,8 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         const QString at = where + QObject::tr(", model");
         unknownKeys(m,
                     {QStringLiteral("lags"), QStringLiteral("minnesota"), QStringLiteral("coefPrecision"),
-                     QStringLiteral("detPrecision"), QStringLiteral("wishartScale"), QStringLiteral("iterations"),
+                     QStringLiteral("detPrecision"), QStringLiteral("wishartScale"), QStringLiteral("wishartDf"),
+                     QStringLiteral("iterations"),
                      QStringLiteral("burnin"), QStringLiteral("seed")},
                     at, warnings);
         e.p = integer(m, QStringLiteral("lags"), e.p, at);
@@ -432,6 +455,7 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         e.coefPrecision = number(m, QStringLiteral("coefPrecision"), e.coefPrecision, at);
         e.detPrecision = number(m, QStringLiteral("detPrecision"), e.detPrecision, at);
         e.wishartScale = number(m, QStringLiteral("wishartScale"), e.wishartScale, at);
+        e.wishartDf = static_cast<int>(number(m, QStringLiteral("wishartDf"), e.wishartDf, at));
         e.iterations = integer(m, QStringLiteral("iterations"), e.iterations, at);
         e.burnin = integer(m, QStringLiteral("burnin"), e.burnin, at);
         const double seed = number(m, QStringLiteral("seed"), static_cast<double>(e.seed), at);
@@ -443,6 +467,10 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         if (e.p < 1 || e.iterations < 1 || e.burnin < 0)
         {
             refuse(QObject::tr("%1: \"lags\" and \"iterations\" must be positive, \"burnin\" not negative").arg(at));
+        }
+        if (e.wishartDf < 0)
+        {
+            refuse(QObject::tr("%1: \"wishartDf\" must be positive, or absent for the builder's").arg(at));
         }
     }
 
@@ -691,9 +719,9 @@ built-in example replaces it.
 | `title` | `"Topic: Authors (year)"`: the topic heads the entry, the authors label its button |
 | `reference`, `question`, `findings` | the citation, the question it answers, what the paper finds |
 | `supported`, `missing` | `false` and what is missing, to list a paper as not yet guided |
-| `data` | `file` (CSV), `dateColumn`, `dates` (`"iso"`: 1947-01-01; `"year.quarter"`: 1955.1), `columns` (each `{"source", "name"}`), and optionally `scale`, `first`, `last`, `dropIncomplete` |
+| `data` | `file` (CSV), `dateColumn`, `dates` (`"iso"`: 1947-01-01; `"year.quarter"`: 1955.1), `columns` (each `{"source", "name"}`), and optionally `transform` (`"log-difference"`, before the scale; the first period is lost), `scale`, `first`, `last`, `dropIncomplete` |
 | `series` | the model's variables in their order; the data's columns by default |
-| `model` | `lags`, `minnesota`, `coefPrecision`, `detPrecision`, `wishartScale`, `iterations`, `burnin`, `seed` |
+| `model` | `lags`, `minnesota`, `coefPrecision`, `detPrecision`, `wishartScale`, `wishartDf` (the builder's k when absent), `iterations`, `burnin`, `seed` |
 | `restrictions` | thesis: each `{"shock", "response", "sign": "+", "-" or "0", "horizon"}` |
 | `race` | horse race: `variables`, `firstOrigin`, `lastOrigin`, `step`, `horizon`, `levels`, `volatilityBreak`, `candidates`, `benchmark` |
 | `notes` | per step id, what the example does there |

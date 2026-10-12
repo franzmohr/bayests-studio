@@ -55,6 +55,13 @@ target_link_libraries(studio_engine PUBLIC
 if(OpenMP_CXX_FOUND)
     target_link_libraries(studio_engine PUBLIC OpenMP::OpenMP_CXX)
 endif()
+# The data of the worked examples the studio ships (engine/Examples.cpp),
+# read as ":/examples/<file>"; in the engine, so its tests read them too.
+qt_add_resources(studio_engine "exampledata"
+    PREFIX "/examples"
+    BASE "engine/data"
+    FILES engine/data/luetkepohl-e1.csv
+)
 
 qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     $<$<PLATFORM_ID:Windows>:app/bayests-studio.rc>

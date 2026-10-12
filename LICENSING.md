@@ -41,6 +41,19 @@ the About box and the shipped licence file reproduce them.
 
 None restricts closed-source or commercial use.
 
+## Example data
+
+`src/engine/data/luetkepohl-e1.csv`, the data of the Lütkepohl (2006)
+worked example, is data set E1 of Lütkepohl, *New Introduction to Multiple
+Time Series Analysis* (Springer), as distributed with JMulTi
+(`jmulti.de/download/datasets/e1.dat`): West German investment, income and
+consumption, 1960Q1 to 1982Q4, originally from the Deutsche Bundesbank. The
+file is the values of the series only, retyped as a CSV with a date column;
+no code of bvartools, which ships the same series, is taken. Official
+statistics of this kind are facts, not a work, and the textbook and JMulTi
+publish them for use; the example cites both. Have this confirmed in the same
+review as the licence agreement.
+
 ## Qt
 
 Under the LGPL the application may stay closed, provided that:

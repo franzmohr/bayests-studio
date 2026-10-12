@@ -18,7 +18,7 @@ namespace studio
 /// names in the model, a scale, the dates, and the sample.
 struct DataRecipe
 {
-    QString file;                               ///< relative to the reproductions folder
+    QString file;                               ///< relative to the reproductions folder; ":/examples/..." the studio's own
     QString dateColumn;
     enum class Dates
     {
@@ -26,7 +26,14 @@ struct DataRecipe
         IsoDate,                                ///< "1947-01-01", monthly
     } dates = Dates::IsoDate;
     std::vector<std::pair<QString, QString>> columns;   ///< source name, name in the model
-    double scale = 1.0;                         ///< every column multiplied by it
+    /// Applied to every column within the sample, before the scale: log
+    /// differences lose the sample's first period.
+    enum class Transform
+    {
+        None,
+        LogDifference,                          ///< log x(t) - log x(t-1)
+    } transform = Transform::None;
+    double scale = 1.0;                         ///< every column multiplied by it, after the transform
     QString first, last;                        ///< the sample, as the converted labels; empty for all
     bool dropIncomplete = true;                 ///< rows with an empty cell in a chosen column
 };
@@ -62,6 +69,7 @@ struct WorkflowExample
     double detPrecision = 0.1;
     bool minnesota = false;
     double wishartScale = 1.0;
+    int wishartDf = 0;                          ///< the Wishart's degrees of freedom; 0: the builder's, k
     int iterations = 5000;
     int burnin = 1000;
     std::uint64_t seed = 1;
@@ -101,8 +109,12 @@ const WorkflowExample *findExample(const QString &id);
 /// setting the assistant stores when the user locates them.
 QString defaultReproductionsFolder();
 
-/// Applies a recipe to the files under `root`. Throws with the reason --
-/// the file missing, a column not there -- where it cannot.
+/// Whether a recipe reads data the studio ships, from its resources.
+bool isBuiltinData(const DataRecipe &recipe);
+
+/// Applies a recipe to the files under `root` (ignored for built-in data).
+/// Throws with the reason -- the file missing, a column not there, a log of
+/// a value not positive -- where it cannot.
 DataSet prepareExampleData(const DataRecipe &recipe, const QString &root);
 
 /// Writes a data set as the CSV the importer reads: a date column first.

@@ -529,7 +529,7 @@ void AssistantPanel::showStep(int index)
         QString label = a.label;
         if (example_ && !example_->recipe.file.isEmpty() && a.id == QLatin1String("import"))
         {
-            label = tr("Prepare the Paper's Data");
+            label = isBuiltinData(example_->recipe) ? tr("Prepare the Example's Data") : tr("Prepare the Paper's Data");
         }
         auto *b = new QPushButton(label);
         b->setToolTip(a.tip);
@@ -612,7 +612,8 @@ void AssistantPanel::act(const QString &id)
         {
             try
             {
-                const QString root = reproductionsFolder();
+                // The studio's own data need no reproductions folder.
+                const QString root = isBuiltinData(example_->recipe) ? QString() : reproductionsFolder();
                 const DataSet data = prepareExampleData(example_->recipe, root);
                 QDir(host_->projectFolder()).mkpath(QStringLiteral("data"));
                 const QString file = QDir(host_->projectFolder()).filePath(QStringLiteral("data/%1.csv").arg(example_->id));
@@ -620,7 +621,9 @@ void AssistantPanel::act(const QString &id)
                 record_.dataFile = QDir(host_->projectFolder()).relativeFilePath(file);
                 saveRecord();
                 host_->importDataFile(file);
-                status_->setText(tr("Prepared %1 series over %2 periods from the paper's files into %3.")
+                status_->setText((isBuiltinData(example_->recipe)
+                                      ? tr("Prepared %1 series over %2 periods from the data the studio ships into %3.")
+                                      : tr("Prepared %1 series over %2 periods from the paper's files into %3."))
                                      .arg(data.series())
                                      .arg(data.length())
                                      .arg(record_.dataFile));

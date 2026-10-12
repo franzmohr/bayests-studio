@@ -20,6 +20,81 @@ std::vector<WorkflowExample> make()
 {
     std::vector<WorkflowExample> out;
 
+    // -- Lütkepohl (2006), as the introduction of bvartools runs it: the
+    // first example, its data shipped with the studio.
+    {
+        WorkflowExample e;
+        e.id = QStringLiteral("luetkepohl2006");
+        e.workflow = QStringLiteral("thesis");
+        e.title = QObject::tr("Income and consumption: the VAR of Lütkepohl (2006)");
+        e.reference = QStringLiteral("Lütkepohl, H. (2006). New Introduction to Multiple Time Series Analysis, "
+                                     "2nd ed. Berlin: Springer, data set E1; and the introduction of the R "
+                                     "package bvartools (Mohr), whose model this example runs.");
+        e.question = QObject::tr("How does consumption respond to a shock to disposable income, and how much of "
+                                 "its forecast error variance do income shocks explain? A small textbook VAR -- the "
+                                 "place to learn the workflow before a paper's.");
+        // The data are shipped (engine/data), so there is no reproduction to locate.
+        e.recipe.file = QStringLiteral(":/examples/luetkepohl-e1.csv");
+        e.recipe.dateColumn = QStringLiteral("date");
+        e.recipe.dates = DataRecipe::Dates::YearDotQuarter;
+        e.recipe.columns = {{QStringLiteral("invest"), QStringLiteral("invest")},
+                            {QStringLiteral("income"), QStringLiteral("income")},
+                            {QStringLiteral("cons"), QStringLiteral("cons")}};
+        e.recipe.transform = DataRecipe::Transform::LogDifference;
+        e.recipe.scale = 100.0;
+        e.recipe.last = QStringLiteral("1978 Q4");
+        e.p = 2;
+        e.coefPrecision = 0.0;   // bvartools' v_i = 0 and v_i_det = 0: flat
+        e.detPrecision = 0.0;
+        e.wishartScale = 1e-4;
+        e.wishartDf = 1;
+        e.iterations = 5000;
+        e.burnin = 1000;
+        e.seed = 1234567;
+        e.notes = {
+            {QStringLiteral("question"),
+             QObject::tr("The data come with the studio: Lütkepohl's file E1, West German fixed investment, "
+                         "disposable income and consumption expenditures, quarterly and seasonally adjusted, in "
+                         "billions of DM, 1960Q1 to 1982Q4 (source: Deutsche Bundesbank). The assistant takes "
+                         "100 × the log differences -- quarterly growth in percent -- and keeps 1960Q2 to "
+                         "1978Q4, the 75 quarters the textbook estimates on; the rest is for forecast evaluation.")},
+            {QStringLiteral("inspect"),
+             QObject::tr("Growth rates, so the VAR is stationary as it stands. Investment growth swings by ten "
+                         "points and more from quarter to quarter; income and consumption move by one or two, and "
+                         "together.")},
+            {QStringLiteral("baseline"),
+             QObject::tr("Two lags and a constant, in the order invest, income, cons, as the textbook. The flat "
+                         "prior is preselected, and the example sets bvartools' uninformative one -- zero precision on every "
+                         "coefficient, and an inverse Wishart with one degree of freedom and a scale of 0.0001. "
+                         "5,000 draws after 1,000, seed 1234567.")},
+            {QStringLiteral("convergence"),
+             QObject::tr("With a flat prior and two lags the sampler mixes quickly: the effective sample sizes are "
+                         "close to the 5,000 draws, and the posterior means close to least squares.")},
+            {QStringLiteral("lags"),
+             QObject::tr("The textbook chooses two lags by the information criteria; compare them with one, three "
+                         "and four by WAIC.")},
+            {QStringLiteral("identify"),
+             QObject::tr("Recursive, in the baseline's order: investment does not respond to income or consumption "
+                         "shocks within the quarter, income not to consumption shocks. No sign restrictions.")},
+            {QStringLiteral("responses"),
+             QObject::tr("The response of cons to a shock to income, eight quarters, three ways: forecast error "
+                         "(a unit shock to the income equation), orthogonalised (Cholesky) and generalised "
+                         "(Pesaran and Shin 1998) -- the identification menu of the responses view. Then the "
+                         "variance decomposition of cons.")},
+        };
+        e.findings = QObject::tr(
+            "As bvartools finds: consumption rises by about 0.23 points in the quarter after a unit shock to income "
+            "and by 0.26 in the second, and nothing is left of it after the third quarter. Orthogonalised, the "
+            "response is about 0.49 on impact, 0.14 after one quarter and 0.36 after two (the generalised one is "
+            "close: 0.53, 0.13, 0.40); the 95% bands exclude zero on impact and at two quarters. Income shocks "
+            "explain about a quarter of the forecast error variance of consumption on impact and a third from two "
+            "quarters on, investment shocks a tenth rising to a sixth, and consumption's own shocks the remaining "
+            "two thirds falling to a half. The posterior means of "
+            "the coefficients are close to least squares: 0.23 and 0.36 for the two lags of income in the "
+            "consumption equation.");
+        out.push_back(e);
+    }
+
     // -- Arias, Rubio-Ramírez and Waggoner (2018): the optimism shock.
     {
         WorkflowExample e;
@@ -373,9 +448,14 @@ QString defaultReproductionsFolder()
     return QStringLiteral("D:/projects/reproduction-projects");
 }
 
+bool isBuiltinData(const DataRecipe &recipe)
+{
+    return recipe.file.startsWith(QLatin1String(":/"));
+}
+
 DataSet prepareExampleData(const DataRecipe &recipe, const QString &root)
 {
-    const QString path = QDir(root).filePath(recipe.file);
+    const QString path = isBuiltinData(recipe) ? recipe.file : QDir(root).filePath(recipe.file);
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly))
     {
@@ -438,11 +518,13 @@ DataSet prepareExampleData(const DataRecipe &recipe, const QString &root)
             bool ok = false;
             const double v = unquote(cells.value(i)).toDouble(&ok);
             complete = complete && ok && std::isfinite(v);
-            row.push_back(v * recipe.scale);
+            row.push_back(v);
         }
         if (!complete)
         {
-            if (recipe.dropIncomplete)
+            // A dropped row in a differenced series would make one difference
+            // span two periods.
+            if (recipe.dropIncomplete && recipe.transform == DataRecipe::Transform::None)
             {
                 continue;
             }
@@ -455,6 +537,33 @@ DataSet prepareExampleData(const DataRecipe &recipe, const QString &root)
             break;
         }
     }
+    if (recipe.transform == DataRecipe::Transform::LogDifference)
+    {
+        for (std::size_t r = 0; r < rows.size(); ++r)
+        {
+            for (std::size_t c = 0; c < recipe.columns.size(); ++c)
+            {
+                if (rows[r][c] <= 0.0)
+                {
+                    throw std::runtime_error(QObject::tr("%1: %2 is not positive in %3, so it has no log.")
+                                                 .arg(path, recipe.columns[c].first, d.periods.at(static_cast<qsizetype>(r)))
+                                                 .toStdString());
+                }
+            }
+        }
+        for (std::size_t r = rows.size(); r-- > 1;)
+        {
+            for (std::size_t c = 0; c < recipe.columns.size(); ++c)
+            {
+                rows[r][c] = std::log(rows[r][c]) - std::log(rows[r - 1][c]);
+            }
+        }
+        if (!rows.empty())
+        {
+            rows.erase(rows.begin());
+            d.periods.removeFirst();
+        }
+    }
     if (rows.empty())
     {
         throw std::runtime_error(QObject::tr("%1: no complete rows in the sample.").arg(path).toStdString());
@@ -464,7 +573,7 @@ DataSet prepareExampleData(const DataRecipe &recipe, const QString &root)
     {
         for (std::size_t c = 0; c < recipe.columns.size(); ++c)
         {
-            d.values(r, c) = rows[r][c];
+            d.values(r, c) = rows[r][c] * recipe.scale;
         }
     }
     return d;

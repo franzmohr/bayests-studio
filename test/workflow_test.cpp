@@ -4,14 +4,17 @@
 //
 //   studio_workflow_test <reference dir>
 
+#include "engine/CoefficientSummary.h"
 #include "engine/DataSet.h"
 #include "engine/Examples.h"
+#include "engine/Structural.h"
 #include "engine/Extensions.h"
 #include "engine/ModelRunner.h"
 #include "engine/Workflow.h"
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -122,6 +125,115 @@ int main(int argc, char **argv)
         else
         {
             std::printf("skip  example data: no reproductions in %s\n", root.toStdString().c_str());
+        }
+    }
+
+    // -- Lütkepohl's E1, which the studio ships: the recipe's log differences
+    // are bvartools' diff(log(e1)) * 100, and the example estimated as it is
+    // specified gives the numbers of the bvartools introduction.
+    {
+        const WorkflowExample *e1 = findExample(QStringLiteral("luetkepohl2006"));
+        check(e1 && isBuiltinData(e1->recipe) && examplesFor(QStringLiteral("thesis")).front() == e1,
+              "Lütkepohl (2006): the first thesis example, on data the studio ships");
+        const DataSet d = prepareExampleData(e1->recipe, QString());
+        const DataSet ref = readDelimited(dir + "/e1.csv");   // bvartools' diff(log(e1)) * 100, to 1982Q4
+        check(d.length() == 75 && d.series() == 3 && d.periods.front() == QStringLiteral("1960 Q2") &&
+                  d.periods.back() == QStringLiteral("1978 Q4") && d.names == ref.names &&
+                  arma::approx_equal(d.values, ref.values.rows(0, 74), "absdiff", 1e-9),
+              "... 75 quarters of 100 x log differences, 1960Q2 to 1978Q4, as bvartools has them");
+
+        QTemporaryDir t;
+        DataRecipe bad;
+        bad.file = t.filePath(QStringLiteral("zero.csv"));
+        bad.dateColumn = QStringLiteral("date");
+        bad.columns = {{QStringLiteral("x"), QStringLiteral("x")}};
+        bad.transform = DataRecipe::Transform::LogDifference;
+        {
+            QFile f(bad.file);
+            f.open(QIODevice::WriteOnly);
+            f.write("date,x\n2000-01-01,1\n2000-02-01,0\n");
+        }
+        bool refused = false;
+        try
+        {
+            prepareExampleData(bad, QString());
+        }
+        catch (const std::exception &)
+        {
+            refused = true;
+        }
+        check(refused, "... and a log difference of a value not positive refused");
+
+        // The baseline as its dialog fills it in.
+        VarBuilderSpec s;
+        s.data = d;
+        s.columns = {0, 1, 2};
+        s.p = e1->p;
+        s.constant = true;
+        s.minnesota = false;
+        s.coefPrecision = e1->coefPrecision;
+        s.detPrecision = e1->detPrecision;
+        s.wishartScale = e1->wishartScale;
+        s.wishartDfExtra = e1->wishartDf - 3;
+        s.iterations = e1->iterations;
+        s.burnin = e1->burnin;
+        s.seed = e1->seed;
+        s.horizon = 8;
+        const QString file = t.filePath(QStringLiteral("e1.h5"));
+        check(summarise(s).refusal.isEmpty(), "... its baseline a model the builder accepts");
+        writeVarModel(s, file);
+        ModelRunner runner;
+        QEventLoop loop;
+        bool ran = false;
+        QObject::connect(&runner, &ModelRunner::runFinished, &loop, [&](bool ok, bool, const QString &error) {
+            ran = ok;
+            if (!ok)
+            {
+                std::printf("      %s\n", error.toStdString().c_str());
+            }
+            loop.quit();
+        });
+        runner.start(file, QString(), {Stage::Coefficients, Stage::Forecast, Stage::LogLikelihood});
+        loop.exec();
+        check(ran, "... and estimated");
+        if (ran)
+        {
+            // bvartools: income.l1 and income.l2 in the cons equation 0.228 and
+            // 0.357 (posterior sd 0.115 and 0.112); the oir of cons to income
+            // 0.494 on impact; income's share of cons's forecast error variance
+            // 0.273 on impact and 0.344 at eight quarters.
+            const CoefficientSummary sum = coefficientSummary(file);
+            const CoefficientBlock &a = sum.blocks.front();
+            const auto mean = [&](int eq, const QString &col) {
+                const qsizetype c = a.columns.indexOf(col);
+                // Panels run regressor by regressor, the equations within each.
+                return c < 0 ? NAN
+                             : arma::mean(a.panels.at(static_cast<std::size_t>(c * sum.equations.size() + eq)).draws);
+            };
+            check(std::abs(mean(2, QStringLiteral("income(-1)")) - 0.228) < 0.02 &&
+                      std::abs(mean(2, QStringLiteral("income(-2)")) - 0.357) < 0.02,
+                  "... the income lags in the consumption equation as bvartools has them");
+            ResponseRequest r;
+            r.type = ResponseType::Oir;
+            r.horizon = 8;
+            const auto oir = impulseResponses(file, r, 1);
+            arma::vec impact(oir.size());
+            for (std::size_t i = 0; i < oir.size(); ++i)
+            {
+                impact(i) = oir[i](0, 2);
+            }
+            const auto fevd = varianceDecomposition(file, r, 2);
+            arma::vec share0(fevd.size()), share8(fevd.size());
+            for (std::size_t i = 0; i < fevd.size(); ++i)
+            {
+                share0(i) = fevd[i](0, 1);
+                share8(i) = fevd[i](8, 1);
+            }
+            std::printf("      oir impact %.3f, fevd income share %.3f and %.3f\n", arma::median(impact),
+                        arma::mean(share0), arma::mean(share8));
+            check(std::abs(arma::median(impact) - 0.494) < 0.03 && std::abs(arma::mean(share0) - 0.273) < 0.03 &&
+                      std::abs(arma::mean(share8) - 0.344) < 0.03,
+                  "... the response of cons to income and its variance share as bvartools has them");
         }
     }
 

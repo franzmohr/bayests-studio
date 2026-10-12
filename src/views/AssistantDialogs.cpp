@@ -239,6 +239,10 @@ VarBuilderSpec ThesisBaselineDialog::spec() const
     if (example_)
     {
         s.wishartScale = example_->wishartScale;
+        if (example_->wishartDf > 0)
+        {
+            s.wishartDfExtra = example_->wishartDf - static_cast<int>(s.columns.size());
+        }
     }
     s.iterations = iterations_->value();
     s.burnin = burnin_->value();
