@@ -105,14 +105,16 @@ void ExtensionsDialog::reload()
 
 void ExtensionsDialog::refresh()
 {
-    const QString reproductions =
-        QSettings().value(QStringLiteral("assistant/reproductions"), defaultReproductionsFolder()).toString();
+    const QString reproductions = reproductionsFolder();
     const auto link = [](const QString &path) {
         return QStringLiteral("<a href=\"%1\">%2</a>")
             .arg(QUrl::fromLocalFile(path).toString(), QDir::toNativeSeparators(path).toHtmlEscaped());
     };
     folders_->setText(tr("Your extensions: %1<br>Reproduction projects: %2")
-                          .arg(link(userExtensionsFolder()), link(reproductions)));
+                          .arg(link(userExtensionsFolder()),
+                               reproductions.isEmpty()
+                                   ? tr("not located yet -- the assistant asks for them with the first paper's data")
+                                   : link(reproductions)));
 
     files_->clear();
     int examples = 0, palettes = 0, failed = 0;

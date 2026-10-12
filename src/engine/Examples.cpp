@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFile>
 #include <QObject>
+#include <QSettings>
 #include <QTextStream>
 
 #include <cmath>
@@ -748,9 +749,13 @@ const WorkflowExample *findExample(const QString &id)
     return nullptr;
 }
 
-QString defaultReproductionsFolder()
+QString reproductionsFolder()
 {
-    return QStringLiteral("D:/projects/reproduction-projects");
+    if (const QString env = qEnvironmentVariable("STUDIO_REPRODUCTIONS"); !env.isEmpty())
+    {
+        return env;
+    }
+    return QSettings().value(QStringLiteral("assistant/reproductions")).toString();
 }
 
 bool isBuiltinData(const DataRecipe &recipe)

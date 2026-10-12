@@ -208,9 +208,7 @@ QStringList extensionFiles(const QString &userFolder, const QString &reproductio
 
 QStringList defaultExtensionFiles()
 {
-    const QString reproductions =
-        QSettings().value(QStringLiteral("assistant/reproductions"), defaultReproductionsFolder()).toString();
-    return extensionFiles(userExtensionsFolder(), reproductions);
+    return extensionFiles(userExtensionsFolder(), reproductionsFolder());
 }
 
 QJsonObject exampleToJson(const WorkflowExample &e)

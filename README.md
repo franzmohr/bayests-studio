@@ -335,8 +335,8 @@ open source under the BSD 3-Clause License, as BayesTS is; see
     introduction runs it, and his VEC of the interest rate and inflation
     (data set E6), as the bvartools article runs it -- both on data the
     studio ships; and, from the
-    reproductions in `D:\projects\reproduction-projects` (located once, then
-    remembered), the papers under "Reproducing papers", for which the
+    reproduction projects (a folder the assistant asks for once, then
+    remembers), the papers under "Reproducing papers", for which the
     assistant prepares the data from the replication files, fills in the
     specification and identification, and says at every step what the paper
     does there and what to expect -- Arias, Rubio-Ramírez and Waggoner

@@ -146,9 +146,12 @@ void setExtensionExamples(std::vector<WorkflowExample> extensions);
 std::vector<const WorkflowExample *> examplesFor(const QString &workflow);
 const WorkflowExample *findExample(const QString &id);
 
-/// The default place of the reproduction projects, overridden by the
-/// setting the assistant stores when the user locates them.
-QString defaultReproductionsFolder();
+/// Where the reproduction projects are: STUDIO_REPRODUCTIONS where it is set
+/// (the tests and smoke runs), else the folder the user located them in,
+/// QSettings' "assistant/reproductions". Empty until one of them names it --
+/// there is no default; the assistant asks the first time a paper's data are
+/// needed.
+QString reproductionsFolder();
 
 /// Whether a recipe reads data the studio ships, from its resources.
 bool isBuiltinData(const DataRecipe &recipe);

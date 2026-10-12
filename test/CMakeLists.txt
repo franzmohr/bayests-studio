@@ -47,6 +47,12 @@ endif()
 add_executable(studio_workflow_test workflow_test.cpp)
 target_link_libraries(studio_workflow_test PRIVATE studio_engine BayesTS::openblas)
 add_test(NAME workflow.assistant COMMAND studio_workflow_test "${CMAKE_CURRENT_SOURCE_DIR}/reference")
+# The paper examples are checked against their replication files where this
+# names the folder holding them (the user preset sets it); skipped otherwise.
+set(STUDIO_REPRODUCTIONS_DIR "" CACHE PATH "Folder of the reproduction projects, for the paper examples' tests")
+if(STUDIO_REPRODUCTIONS_DIR)
+    set_tests_properties(workflow.assistant PROPERTIES ENVIRONMENT "STUDIO_REPRODUCTIONS=${STUDIO_REPRODUCTIONS_DIR}")
+endif()
 
 # Every input of every dialog with a form, and every input, button and plot of
 # the main window's views, has a tooltip: the application, offscreen, opens

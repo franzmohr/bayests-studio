@@ -6,6 +6,8 @@
 // its buttons, accepting its dialogs with what they propose, ticking the
 // confirmations -- in the empty folder STUDIO_SMOKE_FOLDER, saving a capture
 // of the window after every step as <folder>/shot-NN-<step>.png, and quits.
+// A paper's example reads its data from the reproduction projects: set
+// STUDIO_REPRODUCTIONS to their folder, or the run stops at a folder dialog.
 
 #include "app/MainWindow.h"
 

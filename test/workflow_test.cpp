@@ -107,10 +107,10 @@ int main(int argc, char **argv)
     // -- The worked examples: their data prepared from the reproductions, and
     // the examples the studio can implement accepted by the builder.
     {
-        const QString root = defaultReproductionsFolder();
+        const QString root = reproductionsFolder();
         check(examplesFor(QStringLiteral("thesis")).size() >= 2 && examplesFor(QStringLiteral("horserace")).size() >= 1,
               "worked examples for both workflows");
-        if (QDir(root).exists())
+        if (!root.isEmpty() && QDir(root).exists())
         {
             const WorkflowExample *arw = findExample(QStringLiteral("arw2018"));
             const DataSet d = prepareExampleData(arw->recipe, root);
@@ -130,7 +130,8 @@ int main(int argc, char **argv)
         }
         else
         {
-            std::printf("skip  example data: no reproductions in %s\n", root.toStdString().c_str());
+            std::printf("skip  example data: no reproductions in %s\n",
+                        (root.isEmpty() ? QStringLiteral("(STUDIO_REPRODUCTIONS not set)") : root).toStdString().c_str());
         }
     }
 
@@ -348,7 +349,7 @@ int main(int argc, char **argv)
     // the bvartools reproduction prints, the surprise equations held at zero,
     // and the two shocks identified by a rotation of the surprises alone, with
     // thresholds -- and the responses where that reproduction has them.
-    if (const QString root = defaultReproductionsFolder(); QDir(root).exists(QStringLiteral("2026-pinchetti")))
+    if (const QString root = reproductionsFolder(); !root.isEmpty() && QDir(root).exists(QStringLiteral("2026-pinchetti")))
     {
         const WorkflowExample *ex = findExample(QStringLiteral("pinchetti2026"));
         check(ex && ex->supported && ex->nIid == 2 && ex->signRotated == 2 && ex->paperPrior,
@@ -491,14 +492,14 @@ int main(int argc, char **argv)
     }
     else
     {
-        std::printf("skip  Pinchetti (2026): no reproductions in %s\n", defaultReproductionsFolder().toStdString().c_str());
+        std::printf("skip  Pinchetti (2026): no reproductions in %s\n", (reproductionsFolder().isEmpty() ? QStringLiteral("(STUDIO_REPRODUCTIONS not set)") : reproductionsFolder()).toStdString().c_str());
     }
 
     // -- Jarociński and Karadi (2020): the surprises missing before 1990 kept,
     // written as constraints and drawn every sweep, the scales from AR(12)s
     // with the gaps dropped as the replication code does, and Table 2 and
     // Figure 4 where the bvartools reproduction has them.
-    if (const QString root = defaultReproductionsFolder(); QDir(root).exists(QStringLiteral("2020-jarocinski karadi")))
+    if (const QString root = reproductionsFolder(); !root.isEmpty() && QDir(root).exists(QStringLiteral("2020-jarocinski karadi")))
     {
         const WorkflowExample *ex = findExample(QStringLiteral("jk2020"));
         check(ex && ex->supported && ex->recipe.keepMissing && ex->nIid == 2 && ex->signRotated == 2,
@@ -656,7 +657,7 @@ int main(int argc, char **argv)
     else
     {
         std::printf("skip  Jarociński and Karadi (2020): no reproductions in %s\n",
-                    defaultReproductionsFolder().toStdString().c_str());
+                    (reproductionsFolder().isEmpty() ? QStringLiteral("(STUDIO_REPRODUCTIONS not set)") : reproductionsFolder()).toStdString().c_str());
     }
 
     // -- Multipliers of every exogenous variable, as the multipliers view's

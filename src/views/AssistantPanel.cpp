@@ -626,13 +626,14 @@ QString AssistantPanel::reproductionsFolder()
     {
         return example_->dataRoot;
     }
-    QString root = settings.value(QStringLiteral("assistant/reproductions"), defaultReproductionsFolder()).toString();
-    if (example_ && !QDir(QDir(root).filePath(example_->folder)).exists())
+    // Not located yet, or moved: ask, starting from where it was, or home.
+    QString root = studio::reproductionsFolder();
+    if (example_ && (root.isEmpty() || !QDir(QDir(root).filePath(example_->folder)).exists()))
     {
         root = QFileDialog::getExistingDirectory(host_->hostWindow(),
                                                  tr("Locate the Reproduction Projects (the folder holding \"%1\")")
                                                      .arg(example_->folder),
-                                                 root);
+                                                 root.isEmpty() ? QDir::homePath() : root);
         if (!root.isEmpty())
         {
             settings.setValue(QStringLiteral("assistant/reproductions"), root);
