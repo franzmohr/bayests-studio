@@ -45,6 +45,11 @@ enum class StageId
     Application,
 };
 
+/// The estimation sample of a model file, /data/train/y, one vector per
+/// variable, and the variable names the builder writes beside it.
+std::vector<std::vector<double>> sampleSeries(const QString &file, int k);
+QStringList sampleNames(const QString &file);
+
 /// What every page is told when the current model changes or a run ends.
 struct ModelContext
 {
@@ -127,6 +132,8 @@ public:
 
     void runStarted();
     void runFinished();
+    /// Without the page title, for a panel of the workbench.
+    void setCompact();
 
 private:
     void showDataset(int index);
@@ -176,6 +183,11 @@ public:
     explicit ApplicationPage(QWidget *parent = nullptr);
     void showModel(const ModelContext &context) override;
     void showStructural();
+
+    /// One of the page's tabs alone, without the title or the tab bar: a
+    /// panel of the workbench.
+    enum class Panel { Forecasting, Structural };
+    void showOnly(Panel panel);
 
 private:
     void showVariable(int variable);

@@ -112,6 +112,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/StateVarianceView.h
     views/VolatilityBreakView.cpp
     views/VolatilityBreakView.h
+    views/Workbench.cpp
+    views/Workbench.h
     views/PaletteDialog.h
     views/PlotStyle.cpp
     views/PlotStyle.h

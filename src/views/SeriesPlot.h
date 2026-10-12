@@ -39,6 +39,8 @@ public:
 
     /// The title an exported figure carries.
     void setExportTitle(const QString &title) { title_ = title; }
+    /// No legend: a small plot of one series, named on its axis.
+    void hideLegend();
 
 private:
     QwtPlot *plot_;

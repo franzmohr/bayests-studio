@@ -354,6 +354,49 @@ int main(int argc, char *argv[])
         return ok ? 0 : 1;
     }
 
+    // Development aid: STUDIO_SMOKE_WORKBENCH=<prefix> shows the workbench on a
+    // wide screen with the data STUDIO_SMOKE_DATA names imported, captures it
+    // as <prefix>-specify.png, estimates the builder's default model into the
+    // folder given and captures <prefix>-estimated.png once the panels are drawn.
+    if (const QByteArray prefix = qgetenv("STUDIO_SMOKE_WORKBENCH"); !prefix.isEmpty())
+    {
+        window.resize(2560, 1300);
+        window.setWorkbench(true);
+        const QString data = QString::fromLocal8Bit(qgetenv("STUDIO_SMOKE_DATA"));
+        if (!data.isEmpty())
+        {
+            window.importFrom(data);
+        }
+        const QString base = QString::fromLocal8Bit(prefix);
+        const auto settle = [](int ms) {
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < ms)
+            {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+            }
+        };
+        QObject::connect(&window, &studio::MainWindow::runEnded, &window, [&window, base, settle](bool ok) {
+            settle(12000);
+            window.grab().save(base + QStringLiteral("-estimated.png"));
+            QCoreApplication::exit(ok ? 0 : 1);
+        });
+        QTimer::singleShot(800, &window, [&window, base]() {
+            window.grab().save(base + QStringLiteral("-specify.png"));
+            for (QPushButton *b : window.findChildren<QPushButton *>())
+            {
+                if (b->text() == QObject::tr("Estimate as a New Model"))
+                {
+                    b->click();
+                    return;
+                }
+            }
+            std::printf("smoke: no estimate button\n");
+            QCoreApplication::exit(1);
+        });
+        return app.exec();
+    }
+
     // Development aid: STUDIO_SMOKE_ASSISTANT drives the assistant through a
     // workflow (AssistantSmoke.cpp).
     if (const QByteArray which = qgetenv("STUDIO_SMOKE_ASSISTANT"); !which.isEmpty())

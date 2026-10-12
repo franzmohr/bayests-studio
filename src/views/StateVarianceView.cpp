@@ -126,6 +126,7 @@ StateVarianceView::StateVarianceView(QWidget *parent) : QWidget(parent)
         start({v / 10.0, v, v * 10.0});
     });
     clear_ = new QPushButton(tr("Clear Runs"));
+    clear_->setToolTip(tr("Removes the runs made here; your model's own posterior stays as the reference."));
     connect(clear_, &QPushButton::clicked, this, [this]() {
         clearRuns();
         redraw();

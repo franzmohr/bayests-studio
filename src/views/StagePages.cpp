@@ -29,6 +29,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QTableWidget>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QTreeView>
 #include <QVBoxLayout>
@@ -140,6 +141,16 @@ QStringList variableNames(const QString &file)
 }
 
 } // namespace
+
+std::vector<std::vector<double>> sampleSeries(const QString &file, int k)
+{
+    return seriesOf(file, k);
+}
+
+QStringList sampleNames(const QString &file)
+{
+    return variableNames(file);
+}
 
 // --------------------------------------------------------------------------
 // 1. Data
@@ -465,6 +476,15 @@ void PosteriorPage::showDataset(int index)
     }
 }
 
+void PosteriorPage::setCompact()
+{
+    if (auto *title = findChild<QLabel *>(QStringLiteral("pageTitle")))
+    {
+        title->hide();
+    }
+    layout()->setContentsMargins(8, 6, 8, 6);
+}
+
 void PosteriorPage::runStarted()
 {
     simulate_->setEnabled(false);
@@ -652,6 +672,17 @@ ApplicationPage::ApplicationPage(QWidget *parent) : StagePage(parent)
     tabs_->addTab(historical_, tr("Historical decomposition"));
     tabs_->setObjectName(QStringLiteral("applicationTabs"));
     layout->addWidget(tabs_, 1);
+}
+
+void ApplicationPage::showOnly(Panel panel)
+{
+    if (auto *title = findChild<QLabel *>(QStringLiteral("pageTitle")))
+    {
+        title->hide();
+    }
+    tabs_->tabBar()->hide();
+    layout()->setContentsMargins(8, 6, 8, 6);
+    tabs_->setCurrentIndex(panel == Panel::Forecasting ? 0 : 1);
 }
 
 void ApplicationPage::showStructural()

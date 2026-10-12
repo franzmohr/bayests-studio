@@ -118,6 +118,11 @@ void SeriesPlot::addFan(const QString &name, const std::vector<std::vector<doubl
     median->attach(plot_);
 }
 
+void SeriesPlot::hideLegend()
+{
+    plot_->insertLegend(nullptr);
+}
+
 void SeriesPlot::replot()
 {
     plot_->setAxisAutoScale(QwtPlot::xBottom);

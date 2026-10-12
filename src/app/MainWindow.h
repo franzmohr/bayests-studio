@@ -26,6 +26,7 @@ namespace studio
 {
 
 class ModelFileTree;
+class Workbench;
 
 /// The application window, laid out along the workflow of the bvartools
 /// article: a project of models on the left, the five stages -- data, model
@@ -42,6 +43,10 @@ public:
     void openPath(const QString &path);
     void runAll() { run({Stage::Coefficients, Stage::Forecast, Stage::LogLikelihood}); }
     void showStage(StageId stage);
+    /// The workbench layout -- every stage's panels side by side, for a wide
+    /// screen -- or the stage bar with one page at a time.
+    void setWorkbench(bool on);
+    bool workbenchActive() const;
 
 signals:
     void runEnded(bool ok);
@@ -107,6 +112,12 @@ private:
     QStackedWidget *pagesStack_;
     std::array<StagePage *, 5> pages_{};
     PosteriorPage *posterior_ = nullptr;
+    QStackedWidget *layouts_ = nullptr;
+    Workbench *workbench_ = nullptr;
+    QAction *stagesLayout_ = nullptr;
+    QAction *workbenchLayout_ = nullptr;
+    /// The posterior page whose live bands follow the run in progress.
+    PosteriorPage *liveTarget_ = nullptr;
     AssistantPanel *assistant_ = nullptr;
     QDockWidget *assistantDock_ = nullptr;
     QPlainTextEdit *log_;

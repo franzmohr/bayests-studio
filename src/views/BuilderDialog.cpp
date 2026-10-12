@@ -78,38 +78,61 @@ QLabel *hint(const QString &text)
 
 } // namespace
 
-BuilderDialog::BuilderDialog(const DataSet &data, const QString &projectDir, QWidget *parent)
-    : QDialog(parent), data_(data), projectDir_(projectDir)
+BuilderDialog::BuilderDialog(const DataSet &data, const QString &projectDir, QWidget *parent, Mode mode)
+    : QDialog(parent), data_(data), projectDir_(projectDir), mode_(mode)
 {
     setWindowTitle(tr("New Model"));
     resize(1120, 780);
 
-    auto *form = new QWidget;
-    auto *formLayout = new QVBoxLayout(form);
-    formLayout->addWidget(buildDataBox());
-    formLayout->addWidget(buildSpecBox());
-    formLayout->addWidget(buildPriorBox());
-    formLayout->addWidget(buildSamplerBox());
-    formLayout->addStretch(1);
+    sections_[0] = buildDataBox();
+    sections_[1] = buildSpecBox();
+    sections_[2] = buildPriorBox();
+    sections_[3] = buildSamplerBox();
+    sections_[4] = buildSummary();
+    if (mode_ == Mode::Panels)
+    {
+        // Children of the dialog until a host takes them, so that the loops
+        // below find their inputs.
+        createButton_ = new QPushButton(tr("Estimate as a New Model"));
+        createButton_->setDefault(true);
+        createButton_->setToolTip(tr("Writes the model as specified into the project, under a name of its "
+                                     "own, and estimates it: the panels to the right then show it."));
+        connect(createButton_, &QPushButton::clicked, this, &BuilderDialog::createRequested);
+        sections_[4]->layout()->addWidget(createButton_);
+        for (QWidget *section : sections_)
+        {
+            section->setParent(this);
+        }
+    }
+    else
+    {
+        auto *form = new QWidget;
+        auto *formLayout = new QVBoxLayout(form);
+        for (int i = 0; i < 4; ++i)
+        {
+            formLayout->addWidget(sections_[i]);
+        }
+        formLayout->addStretch(1);
 
-    auto *scroll = new QScrollArea;
-    scroll->setWidget(form);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
+        auto *scroll = new QScrollArea;
+        scroll->setWidget(form);
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
 
-    auto *row = new QHBoxLayout;
-    row->addWidget(scroll, 3);
-    row->addWidget(buildSummary(), 2);
+        auto *row = new QHBoxLayout;
+        row->addWidget(scroll, 3);
+        row->addWidget(sections_[4], 2);
 
-    auto *buttons = new QDialogButtonBox;
-    createButton_ = buttons->addButton(tr("Create Model…"), QDialogButtonBox::AcceptRole);
-    buttons->addButton(QDialogButtonBox::Cancel);
-    connect(createButton_, &QPushButton::clicked, this, &BuilderDialog::create);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        auto *buttons = new QDialogButtonBox;
+        createButton_ = buttons->addButton(tr("Create Model…"), QDialogButtonBox::AcceptRole);
+        buttons->addButton(QDialogButtonBox::Cancel);
+        connect(createButton_, &QPushButton::clicked, this, &BuilderDialog::create);
+        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-    auto *layout = new QVBoxLayout(this);
-    layout->addLayout(row, 1);
-    layout->addWidget(buttons);
+        auto *layout = new QVBoxLayout(this);
+        layout->addLayout(row, 1);
+        layout->addWidget(buttons);
+    }
 
     debounce_ = new QTimer(this);
     debounce_->setSingleShot(true);
@@ -866,6 +889,11 @@ void BuilderDialog::runCheck()
     createButton_->setEnabled(ok);
 }
 
+QWidget *BuilderDialog::takeSection(Section section) const
+{
+    return sections_[static_cast<int>(section)];
+}
+
 QString BuilderDialog::suggestedName() const
 {
     const VarBuilderSpec s = readForm();
@@ -921,7 +949,10 @@ bool BuilderDialog::createAt(const QString &path)
         return false;
     }
     created_ = path;
-    accept();
+    if (mode_ == Mode::Dialog)
+    {
+        accept();
+    }
     return true;
 }
 

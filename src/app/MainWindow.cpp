@@ -11,8 +11,10 @@
 #include "views/PaletteDialog.h"
 #include "views/Palettes.h"
 #include "views/SignDialog.h"
+#include "views/Workbench.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDateTime>
@@ -89,7 +91,8 @@ MainWindow::MainWindow()
     connect(runner_, &ModelRunner::messageEmitted, this, &MainWindow::log);
     connect(runner_, &ModelRunner::runFinished, this,
             [this](bool ok, bool cancelled, const QString &error) {
-                posterior_->runFinished();
+                (liveTarget_ != nullptr ? liveTarget_ : posterior_)->runFinished();
+                liveTarget_ = nullptr;
                 setRunning(false);
                 if (ok)
                 {
@@ -118,6 +121,7 @@ MainWindow::MainWindow()
     {
         resize(1360, 860);
     }
+    setWorkbench(settings.value(QStringLiteral("window/layout")).toString() == QLatin1String("workbench"));
 }
 
 void MainWindow::buildActions()
@@ -194,6 +198,19 @@ void MainWindow::buildActions()
     }
 
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
+    QMenu *layoutMenu = viewMenu->addMenu(tr("&Layout"));
+    auto *layouts = new QActionGroup(this);
+    stagesLayout_ = layoutMenu->addAction(tr("&Stages, One at a Time"), this, [this]() { setWorkbench(false); });
+    workbenchLayout_ = layoutMenu->addAction(tr("&Workbench, Side by Side (Wide Screens)"), this,
+                                             [this]() { setWorkbench(true); });
+    workbenchLayout_->setShortcut(QKeySequence(tr("Ctrl+Shift+W")));
+    for (QAction *a : {stagesLayout_, workbenchLayout_})
+    {
+        a->setCheckable(true);
+        layouts->addAction(a);
+    }
+    stagesLayout_->setChecked(true);
+    viewMenu->addSeparator();
     viewMenu->addAction(tr("Colour &Palette…"), this, [this]() {
         PaletteDialog dialog(this);
         if (dialog.exec() == QDialog::Accepted)
@@ -318,7 +335,19 @@ void MainWindow::buildLayout()
     row->setSpacing(0);
     row->addWidget(stages_);
     row->addWidget(pagesStack_, 1);
-    setCentralWidget(central);
+    // The workbench: the same stages side by side, for a wide screen.
+    workbench_ = new Workbench(runner_->reporter());
+    connect(workbench_, &Workbench::runRequested, this, &MainWindow::run);
+    connect(workbench_, &Workbench::importRequested, this, &MainWindow::importData);
+    connect(workbench_, &Workbench::modelCreated, this, &MainWindow::addDerivedModel);
+    connect(workbench_, &Workbench::modelSpecified, this, [this](const QString &file) {
+        addCreatedModel(file);
+        runAll();
+    });
+    layouts_ = new QStackedWidget;
+    layouts_->addWidget(central);
+    layouts_->addWidget(workbench_);
+    setCentralWidget(layouts_);
     updateStageMarks();
     stages_->setCurrentRow(static_cast<int>(StageId::Setup));
 
@@ -353,8 +382,24 @@ void MainWindow::buildLayout()
     statusBar()->addPermanentWidget(cancel_);
 }
 
+void MainWindow::setWorkbench(bool on)
+{
+    layouts_->setCurrentWidget(on ? static_cast<QWidget *>(workbench_) : layouts_->widget(0));
+    (on ? workbenchLayout_ : stagesLayout_)->setChecked(true);
+    QSettings().setValue(QStringLiteral("window/layout"), on ? QStringLiteral("workbench") : QStringLiteral("stages"));
+}
+
+bool MainWindow::workbenchActive() const
+{
+    return layouts_ != nullptr && layouts_->currentWidget() == workbench_;
+}
+
 void MainWindow::showStage(StageId stage)
 {
+    if (workbenchActive())
+    {
+        setWorkbench(false);
+    }
     stages_->setCurrentRow(static_cast<int>(stage));
 }
 
@@ -481,6 +526,8 @@ void MainWindow::refresh()
     {
         page->showModel(context);
     }
+    workbench_->setProjectFolder(projectDir_);
+    workbench_->showModel(context);
     updateStageMarks();
     if (assistant_ != nullptr)
     {
@@ -503,8 +550,16 @@ void MainWindow::run(const std::vector<Stage> &stages)
     setRunning(true);
     if (std::find(stages.begin(), stages.end(), Stage::Coefficients) != stages.end())
     {
-        showStage(StageId::Posterior);
-        posterior_->runStarted();
+        if (workbenchActive())
+        {
+            liveTarget_ = workbench_->posterior();
+        }
+        else
+        {
+            showStage(StageId::Posterior);
+            liveTarget_ = posterior_;
+        }
+        liveTarget_->runStarted();
     }
     runner_->start(file_, QString(), stages);
 }
@@ -589,7 +644,12 @@ void MainWindow::importFrom(const QString &file)
             .arg(data_.length()));
     static_cast<DataPage *>(pages_[static_cast<std::size_t>(StageId::Data)])->showDataSet(data_);
     static_cast<SetupPage *>(pages_[static_cast<std::size_t>(StageId::Setup)])->setDataAvailable(true);
-    showStage(StageId::Data);
+    workbench_->setProjectFolder(projectDir_);
+    workbench_->setData(data_);
+    if (!workbenchActive())
+    {
+        showStage(StageId::Data);
+    }
     if (assistant_ != nullptr)
     {
         assistant_->projectChanged();
@@ -692,12 +752,19 @@ void MainWindow::addCreatedModel(const QString &created)
         openPath(projectDir_);
     }
     selectModel(info.absoluteFilePath());
-    showStage(StageId::Posterior);
+    if (!workbenchActive())
+    {
+        showStage(StageId::Posterior);
+    }
 }
 
 void MainWindow::addDerivedModel(const QString &file)
 {
     addCreatedModel(file);
+    if (workbenchActive())
+    {
+        return;   // the impulse responses are on screen already
+    }
     showStage(StageId::Application);
     static_cast<ApplicationPage *>(pages_[static_cast<std::size_t>(StageId::Application)])->showStructural();
 }

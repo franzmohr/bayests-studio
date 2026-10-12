@@ -34,7 +34,20 @@ class BuilderDialog : public QDialog
     Q_OBJECT
 
 public:
-    BuilderDialog(const DataSet &data, const QString &projectDir, QWidget *parent = nullptr);
+    /// Dialog: the form and its summary, with Create. Panels: nothing is laid
+    /// out -- a host (the workbench) takes the sections with takeSection() and
+    /// places them itself, and the dialog stays hidden as their controller.
+    enum class Mode { Dialog, Panels };
+    enum class Section { Data, Specification, Priors, Sampler, Summary };
+
+    BuilderDialog(const DataSet &data, const QString &projectDir, QWidget *parent = nullptr,
+                  Mode mode = Mode::Dialog);
+
+    /// Panels mode: one section, which the caller reparents and so owns.
+    QWidget *takeSection(Section section) const;
+
+    /// A file name for the model as specified, "var-tvp-sv-p2.h5" and the like.
+    QString suggestedName() const;
 
     /// The file written by Create, once the dialog was accepted.
     QString createdFile() const { return created_; }
@@ -56,7 +69,6 @@ private:
     void scheduleCheck();
     void runCheck();
     void create();
-    QString suggestedName() const;
 
     DataSet data_;
     QString projectDir_;
@@ -142,6 +154,12 @@ private:
     QLabel *status_;
     QLabel *notes_;
     QPushButton *createButton_;
+    Mode mode_ = Mode::Dialog;
+    QWidget *sections_[5] = {};
+
+signals:
+    /// Panels mode: the summary's button was pressed, with the form accepted.
+    void createRequested();
 };
 
 } // namespace studio
