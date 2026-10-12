@@ -53,6 +53,7 @@ LiveBandsView::LiveBandsView(QtReporter *reporter, QWidget *parent)
     row_ = new QComboBox;
     row_->setMinimumContentsLength(28);
     row_->setMaxVisibleItems(24);
+    row_->setToolTip(tr("The time-varying coefficient whose path is shown, as its bands form while the sampler runs."));
     row_->setEnabled(false);
     connect(row_, &QComboBox::currentIndexChanged, this, [this](int i) { coefficientChanged(i); });
 
@@ -65,6 +66,7 @@ LiveBandsView::LiveBandsView(QtReporter *reporter, QWidget *parent)
 
     plot_ = new QwtPlot;
     styleAxes(plot_, tr("Period"), tr("Coefficient"));
+    plot_->setToolTip(tr("The coefficient's path over the sample: the median of the draws kept so far with its bands, redrawn as the chain runs. Right-click to copy or save the figure."));
     attachFigureExport(plot_, [this]() {
         return singleFigure(plot_, tr("Time-varying coefficient %1").arg(row_->currentText()),
                             QStringLiteral("tvp-%1").arg(row_->currentText()));

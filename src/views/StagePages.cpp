@@ -155,6 +155,7 @@ DataPage::DataPage(QWidget *parent) : StagePage(parent)
     newModel_->setEnabled(false);
     connect(newModel_, &QPushButton::clicked, this, &StagePage::newModelRequested);
     auto *bar = new QHBoxLayout;
+    newModel_->setToolTip(tr("The model builder on the imported data: choose the model, the priors and the sampler, and BayesTS checks the file before it is written."));
     bar->addWidget(import);
     bar->addWidget(newModel_);
     bar->addStretch(1);
@@ -289,6 +290,7 @@ PosteriorPage::PosteriorPage(QtReporter *reporter, QWidget *parent) : StagePage(
     chain_ = subtle();
     simulate_ = new QPushButton(tr("Run Posterior Simulation"));
     simulate_->setDefault(true);
+    simulate_->setToolTip(tr("Draws from the posterior of the selected model and writes the draws into its file. A model already estimated is not estimated again."));
     connect(simulate_, &QPushButton::clicked, this, [this]() { emit runRequested({Stage::Coefficients}); });
 
     auto *bar = new QHBoxLayout;
@@ -306,6 +308,7 @@ PosteriorPage::PosteriorPage(QtReporter *reporter, QWidget *parent) : StagePage(
     drawsLayout->setContentsMargins(0, 8, 0, 0);
     dataset_ = new QComboBox;
     dataset_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    dataset_->setToolTip(tr("The block of parameters whose draws the trace and the histogram show."));
     connect(dataset_, &QComboBox::currentIndexChanged, this, &PosteriorPage::showDataset);
     auto *pick = new QHBoxLayout;
     pick->addWidget(new QLabel(tr("Parameter block")));
@@ -488,6 +491,7 @@ EvaluationPage::EvaluationPage(QWidget *parent) : StagePage(parent)
     layout->addWidget(explanation_);
 
     loglik_ = new QPushButton(tr("Compute Log Likelihood"));
+    loglik_->setToolTip(tr("Writes the pointwise log likelihood of the selected model, which lppd and WAIC are computed from."));
     connect(loglik_, &QPushButton::clicked, this, [this]() { emit runRequested({Stage::LogLikelihood}); });
     auto *bar = new QHBoxLayout;
     bar->addWidget(loglik_);
@@ -602,9 +606,11 @@ ApplicationPage::ApplicationPage(QWidget *parent) : StagePage(parent)
     auto *fl = new QVBoxLayout(forecasting);
     fl->setContentsMargins(0, 8, 0, 0);
     forecast_ = new QPushButton(tr("Run Forecast"));
+    forecast_->setToolTip(tr("Draws the forecast of the selected model over the horizon set in its file."));
     connect(forecast_, &QPushButton::clicked, this, [this]() { emit runRequested({Stage::Forecast}); });
     variable_ = new QComboBox;
     connect(variable_, &QComboBox::currentIndexChanged, this, &ApplicationPage::showVariable);
+    variable_->setToolTip(tr("The variable whose forecast is shown."));
     auto *bar = new QHBoxLayout;
     bar->addWidget(forecast_);
     bar->addSpacing(16);

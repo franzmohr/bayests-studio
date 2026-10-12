@@ -132,6 +132,7 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
         bl->addWidget(subtle(w.summary));
         auto *scratch = new QPushButton(tr("Start with My Own Data"));
         scratch->setObjectName(QStringLiteral("start-%1").arg(w.id));
+        scratch->setToolTip(tr("Follow this workflow on a data set of your own, from importing it to the write-up."));
         connect(scratch, &QPushButton::clicked, this, [this, id = w.id]() { start(id); });
         bl->addWidget(scratch);
         QStringList later;
@@ -177,6 +178,7 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
     exampleLabel_ = subtle();
     auto *change = new QPushButton(tr("Change…"));
     connect(change, &QPushButton::clicked, this, &AssistantPanel::showChooser);
+    change->setToolTip(tr("Back to the list of workflows and worked examples. What was done so far is kept in the project."));
     auto *head = new QHBoxLayout;
     auto *headText = new QVBoxLayout;
     headText->addWidget(title_);
@@ -187,6 +189,7 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
     steps_ = new QListWidget;
     steps_->setObjectName(QStringLiteral("assistantSteps"));
     steps_->setMaximumHeight(240);
+    steps_->setToolTip(tr("The steps of the workflow: a tick when done, a dot at the current one. Click one to read it and open the stage it concerns."));
     connect(steps_, &QListWidget::currentRowChanged, this, [this](int row) {
         showStep(row);
         if (workflow_ && row >= 0 && row < static_cast<int>(workflow_->steps.size()))
@@ -202,6 +205,7 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
     fl->addWidget(guidance_, 1);
     confirm_ = new QCheckBox;
     confirm_->setObjectName(QStringLiteral("assistantConfirm"));
+    confirm_->setToolTip(tr("A judgement only you can make: tick it when it is made, and the assistant moves on."));
     connect(confirm_, &QCheckBox::toggled, this, [this](bool on) {
         if (!workflow_ || shown_ < 0)
         {
@@ -232,6 +236,8 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
     back_ = new QPushButton(tr("‹ Back"));
     next_ = new QPushButton(tr("Next ›"));
     next_->setObjectName(QStringLiteral("assistantNext"));
+    next_->setToolTip(tr("The next step. Steps can be read ahead of time; they tick themselves off as the project shows them done."));
+    back_->setToolTip(tr("The previous step."));
     connect(back_, &QPushButton::clicked, this, [this]() { steps_->setCurrentRow(std::max(0, shown_ - 1)); });
     connect(next_, &QPushButton::clicked, this, [this]() {
         if (workflow_)

@@ -238,11 +238,13 @@ SummaryPlotView::SummaryPlotView(QWidget *parent) : QWidget(parent)
     page_ = new QComboBox;
     page_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     page_->setObjectName(QStringLiteral("summaryBlock"));
+    page_->setToolTip(tr("The block of coefficients shown, in pages of the grid where a block is large."));
     type_ = new QComboBox;
     type_->addItem(tr("Histogram"), Histogram);
     type_->addItem(tr("Trace"), Trace);
     type_->addItem(tr("Box plot"), BoxPlot);
     type_->setObjectName(QStringLiteral("summaryType"));
+    type_->setToolTip(tr("How each coefficient's draws are summarised: a histogram, the trace of the chain, or a box plot."));
     ci_ = new QDoubleSpinBox;
     ci_->setRange(0.5, 0.99);
     ci_->setSingleStep(0.05);

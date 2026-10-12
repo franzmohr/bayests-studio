@@ -69,11 +69,14 @@ HistoricalDecompositionView::HistoricalDecompositionView(QWidget *parent) : QWid
     response_ = new QComboBox;
     response_->setMinimumContentsLength(10);
     response_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    response_->setToolTip(tr("The variable whose path over the sample is decomposed."));
     type_ = new QComboBox;
     type_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    type_->setToolTip(tr("How the shocks are identified: orthogonalised (Cholesky, in the model's variable order) or the sign restrictions set for the model."));
     statistic_ = new QComboBox;
     statistic_->addItem(tr("Posterior mean"), false);
     statistic_->addItem(tr("Posterior median"), true);
+    statistic_->setToolTip(tr("Which posterior summary of each shock's contribution the bars show. The means add up to the data; the medians need not."));
     baseline_ = new QCheckBox(tr("Show the baseline"));
     baseline_->setToolTip(tr("What the shocks of the sample leave of the data: the deterministic terms, the "
                              "exogenous variables and the initial conditions."));
@@ -92,6 +95,7 @@ HistoricalDecompositionView::HistoricalDecompositionView(QWidget *parent) : QWid
 
     plot_ = new QwtPlot;
     plot_->setObjectName(QStringLiteral("hdPlot"));
+    plot_->setToolTip(tr("Each shock's contribution to the variable, period by period, against what the shocks add up to. Right-click to copy or save the figure."));
     const FigureProvider figure = [this]() {
         FigureSpec spec = singleFigure(plot_, tr("Historical decomposition of %1").arg(response_->currentText()),
                                        QStringLiteral("hd-%1").arg(response_->currentText()));

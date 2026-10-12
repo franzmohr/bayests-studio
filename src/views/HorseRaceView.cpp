@@ -80,6 +80,7 @@ HorseRaceView::HorseRaceView(QWidget *parent) : QWidget(parent)
     status_ = subtle();
     auto *refresh = new QPushButton(tr("Refresh"));
     connect(refresh, &QPushButton::clicked, this, &HorseRaceView::reload);
+    refresh->setToolTip(tr("Reads the race's files again, for runs that finished outside the studio."));
     auto *top = new QHBoxLayout;
     top->addWidget(status_, 1);
     top->addWidget(refresh, 0, Qt::AlignTop);
@@ -88,6 +89,7 @@ HorseRaceView::HorseRaceView(QWidget *parent) : QWidget(parent)
     score_->setObjectName(QStringLiteral("raceScore"));
     variable_ = new QComboBox;
     variable_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    variable_->setToolTip(tr("The variable whose RMSE the table shows."));
     connect(variable_, &QComboBox::currentIndexChanged, this, &HorseRaceView::showRmse);
     rmse_ = makeTable();
     rmse_->setObjectName(QStringLiteral("raceRmse"));
@@ -95,6 +97,7 @@ HorseRaceView::HorseRaceView(QWidget *parent) : QWidget(parent)
     cumulative_ = new QwtPlot;
     styleAxes(cumulative_, tr("Forecast origin"), tr("Cumulative log score difference"));
     cumulative_->insertLegend(new QwtLegend, QwtPlot::BottomLegend);
+    cumulative_->setToolTip(tr("Each model's log score less the benchmark's, summed over the origins up to each one: a rise means the model forecast better there, a jump that one episode decided it. Right-click to copy or save the figure."));
     const FigureProvider figure = [this]() {
         FigureSpec spec = singleFigure(cumulative_, tr("Cumulative log predictive score relative to the benchmark"),
                                        QStringLiteral("horse-race-cumulative-log-score"));

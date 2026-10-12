@@ -252,6 +252,7 @@ void MainWindow::buildLayout()
     models_->setUniformItemSizes(true);
     models_->setMinimumWidth(210);
     models_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    models_->setToolTip(tr("The model files of the project. Select one to see it at every stage."));
     connect(models_, &QListWidget::currentItemChanged, this, [this](QListWidgetItem *item) {
         if (item != nullptr)
         {
@@ -272,6 +273,7 @@ void MainWindow::buildLayout()
     stages_->setTextElideMode(Qt::ElideNone);
     stages_->setSpacing(2);
     stages_->setFrameShape(QFrame::NoFrame);
+    stages_->setToolTip(tr("The stages of a Bayesian VAR analysis, as in the bvartools article: data, set-up, posterior simulation, evaluation and application."));
     for (std::size_t i = 0; i < kStages.size(); ++i)
     {
         auto *item = new QListWidgetItem;
@@ -328,6 +330,7 @@ void MainWindow::buildLayout()
     progress_->setTextVisible(true);
     cancel_ = new QPushButton(tr("Cancel"));
     connect(cancel_, &QPushButton::clicked, runner_, &ModelRunner::cancel);
+    cancel_->setToolTip(tr("Stops the run in progress."));
     statusBar()->addPermanentWidget(stageLabel_);
     statusBar()->addPermanentWidget(progress_);
     statusBar()->addPermanentWidget(cancel_);

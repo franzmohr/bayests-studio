@@ -25,9 +25,11 @@ OverviewView::OverviewView(QWidget *parent) : QWidget(parent)
     facts_ = new QListWidget;
     facts_->setFrameShape(QFrame::NoFrame);
     facts_->setSelectionMode(QAbstractItemView::NoSelection);
+    facts_->setToolTip(tr("The model as BayesTS reads it from the file: the algorithm, the dimensions and the options it takes."));
     warnings_ = new QListWidget;
     warnings_->setFrameShape(QFrame::NoFrame);
     warnings_->setWordWrap(true);
+    warnings_->setToolTip(tr("What bayests check says about the file: refusals that stop a run, and warnings that do not."));
 
     auto *factsTitle = new QLabel(tr("Specification as BayesTS reads it"));
     factsTitle->setObjectName(QStringLiteral("sectionTitle"));

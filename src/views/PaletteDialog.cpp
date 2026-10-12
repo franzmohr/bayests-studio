@@ -84,6 +84,7 @@ PaletteDialog::PaletteDialog(QWidget *parent) : QDialog(parent), custom_(customC
     list_ = new QListWidget;
     list_->setObjectName(QStringLiteral("paletteList"));
     list_->setIconSize(QSize(160, 16));
+    list_->setToolTip(tr("The palettes, by the package they come from. The studio's default is safe for the common colour vision deficiencies."));
     QString family;
     const QString current = currentPalette().id;
     for (const Palette &p : palettes())

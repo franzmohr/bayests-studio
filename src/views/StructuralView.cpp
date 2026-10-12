@@ -75,16 +75,21 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     type_ = new QComboBox;
     type_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     type_->setMinimumContentsLength(20);
+    type_->setToolTip(tr("How the shocks are identified: forecast error (a unit shock to one equation's error), orthogonalised (Cholesky, in the model's variable order), generalised (Pesaran and Shin 1998), structural and structural generalised for a model with contemporaneous coefficients, or the sign restrictions you set."));
     impulse_ = new QComboBox;
     impulse_->setMinimumContentsLength(10);
     impulse_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    impulse_->setToolTip(tr("The variable whose shock the responses trace."));
     horizon_ = new QSpinBox;
     horizon_->setRange(0, 200);
     horizon_->setValue(20);
+    horizon_->setToolTip(tr("How many periods after the shock the responses run."));
     period_ = new QSpinBox;
     period_->setMinimum(1);
+    period_->setToolTip(tr("For a model whose coefficients or volatilities move: the period of the sample whose system the analysis describes. The last period by default."));
     periodLabel_ = new QLabel(tr("Period"));
     cumulative_ = new QCheckBox(tr("Cumulative"));
+    cumulative_->setToolTip(tr("The responses summed over the horizons: the response of the level where the model is in growth rates."));
     standardDeviation_ = new QCheckBox(tr("One standard deviation"));
     standardDeviation_->setToolTip(tr("Forecast error and structural responses are to a shock of one unit "
                                       "unless this is ticked; the others are in standard deviations already."));
@@ -162,6 +167,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     auto *fevdLayout = new QVBoxLayout(fevdPage);
     fevdLayout->setContentsMargins(0, 8, 0, 0);
     response_ = new QComboBox;
+    response_->setToolTip(tr("The variable whose forecast error variance is decomposed into the shares of the shocks."));
     auto *pick = new QHBoxLayout;
     pick->addWidget(new QLabel(tr("Forecast error variance of")));
     pick->addWidget(response_);
@@ -173,6 +179,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     styleAxes(fevd_, tr("Horizon"), tr("Share"));
     fevd_->setAxisScale(QwtPlot::yLeft, 0.0, 1.0);
     fevd_->insertLegend(new QwtLegend, QwtPlot::RightLegend);
+    fevd_->setToolTip(tr("The share of the forecast error variance at each horizon due to each shock: posterior means, adding to one. Right-click to copy or save the figure."));
     fevdLayout->addWidget(fevd_, 1);
 
     tabs_ = new QTabWidget;
@@ -367,6 +374,7 @@ void StructuralView::rebuildGrid(int k)
     {
         auto *plot = new QwtPlot;
         attachFigureExport(plot, figure_);
+    plot->setToolTip(tr("The response of this variable: the posterior median with 68% and 90% bands. Right-click to copy or save the figure."));
         plot->setMinimumHeight(220);
         styleAxes(plot, tr("Horizon"), QString());
         QwtText title(support_.variables.value(i));

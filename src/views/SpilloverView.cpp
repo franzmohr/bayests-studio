@@ -142,6 +142,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     status_ = subtle();
     type_ = new QComboBox;
     type_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    type_->setToolTip(tr("The variance decomposition the spillovers are read from: generalised (Diebold and Yilmaz 2012), independent of the variable order; orthogonalised (Diebold and Yilmaz 2009), which depends on it; or the sign restrictions set for the model."));
     horizon_ = new QSpinBox;
     horizon_->setRange(1, 200);
     horizon_->setValue(10);
@@ -149,6 +150,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
                             "made of the responses of periods 0 to H - 1."));
     period_ = new QSpinBox;
     period_->setMinimum(1);
+    period_->setToolTip(tr("For a model whose coefficients or volatilities move: the period of the sample whose system the analysis describes. The last period by default."));
     periodLabel_ = new QLabel(tr("Period"));
 
     auto *controls = new QHBoxLayout;
@@ -187,6 +189,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     measure_->addItem(tr("Net: to others less from others"));
     measure_->addItem(tr("To others"));
     measure_->addItem(tr("From others"));
+    measure_->setToolTip(tr("Net: what a variable transmits to the others less what it receives. To others and from others: each side alone."));
     auto *pick = new QHBoxLayout;
     pick->addWidget(new QLabel(tr("Measure")));
     pick->addWidget(measure_);
@@ -196,6 +199,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
                             "that transmits more forecast error variance than it receives.")));
     bars_ = new QwtPlot;
     styleAxes(bars_, QString(), tr("Percent"));
+    bars_->setToolTip(tr("Each variable's spillover, median with the 90% credible interval. Right-click to copy or save the figure."));
     {
         const FigureProvider figure = [this]() {
             FigureSpec spec = singleFigure(bars_, measure_->currentText().section(QLatin1Char(':'), 0, 0) +
@@ -236,6 +240,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     path_ = new QwtPlot;
     styleAxes(path_, tr("Period"), tr("Total spillover index, percent"));
     path_->insertLegend(new QwtLegend, QwtPlot::BottomLegend);
+    path_->setToolTip(tr("The total spillover index in every period of the sample, for a model whose system moves. Right-click to copy or save the figure."));
     {
         const FigureProvider figure = [this]() {
             FigureSpec spec = singleFigure(path_, tr("Total spillover index"), QStringLiteral("spillover-index"));

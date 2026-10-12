@@ -30,6 +30,15 @@
 #include <QRadioButton>
 #include <QSpinBox>
 #include <QTimer>
+#include <QMenuBar>
+#include <QToolBar>
+#include <qwt_text.h>
+#include <qwt_plot.h>
+#include <QAbstractScrollArea>
+#include <QToolButton>
+#include <QTabBar>
+#include <QDockWidget>
+#include <QDialogButtonBox>
 
 #include <cstdlib>
 
@@ -114,15 +123,30 @@ int main(int argc, char *argv[])
     {
         const studio::DataSet data = studio::readDelimited(QString::fromLocal8Bit(csv));
         int missing = 0, inputs = 0;
-        const auto audit = [&](QWidget *dialog, const char *name) {
+        // The inputs; and in the views also every plot and every button but a
+        // dialog's own OK and Cancel and the parts of Qt's composite widgets.
+        const auto audit = [&](QWidget *dialog, const char *name, bool views = false) {
             QList<QWidget *> fields;
             for (QWidget *w : dialog->findChildren<QWidget *>())
             {
+                const QWidget *parent = w->parentWidget();
+                const bool part = qobject_cast<const QAbstractSpinBox *>(parent) ||
+                                  qobject_cast<const QComboBox *>(parent) ||
+                                  qobject_cast<const QDialogButtonBox *>(parent) ||
+                                  qobject_cast<const QTabBar *>(parent) ||
+                                  qobject_cast<const QAbstractScrollArea *>(parent) ||
+                                  qobject_cast<const QDockWidget *>(parent) ||
+                                  qobject_cast<const QToolBar *>(parent) ||   // an action's own tooltip
+                                  qobject_cast<const QMenuBar *>(parent);
+                if (part)
+                {
+                    continue;
+                }
                 if (qobject_cast<QAbstractSpinBox *>(w) || qobject_cast<QComboBox *>(w) ||
                     qobject_cast<QCheckBox *>(w) || qobject_cast<QRadioButton *>(w) ||
-                    qobject_cast<QListWidget *>(w) ||
-                    (qobject_cast<QLineEdit *>(w) && !qobject_cast<QAbstractSpinBox *>(w->parentWidget()) &&
-                     !qobject_cast<QComboBox *>(w->parentWidget())))
+                    qobject_cast<QListWidget *>(w) || qobject_cast<QLineEdit *>(w) ||
+                    (views && (qobject_cast<QwtPlot *>(w) || qobject_cast<QPushButton *>(w) ||
+                               qobject_cast<QToolButton *>(w))))
                 {
                     fields << w;
                 }
@@ -137,6 +161,23 @@ int main(int argc, char *argv[])
                     if (auto *b = qobject_cast<QAbstractButton *>(w))
                     {
                         what = b->text();
+                    }
+                    if (auto *plot = qobject_cast<QwtPlot *>(w))
+                    {
+                        what = QStringLiteral("plot: ") + plot->axisTitle(QwtPlot::yLeft).text();
+                    }
+                    if (w->parentWidget())
+                    {
+                        what += QStringLiteral(" in %1").arg(QString::fromLatin1(w->parentWidget()->metaObject()->className()));
+                    }
+                    // The view it belongs to: the nearest of the studio's own classes.
+                    for (const QWidget *up = w->parentWidget(); up; up = up->parentWidget())
+                    {
+                        if (QByteArray(up->metaObject()->className()).startsWith("studio::"))
+                        {
+                            what += QStringLiteral("  [%1]").arg(QString::fromLatin1(up->metaObject()->className()));
+                            break;
+                        }
                     }
                     std::printf("no tooltip  %s: %s %s\n", name, w->metaObject()->className(),
                                 what.toLocal8Bit().constData());
@@ -158,6 +199,14 @@ int main(int argc, char *argv[])
         {
             studio::FontDialog d;
             audit(&d, "font");
+        }
+        {
+            studio::PaletteDialog d;
+            audit(&d, "palette");
+        }
+        {
+            studio::MainWindow w;
+            audit(&w, "views", true);
         }
         std::printf("smoke: %d of %d inputs without a tooltip\n", missing, inputs);
         return missing == 0 ? 0 : 1;

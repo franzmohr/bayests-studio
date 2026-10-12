@@ -46,6 +46,7 @@ DiagnosticsView::DiagnosticsView(QWidget *parent) : QWidget(parent)
 
     row_ = new QComboBox;
     row_->setMinimumContentsLength(12);
+    row_->setToolTip(tr("The parameter of the block whose draws are shown."));
     connect(row_, &QComboBox::currentIndexChanged, this, &DiagnosticsView::showRow);
 
     stats_ = new QLabel;
@@ -62,6 +63,8 @@ DiagnosticsView::DiagnosticsView(QWidget *parent) : QWidget(parent)
     styleAxes(density_, tr("Value"), tr("Share of draws"));
     trace_->setTitle(tr("Trace"));
     density_->setTitle(tr("Marginal posterior"));
+    density_->setToolTip(tr("A histogram of the kept draws: the marginal posterior of the parameter. Right-click to copy or save the figure."));
+    trace_->setToolTip(tr("The kept draws in order, the dashed line their mean. A chain that has converged wanders around one level with no trend. Right-click to copy or save the figure."));
     // Both panels side by side, as the view shows them.
     const FigureProvider figure = [this]() {
         FigureSpec spec;

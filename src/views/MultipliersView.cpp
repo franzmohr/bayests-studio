@@ -59,21 +59,26 @@ MultipliersView::MultipliersView(QWidget *parent) : QWidget(parent)
     impulse_ = new QComboBox;
     impulse_->setMinimumContentsLength(10);
     impulse_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    impulse_->setToolTip(tr("The exogenous variable whose change the multipliers trace."));
     type_ = new QComboBox;
     type_->addItem(tr("Permanent: held from period 0"), true);
     type_->addItem(tr("Transitory: period 0 alone"), false);
     type_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    type_->setToolTip(tr("Permanent: the variable is raised in period 0 and stays raised. Transitory: it is raised in period 0 only."));
     horizon_ = new QSpinBox;
     horizon_->setRange(0, 200);
     horizon_->setValue(20);
+    horizon_->setToolTip(tr("How many periods after the change the multipliers run."));
     shock_ = new QDoubleSpinBox;
     shock_->setRange(-1e6, 1e6);
     shock_->setDecimals(3);
     shock_->setValue(1.0);
     shock_->setToolTip(tr("The size of the change, in the exogenous variable's own units."));
     cumulative_ = new QCheckBox(tr("Cumulative"));
+    cumulative_->setToolTip(tr("The multipliers summed over the horizons."));
     period_ = new QSpinBox;
     period_->setMinimum(1);
+    period_->setToolTip(tr("For a model whose coefficients or volatilities move: the period of the sample whose system the analysis describes. The last period by default."));
     periodLabel_ = new QLabel(tr("Period"));
 
     auto *controls = new QHBoxLayout;
@@ -242,6 +247,7 @@ void MultipliersView::rebuildGrid()
     {
         auto *plot = new QwtPlot;
         attachFigureExport(plot, figure_);
+    plot->setToolTip(tr("The multiplier for this variable: the posterior median with 68% and 90% bands. Right-click to copy or save the figure."));
         plot->setMinimumHeight(220);
         styleAxes(plot, tr("Horizon"), QString());
         QwtText title(support_.variables.value(i));
