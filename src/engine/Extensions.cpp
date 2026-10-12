@@ -222,6 +222,10 @@ QJsonObject exampleToJson(const WorkflowExample &e)
     {
         o[QStringLiteral("folder")] = e.folder;
     }
+    if (!e.reproduction)
+    {
+        o[QStringLiteral("reproduction")] = false;
+    }
     if (!e.supported)
     {
         o[QStringLiteral("supported")] = false;
@@ -362,7 +366,8 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
     const QString where = QObject::tr("example \"%1\"").arg(e.id);
     unknownKeys(o,
                 {QStringLiteral("id"), QStringLiteral("workflow"), QStringLiteral("title"), QStringLiteral("reference"),
-                 QStringLiteral("question"), QStringLiteral("folder"), QStringLiteral("supported"),
+                 QStringLiteral("question"), QStringLiteral("folder"), QStringLiteral("reproduction"),
+                 QStringLiteral("supported"),
                  QStringLiteral("missing"), QStringLiteral("data"), QStringLiteral("series"), QStringLiteral("model"),
                  QStringLiteral("restrictions"), QStringLiteral("race"), QStringLiteral("notes"),
                  QStringLiteral("findings")},
@@ -377,6 +382,7 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
     e.reference = text(o, QStringLiteral("reference"), where);
     e.question = text(o, QStringLiteral("question"), where);
     e.folder = text(o, QStringLiteral("folder"), where);
+    e.reproduction = flag(o, QStringLiteral("reproduction"), true, where);
     e.supported = flag(o, QStringLiteral("supported"), true, where);
     e.missing = text(o, QStringLiteral("missing"), where);
     e.dataRoot = base;
@@ -728,6 +734,7 @@ built-in example replaces it.
 | `workflow` | `"thesis"` or `"horserace"` |
 | `title` | `"Topic: Authors (year)"`: the topic heads the entry, the authors label its button |
 | `reference`, `question`, `findings` | the citation, the question it answers, what the paper finds |
+| `reproduction` | `false` for a textbook example, listed with its workflow rather than under "Reproducing papers" (introductory workflow only) |
 | `supported`, `missing` | `false` and what is missing, to list a paper as not yet guided |
 | `data` | `file` (CSV), `dateColumn`, `dates` (`"iso"`: 1947-01-01; `"year.quarter"`: 1955.1), `columns` (each `{"source", "name"}`), and optionally `transform` (`"log-difference"`, before the scale; the first period is lost), `scale`, `first`, `last`, `dropIncomplete` |
 | `series` | the model's variables in their order; the data's columns by default |

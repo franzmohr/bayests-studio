@@ -135,6 +135,12 @@ int main(int argc, char **argv)
         const WorkflowExample *e1 = findExample(QStringLiteral("luetkepohl2006"));
         check(e1 && isBuiltinData(e1->recipe) && examplesFor(QStringLiteral("thesis")).front() == e1,
               "Lütkepohl (2006): the first thesis example, on data the studio ships");
+        bool papers = !e1->reproduction;
+        for (const WorkflowExample *e : examplesFor(QStringLiteral("thesis")))
+        {
+            papers = papers && (e == e1 || e->reproduction);
+        }
+        check(papers, "... the one introductory example, every other a paper reproduced");
         const DataSet d = prepareExampleData(e1->recipe, QString());
         const DataSet ref = readDelimited(dir + "/e1.csv");   // bvartools' diff(log(e1)) * 100, to 1982Q4
         check(d.length() == 75 && d.series() == 3 && d.periods.front() == QStringLiteral("1960 Q2") &&

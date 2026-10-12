@@ -26,7 +26,8 @@ std::vector<WorkflowExample> make()
         WorkflowExample e;
         e.id = QStringLiteral("luetkepohl2006");
         e.workflow = QStringLiteral("thesis");
-        e.title = QObject::tr("Income and consumption: the VAR of Lütkepohl (2006)");
+        e.reproduction = false;   // a textbook's, listed with the introductory examples
+        e.title = QObject::tr("Income and consumption: Lütkepohl (2006)");
         e.reference = QStringLiteral("Lütkepohl, H. (2006). New Introduction to Multiple Time Series Analysis, "
                                      "2nd ed. Berlin: Springer, data set E1; and the introduction of the R "
                                      "package bvartools (Mohr), whose model this example runs.");

@@ -256,21 +256,16 @@ void AssistantPanel::rebuildChooser()
     chooser_->addWidget(subtle(tr("The assistant guides you through a workflow step by step: what to do, why, the "
                                   "usual choices and their references, and the buttons that do it. Start from your "
                                   "own data, or follow a published paper.")));
-    for (const Workflow &w : workflows())
-    {
-        auto *box = new QGroupBox(w.title);
-        auto *bl = new QVBoxLayout(box);
-        auto *audience = new QLabel(QStringLiteral("<b>%1</b>").arg(w.audience));
-        bl->addWidget(audience);
-        bl->addWidget(subtle(w.summary));
-        auto *scratch = new QPushButton(tr("Start with My Own Data"));
-        scratch->setObjectName(QStringLiteral("start-%1").arg(w.id));
-        scratch->setToolTip(tr("Follow this workflow on a data set of your own, from importing it to the write-up."));
-        connect(scratch, &QPushButton::clicked, this, [this, id = w.id]() { start(id); });
-        bl->addWidget(scratch);
+    // The examples of a workflow -- those `papers` selects, under the
+    // introductory workflow -- as buttons, then those not yet guided.
+    const auto addExamples = [this](QVBoxLayout *bl, const Workflow &w, std::optional<bool> papers) {
         QStringList later;
         for (const WorkflowExample *e : examplesFor(w.id))
         {
+            if (papers && e->reproduction != *papers)
+            {
+                continue;
+            }
             if (!e->supported)
             {
                 later << QStringLiteral("<li>%1 -- <i>%2</i></li>").arg(e->title.toHtmlEscaped(), e->missing.toHtmlEscaped());
@@ -292,7 +287,36 @@ void AssistantPanel::rebuildChooser()
             note->setTextFormat(Qt::RichText);
             bl->addWidget(note);
         }
+    };
+    for (const Workflow &w : workflows())
+    {
+        // The introductory workflow lists its textbook examples, and the
+        // papers it reproduces get a box of their own below it.
+        const bool introductory = w.id == QLatin1String("thesis");
+        auto *box = new QGroupBox(w.title);
+        auto *bl = new QVBoxLayout(box);
+        auto *audience = new QLabel(QStringLiteral("<b>%1</b>").arg(w.audience));
+        bl->addWidget(audience);
+        bl->addWidget(subtle(w.summary));
+        auto *scratch = new QPushButton(tr("Start with My Own Data"));
+        scratch->setObjectName(QStringLiteral("start-%1").arg(w.id));
+        scratch->setToolTip(tr("Follow this workflow on a data set of your own, from importing it to the write-up."));
+        connect(scratch, &QPushButton::clicked, this, [this, id = w.id]() { start(id); });
+        bl->addWidget(scratch);
+        addExamples(bl, w, introductory ? std::optional<bool>(false) : std::nullopt);
         chooser_->addWidget(box);
+        if (introductory)
+        {
+            auto *papers = new QGroupBox(tr("Reproducing papers"));
+            papers->setObjectName(QStringLiteral("reproducingPapers"));
+            auto *pl = new QVBoxLayout(papers);
+            pl->addWidget(new QLabel(QStringLiteral("<b>%1</b>").arg(tr("For following a published study"))));
+            pl->addWidget(subtle(tr("Published structural BVAR studies, each implemented with the steps of the "
+                                    "introductory workflow: the paper's data and specification filled in, its "
+                                    "identification ready to apply, and what the paper finds to compare against.")));
+            addExamples(pl, w, true);
+            chooser_->addWidget(papers);
+        }
     }
     chooser_->addStretch(1);
 }

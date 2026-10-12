@@ -58,6 +58,9 @@ struct WorkflowExample
     QString reference;                          ///< the citation
     QString question;
     QString folder;                             ///< the reproduction's folder
+    /// A published paper reproduced, listed under "Reproducing papers"; false
+    /// for a textbook example, listed with its workflow.
+    bool reproduction = true;
     bool supported = true;
     QString missing;                            ///< what the studio would need, when not supported
     DataRecipe recipe;                          ///< recipe.file empty: the user brings the data
