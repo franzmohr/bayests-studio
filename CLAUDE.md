@@ -1,8 +1,8 @@
 # CLAUDE.md
 
 BayesTS Studio: a free, open-source (BSD-3-Clause) Qt 6 Widgets desktop application over the
-BayesTS library (D:/projects/BayesTS, pulled in by FetchContent; the user
-presets point `FETCHCONTENT_SOURCE_DIR_BAYESTS` at the local checkout).
+BayesTS library (pulled in by FetchContent at a pinned commit; a user preset
+may point `FETCHCONTENT_SOURCE_DIR_BAYESTS` at a local checkout instead).
 
 - **Licensing constrains the dependencies** -- read LICENSING.md before adding
   one. Only LGPL Qt modules, linked dynamically; never Qt Charts, Qt Graphs or
@@ -21,8 +21,9 @@ presets point `FETCHCONTENT_SOURCE_DIR_BAYESTS` at the local checkout).
   `Reporter::kept_draw()`) go upstream into BayesTS, not into a fork.
 
 Build: `cmake --preset <your-preset>`, `cmake --build build/<your-preset>`.
-Runtime PATH on this machine:
-`/d/vcpkg/installed/x64-mingw-dynamic/bin:/d/HDF5/2.0.0/bin:/c/msys64/ucrt64/bin`.
+Running a build tree needs the dependencies' DLLs on PATH: the `bin` directory
+of each entry in your preset's `CMAKE_PREFIX_PATH`, plus the toolchain's (for
+MSYS2, `ucrt64/bin`, which also holds Qt and Qwt).
 
 Smoke test without a display: `QT_QPA_PLATFORM=offscreen
 STUDIO_SMOKE_CAPTURE=<prefix> bayests-studio <file-or-folder>` runs every

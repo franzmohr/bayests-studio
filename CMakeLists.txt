@@ -27,9 +27,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # always names the sampler code it ships. For working on both at once, point
 # FetchContent at a local checkout instead of the pinned commit:
 #
-#   -DFETCHCONTENT_SOURCE_DIR_BAYESTS=D:/projects/BayesTS
+#   -DFETCHCONTENT_SOURCE_DIR_BAYESTS=<path-to-BayesTS>
 #
-# (the user presets do this). BayesTS is BSD-3-Clause; its licence text is
+# (a CMakeUserPresets.json is the place for it). BayesTS is BSD-3-Clause; its licence text is
 # installed with the application and shown under Help > Third-party licences.
 
 include(FetchContent)
