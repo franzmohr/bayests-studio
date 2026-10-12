@@ -734,7 +734,7 @@ built-in example replaces it.
 | `workflow` | `"thesis"` or `"horserace"` |
 | `title` | `"Topic: Authors (year)"`: the topic heads the entry, the authors label its button |
 | `reference`, `question`, `findings` | the citation, the question it answers, what the paper finds |
-| `reproduction` | `false` for a textbook example, listed with its workflow rather than under "Reproducing papers" (introductory workflow only) |
+| `reproduction` | `false` for a textbook example, listed with its workflow rather than under "Reproducing papers" |
 | `supported`, `missing` | `false` and what is missing, to list a paper as not yet guided |
 | `data` | `file` (CSV), `dateColumn`, `dates` (`"iso"`: 1947-01-01; `"year.quarter"`: 1955.1), `columns` (each `{"source", "name"}`), and optionally `transform` (`"log-difference"`, before the scale; the first period is lost), `scale`, `first`, `last`, `dropIncomplete` |
 | `series` | the model's variables in their order; the data's columns by default |
