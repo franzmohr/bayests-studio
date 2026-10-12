@@ -164,7 +164,7 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
     });
     fl->addWidget(steps_);
     guidance_ = new QTextBrowser;
-    // Read at length: the serif, with room between the lines.
+    // Read at length: half a point larger, with room between the lines.
     guidance_->setFont(readingFont());
     guidance_->document()->setDefaultStyleSheet(QStringLiteral("p, li { line-height: 125%; }"));
     guidance_->setOpenExternalLinks(true);

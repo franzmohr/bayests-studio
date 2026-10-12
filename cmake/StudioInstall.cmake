@@ -120,11 +120,9 @@ set(_studio_lic "${_studio_msys_prefix}/share/licenses")
 # to accept, and Help > Licence Agreement shows.
 install(FILES "${PROJECT_SOURCE_DIR}/EULA.txt" DESTINATION "licenses/BayesTS Studio")
 
-# The fonts in the resources, SIL OFL 1.1, each with its own copyright notice.
+# The font in the resources, SIL OFL 1.1, with its copyright notice.
 install(FILES "${PROJECT_SOURCE_DIR}/src/app/fonts/Inter-LICENSE.txt"
         DESTINATION "licenses/Inter" RENAME "LICENSE.txt")
-install(FILES "${PROJECT_SOURCE_DIR}/src/app/fonts/SourceSerif4-LICENSE.md"
-        DESTINATION "licenses/Source Serif 4" RENAME "LICENSE.md")
 
 studio_install_licence(BayesTS   NAMES LICENSE         HINTS "${bayests_SOURCE_DIR}")
 studio_install_licence(Qt        NAMES LGPL-3.0-only.txt HINTS "${_studio_lic}/qt6-base")

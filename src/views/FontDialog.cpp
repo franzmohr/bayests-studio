@@ -26,7 +26,7 @@ FontDialog::FontDialog(QWidget *parent) : QDialog(parent)
                                 .arg(systemFont().family())
                                 .arg(systemFont().pointSizeF()));
     system_->setChecked(now.systemInterface);
-    system_->setToolTip(tr("Inter, which the studio ships so that it looks the same on every system and screen; the guidance is set in Source Serif 4 beside it."));
+    system_->setToolTip(tr("Inter, which the studio ships so that it looks the same on every system and screen; the guidance is set in it too, half a point larger."));
     uf->addRow(system_);
     interface_ = new QFontComboBox;
     interface_->setCurrentFont(now.interface);

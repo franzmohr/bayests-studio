@@ -141,7 +141,7 @@ qt_add_resources(bayests-studio "icons"
         app/icons/bayests-studio-256.png
 )
 
-# The fonts the studio ships (views/Fonts.h): Inter and Source Serif 4.
+# The font the studio ships (views/Fonts.h): Inter, sans serif.
 qt_add_resources(bayests-studio "fonts"
     PREFIX "/fonts"
     BASE "app/fonts"
@@ -151,10 +151,6 @@ qt_add_resources(bayests-studio "fonts"
         app/fonts/Inter-SemiBold.ttf
         app/fonts/Inter-Bold.ttf
         app/fonts/Inter-BoldItalic.ttf
-        app/fonts/SourceSerif4-Regular.ttf
-        app/fonts/SourceSerif4-It.ttf
-        app/fonts/SourceSerif4-Semibold.ttf
-        app/fonts/SourceSerif4-Bold.ttf
 )
 
 # The end-user licence agreement, for Help > Licence Agreement.

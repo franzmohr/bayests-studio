@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
             ++missing;
         }
         // The fonts the studio ships, registered and in use: Inter for the
-        // interface, Source Serif 4 for the guidance, and every character the
+        // interface and the guidance alike, sans serif, and every character the
         // studio writes drawn from them rather than a system fallback.
         {
             const QFont ui = QApplication::font();
@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
                 lacking += metrics.inFontUcs4(c) ? 0 : 1;
             }
             if (ui.family() != QLatin1String("Inter") ||
-                reading.families().value(0) != QLatin1String("Source Serif 4") || lacking > 0)
+                reading.family() != QLatin1String("Inter") || lacking > 0)
             {
                 std::printf("the studio's fonts are not in use: interface %s, reading %s, %d characters lacking\n",
                             ui.family().toStdString().c_str(), reading.families().join(QLatin1Char(',')).toStdString().c_str(),

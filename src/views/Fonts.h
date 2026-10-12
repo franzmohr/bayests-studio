@@ -9,13 +9,11 @@ namespace studio
 /// The fonts the user chose, kept in QSettings beside the palette.
 ///
 /// The studio ships its own, so that it looks the same on every system and
-/// every screen: Inter (Rasmus Andersson, SIL OFL 1.1) for the interface,
-/// the tables and the figures, with tabular figures where numbers stand in
-/// columns -- table cells and number fields -- so that they line up,
-/// and Source Serif 4 (Adobe, SIL OFL 1.1) for the text read at length -- the
-/// assistant's guidance and the examples' notes. Both are in the resources
-/// (src/app/fonts) and registered at start-up; their licences are installed
-/// beside the others.
+/// every screen: Inter (Rasmus Andersson, SIL OFL 1.1), sans serif only, for
+/// the interface, the text read at length, the tables and the figures, with
+/// tabular figures where numbers stand in columns -- table cells and number
+/// fields -- so that they line up. It is in the resources (src/app/fonts) and
+/// registered at start-up; its licence is installed beside the others.
 ///
 /// The interface font is every widget's. The figure font is what plots draw
 /// their axes and labels in, on screen and in an exported figure -- the
@@ -32,16 +30,15 @@ struct FontChoice
 };
 
 /// Registers the fonts the studio ships. Call once, before anything asks
-/// for a font; returns how many families were added (two).
+/// for a font; returns how many families were added (one).
 int registerStudioFonts();
 
 /// The studio's interface font: Inter at 10.5 pt with tabular figures, or
 /// the platform's own where the resources are missing.
 QFont systemFont();
 
-/// The font of text read at length, at the interface's size plus half a
-/// point: Source Serif 4, falling back to the interface's family for the
-/// symbols it lacks (✓, ✗, arrows).
+/// The font of text read at length -- the assistant's guidance and the
+/// examples' notes: the interface's, half a point larger.
 QFont readingFont();
 
 FontChoice currentFonts();

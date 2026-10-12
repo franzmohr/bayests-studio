@@ -20,7 +20,6 @@ std::optional<QFont> &startFont()
 }
 
 const QString interfaceFamily = QStringLiteral("Inter");
-const QString readingFamily = QStringLiteral("Source Serif 4");
 // The size of Claude's and most modern applications' body text: Windows' 9 pt
 // is cramped on a 13" laptop, and Inter's tall lowercase reads at 10.5 pt as
 // comfortably on a wide monitor.
@@ -115,17 +114,6 @@ QFont systemFont()
 QFont readingFont()
 {
     QFont f = choice().interface;
-    QStringList families;
-    if (registered(readingFamily))
-    {
-        families << readingFamily;
-    }
-    families << f.families();
-    if (!families.contains(f.family()))
-    {
-        families << f.family();
-    }
-    f.setFamilies(families);
     f.setPointSizeF((f.pointSizeF() > 0 ? f.pointSizeF() : interfaceSize) + 0.5);
     return f;
 }

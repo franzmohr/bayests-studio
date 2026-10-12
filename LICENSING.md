@@ -43,19 +43,15 @@ None restricts closed-source or commercial use.
 
 ## Fonts
 
-The studio ships its fonts in its resources (`src/app/fonts`), so that it looks
+The studio ships its font in its resources (`src/app/fonts`), so that it looks
 the same on every system: Inter 4.1 (regular, italic, semibold, bold, bold
-italic; Copyright (c) 2016 The Inter Project Authors) for the interface and
-the figures, and Source Serif 4.005 (regular, italic, semibold, bold;
-Copyright 2014-2023 Adobe, Reserved Font Name "Source") for the assistant's
-guidance -- the unmodified files of the official releases, github.com/rsms/inter
-and github.com/adobe-fonts/source-serif. Both are under the SIL Open Font
-License 1.1, which allows bundling them with commercial software provided
-they are not sold on their own and keep their copyright notices and licence:
-the licences are installed into `licenses/Inter` and `licenses/Source Serif 4`
-and named under Help > Third-party Licences. Exported PDF figures embed Inter,
-which the licence allows. A modified font -- a subset, say -- would have to
-drop the Reserved Font Name "Source".
+italic; Copyright (c) 2016 The Inter Project Authors), sans serif, for the
+interface, the assistant's guidance and the figures -- the unmodified files of
+the official release, github.com/rsms/inter. It is under the SIL Open Font
+License 1.1, which allows bundling it with commercial software provided it is
+not sold on its own and keeps its copyright notice and licence: the licence is
+installed into `licenses/Inter` and named under Help > Third-party Licences.
+Exported PDF figures embed Inter, which the licence allows.
 
 ## Example data
 
