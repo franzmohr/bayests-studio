@@ -40,6 +40,7 @@ private:
     QRadioButton *vec_;
     QSpinBox *rank_;
     QSpinBox *p_;
+    QSpinBox *forecastHorizon_;
     QComboBox *prior_;
     QDoubleSpinBox *kappa1_;
     QSpinBox *iterations_;

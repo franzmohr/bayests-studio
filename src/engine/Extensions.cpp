@@ -292,6 +292,10 @@ QJsonObject exampleToJson(const WorkflowExample &e)
     {
         m[QStringLiteral("wishartDf")] = e.wishartDf;
     }
+    if (e.forecastHorizon != 8)
+    {
+        m[QStringLiteral("forecastHorizon")] = e.forecastHorizon;
+    }
     m[QStringLiteral("iterations")] = e.iterations;
     m[QStringLiteral("burnin")] = e.burnin;
     m[QStringLiteral("seed")] = static_cast<double>(e.seed);
@@ -447,6 +451,7 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         unknownKeys(m,
                     {QStringLiteral("lags"), QStringLiteral("minnesota"), QStringLiteral("coefPrecision"),
                      QStringLiteral("detPrecision"), QStringLiteral("wishartScale"), QStringLiteral("wishartDf"),
+                     QStringLiteral("forecastHorizon"),
                      QStringLiteral("iterations"),
                      QStringLiteral("burnin"), QStringLiteral("seed")},
                     at, warnings);
@@ -456,6 +461,7 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         e.detPrecision = number(m, QStringLiteral("detPrecision"), e.detPrecision, at);
         e.wishartScale = number(m, QStringLiteral("wishartScale"), e.wishartScale, at);
         e.wishartDf = static_cast<int>(number(m, QStringLiteral("wishartDf"), e.wishartDf, at));
+        e.forecastHorizon = integer(m, QStringLiteral("forecastHorizon"), e.forecastHorizon, at);
         e.iterations = integer(m, QStringLiteral("iterations"), e.iterations, at);
         e.burnin = integer(m, QStringLiteral("burnin"), e.burnin, at);
         const double seed = number(m, QStringLiteral("seed"), static_cast<double>(e.seed), at);
@@ -467,6 +473,10 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         if (e.p < 1 || e.iterations < 1 || e.burnin < 0)
         {
             refuse(QObject::tr("%1: \"lags\" and \"iterations\" must be positive, \"burnin\" not negative").arg(at));
+        }
+        if (e.forecastHorizon < 0)
+        {
+            refuse(QObject::tr("%1: \"forecastHorizon\" must not be negative").arg(at));
         }
         if (e.wishartDf < 0)
         {
@@ -721,7 +731,7 @@ built-in example replaces it.
 | `supported`, `missing` | `false` and what is missing, to list a paper as not yet guided |
 | `data` | `file` (CSV), `dateColumn`, `dates` (`"iso"`: 1947-01-01; `"year.quarter"`: 1955.1), `columns` (each `{"source", "name"}`), and optionally `transform` (`"log-difference"`, before the scale; the first period is lost), `scale`, `first`, `last`, `dropIncomplete` |
 | `series` | the model's variables in their order; the data's columns by default |
-| `model` | `lags`, `minnesota`, `coefPrecision`, `detPrecision`, `wishartScale`, `wishartDf` (the builder's k when absent), `iterations`, `burnin`, `seed` |
+| `model` | `lags`, `minnesota`, `coefPrecision`, `detPrecision`, `wishartScale`, `wishartDf` (the builder's k when absent), `forecastHorizon` (thesis: the baseline's forecast, 8 when absent), `iterations`, `burnin`, `seed` |
 | `restrictions` | thesis: each `{"shock", "response", "sign": "+", "-" or "0", "horizon"}` |
 | `race` | horse race: `variables`, `firstOrigin`, `lastOrigin`, `step`, `horizon`, `levels`, `volatilityBreak`, `candidates`, `benchmark` |
 | `notes` | per step id, what the example does there |

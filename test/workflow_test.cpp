@@ -178,7 +178,7 @@ int main(int argc, char **argv)
         s.iterations = e1->iterations;
         s.burnin = e1->burnin;
         s.seed = e1->seed;
-        s.horizon = 8;
+        s.horizon = e1->forecastHorizon;
         const QString file = t.filePath(QStringLiteral("e1.h5"));
         check(summarise(s).refusal.isEmpty(), "... its baseline a model the builder accepts");
         writeVarModel(s, file);
@@ -195,7 +195,7 @@ int main(int argc, char **argv)
         });
         runner.start(file, QString(), {Stage::Coefficients, Stage::Forecast, Stage::LogLikelihood});
         loop.exec();
-        check(ran, "... and estimated");
+        check(ran && ModelRunner::check(file, QString()).horizon == 10, "... and estimated, forecasting ten quarters as the vignette");
         if (ran)
         {
             // bvartools: income.l1 and income.l2 in the cons equation 0.228 and

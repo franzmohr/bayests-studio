@@ -306,7 +306,7 @@ components it uses.
   confirm a judgement only you can make, and the assistant moves on. What it
   did is kept in the project's `assistant.json`, so a project reopens where
   it was left.
-  - **Master thesis: a structural BVAR** -- research question and data, a
+  - **Introductory examples** -- research question and data, a
     look at the data, a baseline BVAR (Minnesota prior, a year of lags, a
     fixed seed), estimation, convergence, the lag order compared by WAIC
     (the alternatives made and estimated for you), identification,

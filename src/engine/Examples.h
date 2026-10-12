@@ -70,6 +70,7 @@ struct WorkflowExample
     bool minnesota = false;
     double wishartScale = 1.0;
     int wishartDf = 0;                          ///< the Wishart's degrees of freedom; 0: the builder's, k
+    int forecastHorizon = 8;                    ///< the baseline's forecast, periods after the sample
     int iterations = 5000;
     int burnin = 1000;
     std::uint64_t seed = 1;

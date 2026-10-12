@@ -51,6 +51,7 @@ std::vector<WorkflowExample> make()
         e.iterations = 5000;
         e.burnin = 1000;
         e.seed = 1234567;
+        e.forecastHorizon = 10;   // add_forecast_input(model, n_ahead = 10)
         e.notes = {
             {QStringLiteral("question"),
              QObject::tr("The data come with the studio: Lütkepohl's file E1, West German fixed investment, "
@@ -66,7 +67,8 @@ std::vector<WorkflowExample> make()
              QObject::tr("Two lags and a constant, in the order invest, income, cons, as the textbook. The flat "
                          "prior is preselected, and the example sets bvartools' uninformative one -- zero precision on every "
                          "coefficient, and an inverse Wishart with one degree of freedom and a scale of 0.0001. "
-                         "5,000 draws after 1,000, seed 1234567.")},
+                         "5,000 draws after 1,000, seed 1234567, and a forecast ten quarters ahead, 1979Q1 to "
+                         "1981Q2, as the vignette's.")},
             {QStringLiteral("convergence"),
              QObject::tr("With a flat prior and two lags the sampler mixes quickly: the effective sample sizes are "
                          "close to the 5,000 draws, and the posterior means close to least squares.")},

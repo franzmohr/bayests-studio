@@ -165,6 +165,12 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     p_->setValue(example ? example->p : suggestedLags(data));
     p_->setToolTip(tr("A year of dynamics: four for quarterly data, twelve for monthly, two for annual."));
     form->addRow(tr("Lags"), p_);
+    forecastHorizon_ = new QSpinBox;
+    forecastHorizon_->setObjectName(QStringLiteral("baselineForecastHorizon"));
+    forecastHorizon_->setRange(0, 100);
+    forecastHorizon_->setValue(example ? example->forecastHorizon : 8);
+    forecastHorizon_->setToolTip(tr("How many periods after the sample the baseline forecasts; nothing is held out, so the forecast is to look at. Zero: none."));
+    form->addRow(tr("Forecast horizon"), forecastHorizon_);
     prior_ = new QComboBox;
     prior_->addItem(tr("Minnesota prior, for growth rates (recommended)"));
     prior_->addItem(tr("Flat: the data alone"));
@@ -250,7 +256,7 @@ VarBuilderSpec ThesisBaselineDialog::spec() const
     {
         s.seed = seed_->text().toULongLong();
     }
-    s.horizon = 8;   // a forecast to look at; nothing is held out
+    s.horizon = forecastHorizon_->value();   // a forecast to look at; nothing is held out
     return s;
 }
 

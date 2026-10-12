@@ -99,7 +99,7 @@ Workflow thesis()
     using S = WorkflowStage;
     Workflow w;
     w.id = QStringLiteral("thesis");
-    w.title = QObject::tr("Master thesis: a structural BVAR");
+    w.title = QObject::tr("Introductory examples");
     w.audience = QObject::tr("For a first empirical project");
     w.summary = QObject::tr("From a research question to the figures and the methods section of a thesis: data, a "
                             "baseline Bayesian VAR, convergence, the lag order, identification, impulse "
