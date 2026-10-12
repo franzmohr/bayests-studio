@@ -1,4 +1,5 @@
 #include "views/AssistantPanel.h"
+#include "views/Fonts.h"
 
 #include "engine/BatchRunner.h"
 #include "engine/HorseRace.h"
@@ -148,6 +149,10 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
     steps_ = new QListWidget;
     steps_->setObjectName(QStringLiteral("assistantSteps"));
     steps_->setMaximumHeight(240);
+    // Long step titles wrap rather than scroll sideways.
+    steps_->setWordWrap(true);
+    steps_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    steps_->setResizeMode(QListView::Adjust);
     steps_->setToolTip(tr("The steps of the workflow: a tick when done, a dot at the current one. Click one to read it and open the stage it concerns."));
     connect(steps_, &QListWidget::currentRowChanged, this, [this](int row) {
         showStep(row);
@@ -159,6 +164,9 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
     });
     fl->addWidget(steps_);
     guidance_ = new QTextBrowser;
+    // Read at length: the serif, with room between the lines.
+    guidance_->setFont(readingFont());
+    guidance_->document()->setDefaultStyleSheet(QStringLiteral("p, li { line-height: 125%; }"));
     guidance_->setOpenExternalLinks(true);
     guidance_->setObjectName(QStringLiteral("assistantGuidance"));
     fl->addWidget(guidance_, 1);

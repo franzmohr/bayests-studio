@@ -22,11 +22,11 @@ FontDialog::FontDialog(QWidget *parent) : QDialog(parent)
 
     auto *ui = new QGroupBox(tr("Interface"));
     auto *uf = new QFormLayout(ui);
-    system_ = new QCheckBox(tr("The system's font (%1, %2 pt)")
+    system_ = new QCheckBox(tr("The studio's font (%1, %2 pt)")
                                 .arg(systemFont().family())
                                 .arg(systemFont().pointSizeF()));
     system_->setChecked(now.systemInterface);
-    system_->setToolTip(tr("The platform's own font, as the studio found it at start-up."));
+    system_->setToolTip(tr("Inter, which the studio ships so that it looks the same on every system and screen; the guidance is set in Source Serif 4 beside it."));
     uf->addRow(system_);
     interface_ = new QFontComboBox;
     interface_->setCurrentFont(now.interface);
@@ -37,7 +37,7 @@ FontDialog::FontDialog(QWidget *parent) : QDialog(parent)
     interfaceSize_->setSingleStep(0.5);
     interfaceSize_->setDecimals(1);
     interfaceSize_->setSuffix(tr(" pt"));
-    interfaceSize_->setValue(now.interface.pointSizeF() > 0 ? now.interface.pointSizeF() : 9.0);
+    interfaceSize_->setValue(now.interface.pointSizeF() > 0 ? now.interface.pointSizeF() : 10.5);
     interfaceSize_->setToolTip(tr("The interface's size in points; plots scale their axis labels with it."));
     uf->addRow(tr("Size"), interfaceSize_);
     interfacePreview_ = new QLabel(tr("Posterior simulation -- 20,000 draws after a burn-in of 2,000"));
