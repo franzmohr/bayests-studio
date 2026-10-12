@@ -26,9 +26,11 @@ FontDialog::FontDialog(QWidget *parent) : QDialog(parent)
                                 .arg(systemFont().family())
                                 .arg(systemFont().pointSizeF()));
     system_->setChecked(now.systemInterface);
+    system_->setToolTip(tr("The platform's own font, as the studio found it at start-up."));
     uf->addRow(system_);
     interface_ = new QFontComboBox;
     interface_->setCurrentFont(now.interface);
+    interface_->setToolTip(tr("The family of every menu, form and table."));
     uf->addRow(tr("Family"), interface_);
     interfaceSize_ = new QDoubleSpinBox;
     interfaceSize_->setRange(7.0, 18.0);
@@ -36,6 +38,7 @@ FontDialog::FontDialog(QWidget *parent) : QDialog(parent)
     interfaceSize_->setDecimals(1);
     interfaceSize_->setSuffix(tr(" pt"));
     interfaceSize_->setValue(now.interface.pointSizeF() > 0 ? now.interface.pointSizeF() : 9.0);
+    interfaceSize_->setToolTip(tr("The interface's size in points; plots scale their axis labels with it."));
     uf->addRow(tr("Size"), interfaceSize_);
     interfacePreview_ = new QLabel(tr("Posterior simulation -- 20,000 draws after a burn-in of 2,000"));
     interfacePreview_->setWordWrap(true);
@@ -46,9 +49,11 @@ FontDialog::FontDialog(QWidget *parent) : QDialog(parent)
     auto *ff = new QFormLayout(fig);
     sameFigure_ = new QCheckBox(tr("The interface's family"));
     sameFigure_->setChecked(now.figureFamily.isEmpty());
+    sameFigure_->setToolTip(tr("Plots and exported figures in the interface's family."));
     ff->addRow(sameFigure_);
     figure_ = new QFontComboBox;
     figure_->setCurrentFont(QFont(now.figureFamily.isEmpty() ? now.interface.family() : now.figureFamily));
+    figure_->setToolTip(tr("The family of the plots' text, on screen and in every exported figure."));
     ff->addRow(tr("Family"), figure_);
     figureSize_ = new QDoubleSpinBox;
     figureSize_->setRange(6.0, 14.0);

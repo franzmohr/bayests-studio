@@ -112,10 +112,13 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     }
     variables_ = seriesList(data, chosen, chosen.isEmpty());
     variables_->setObjectName(QStringLiteral("baselineVariables"));
+    variables_->setToolTip(tr("The variables of the baseline. Their order is the recursive order of the Cholesky identification: a variable responds within the period to those above it only."));
     auto *up = new QToolButton;
     up->setArrowType(Qt::UpArrow);
+    up->setToolTip(tr("Move the selected variable up the ordering."));
     auto *down = new QToolButton;
     down->setArrowType(Qt::DownArrow);
+    down->setToolTip(tr("Move the selected variable down the ordering."));
     const auto move = [this](int by) {
         const int row = variables_->currentRow();
         const int to = row + by;
@@ -144,6 +147,8 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     var_ = new QRadioButton(tr("VAR"));
     vec_ = new QRadioButton(tr("VEC, for series in levels with a cointegration relation"));
     var_->setChecked(true);
+    vec_->setToolTip(tr("A vector error correction model for series in levels that share a long-run relation."));
+    var_->setToolTip(tr("A VAR in the variables as they are: growth rates, or levels with the random walk prior."));
     auto *family = new QButtonGroup(this);
     family->addButton(var_);
     family->addButton(vec_);
@@ -153,6 +158,7 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     form->addRow(tr("Model"), fam);
     rank_ = new QSpinBox;
     rank_->setRange(1, 10);
+    rank_->setToolTip(tr("The number of cointegration relations."));
     form->addRow(tr("Cointegration rank"), rank_);
     p_ = new QSpinBox;
     p_->setRange(1, 24);
@@ -164,12 +170,13 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     prior_->addItem(tr("Flat: the data alone"));
     prior_->addItem(tr("Minnesota prior, random walks, for series in levels"));
     prior_->setCurrentIndex(example && !example->minnesota ? 1 : 0);
+    prior_->setToolTip(tr("The Minnesota prior (Litterman 1986) shrinks towards white noise for growth rates, or towards random walks for series in levels; flat lets the data alone speak, which a small sample with many lags cannot afford."));
     form->addRow(tr("Coefficient prior"), prior_);
     kappa1_ = new QDoubleSpinBox;
     kappa1_->setRange(0.01, 10.0);
     kappa1_->setSingleStep(0.05);
     kappa1_->setValue(0.2);
-    kappa1_->setToolTip(tr("Overall tightness: smaller shrinks harder towards random walks."));
+    kappa1_->setToolTip(tr("Overall tightness of the Minnesota prior: smaller shrinks every coefficient harder towards the prior mean -- white noise, or random walks with the prior for levels."));
     form->addRow(tr("Tightness κ₁"), kappa1_);
     iterations_ = new QSpinBox;
     iterations_->setRange(100, 1000000);
@@ -179,6 +186,8 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     burnin_->setRange(0, 1000000);
     burnin_->setSingleStep(500);
     burnin_->setValue(example ? example->burnin : 2000);
+    burnin_->setToolTip(tr("Draws discarded while the chain moves away from its starting values."));
+    iterations_->setToolTip(tr("Draws kept after the burn-in, the size of every posterior summary."));
     form->addRow(tr("Draws kept"), iterations_);
     form->addRow(tr("Burn-in"), burnin_);
     seed_ = new QLineEdit(QString::number(example ? example->seed : 20261011ULL));
@@ -270,6 +279,7 @@ HorseRaceDialog::HorseRaceDialog(const DataSet &data, const WorkflowExample *exa
                               "expanding window -- and forecasts the horizon after it, which is then scored.")));
 
     variables_ = seriesList(data, example ? example->variables : QStringList(), !example);
+    variables_->setToolTip(tr("The variables every model of the race forecasts and is scored on."));
     layout->addWidget(new QLabel(tr("Variables to forecast")));
     layout->addWidget(variables_);
 
@@ -291,6 +301,9 @@ HorseRaceDialog::HorseRaceDialog(const DataSet &data, const WorkflowExample *exa
     first_->setCurrentIndex(0);
     firstOrigin_->setCurrentIndex(example ? at(example->firstOrigin, last * 3 / 4) : std::max(0, last - std::max(8, last / 4)));
     lastOrigin_->setCurrentIndex(example ? at(example->lastOrigin, last - 1) : std::max(0, last - 1));
+    first_->setToolTip(tr("Where every estimation window starts. The windows expand: each runs from here to its origin."));
+    firstOrigin_->setToolTip(tr("The last period of the first window, from which the first forecast is made."));
+    lastOrigin_->setToolTip(tr("The last period of the last window. Its forecast is scored on what remains of the data, so it lies before the end."));
     form->addRow(tr("Windows start"), first_);
     form->addRow(tr("First forecast origin"), firstOrigin_);
     form->addRow(tr("Last forecast origin"), lastOrigin_);
@@ -303,13 +316,16 @@ HorseRaceDialog::HorseRaceDialog(const DataSet &data, const WorkflowExample *exa
     horizon_ = new QSpinBox;
     horizon_->setRange(1, 60);
     horizon_->setValue(example ? example->horizon : 8);
+    horizon_->setToolTip(tr("Periods ahead each model forecasts from each origin, and is scored on."));
     form->addRow(tr("Horizon"), horizon_);
     lags_ = new QSpinBox;
     lags_->setRange(1, 24);
     lags_->setValue(example ? example->p : suggestedLags(data));
+    lags_->setToolTip(tr("The lag order of the benchmark and the models like it; the one-lag and TVP models keep their own."));
     form->addRow(tr("Lags of the larger VARs"), lags_);
     levels_ = new QCheckBox(tr("The series are in levels: random walk priors, and a VEC"));
     levels_->setChecked(example && example->levels);
+    levels_->setToolTip(tr("For series in levels: the Minnesota priors centre on random walks (Litterman 1986), and a VEC of rank one joins the field."));
     form->addRow(QString(), levels_);
     break_ = new QComboBox;
     break_->addItem(tr("None"));
@@ -327,9 +343,11 @@ HorseRaceDialog::HorseRaceDialog(const DataSet &data, const WorkflowExample *exa
     candidates_ = new QListWidget;
     candidates_->setObjectName(QStringLiteral("raceCandidates"));
     candidates_->setMaximumHeight(170);
+    candidates_->setToolTip(tr("The models in the race; hover over one for what it is. Each is estimated at every origin."));
     layout->addWidget(candidates_);
     auto *bench = new QFormLayout;
     benchmark_ = new QComboBox;
+    benchmark_->setToolTip(tr("The model the others are measured against: RMSEs relative to its, log scores as differences from its."));
     bench->addRow(tr("Benchmark"), benchmark_);
     iterations_ = new QSpinBox;
     iterations_->setRange(100, 100000);
@@ -339,6 +357,8 @@ HorseRaceDialog::HorseRaceDialog(const DataSet &data, const WorkflowExample *exa
     burnin_->setRange(0, 100000);
     burnin_->setSingleStep(250);
     burnin_->setValue(example ? example->burnin : 500);
+    iterations_->setToolTip(tr("Draws kept per run. A race estimates every model at every origin, so fewer draws than for a single model are usual."));
+    burnin_->setToolTip(tr("Draws discarded at the start of each run."));
     bench->addRow(tr("Draws kept per run"), iterations_);
     bench->addRow(tr("Burn-in"), burnin_);
     layout->addLayout(bench);

@@ -174,6 +174,7 @@ QWidget *BuilderDialog::buildDataBox()
 
     variables_ = new QListWidget;
     variables_->setMaximumHeight(130);
+    variables_->setToolTip(tr("The variables the model explains. Their order is the recursive ordering of a structural form, a covariance block and the orthogonalised impulse responses; move one with the arrows."));
     for (int c = 0; c < data_.series(); ++c)
     {
         auto *item = new QListWidgetItem(data_.names[c]);
@@ -184,8 +185,10 @@ QWidget *BuilderDialog::buildDataBox()
     }
     auto *up = new QToolButton;
     up->setArrowType(Qt::UpArrow);
+    up->setToolTip(tr("Move the selected variable up the ordering."));
     auto *down = new QToolButton;
     down->setArrowType(Qt::DownArrow);
+    down->setToolTip(tr("Move the selected variable down the ordering."));
     const auto move = [this](int by) {
         const int row = variables_->currentRow();
         const int to = row + by;
@@ -207,6 +210,7 @@ QWidget *BuilderDialog::buildDataBox()
     exogenous_ = new QListWidget;
     exogenous_->setObjectName(QStringLiteral("exogenousList"));
     exogenous_->setMaximumHeight(130);
+    exogenous_->setToolTip(tr("Regressors the model does not explain (a VARX or VECX). A forecast takes their future values as given, so it needs them over the horizon."));
     for (int c = 0; c < data_.series(); ++c)
     {
         auto *item = new QListWidgetItem(data_.names[c]);
@@ -239,6 +243,8 @@ QWidget *BuilderDialog::buildDataBox()
     }
     first_->setCurrentIndex(0);
     last_->setCurrentIndex(data_.length() - 1);
+    first_->setToolTip(tr("The first period of the sample. The first p periods supply the initial lags and are not themselves explained."));
+    last_->setToolTip(tr("The last period used. Periods held out for evaluation are taken from the end of this range."));
     auto *range = new QHBoxLayout;
     range->addWidget(new QLabel(tr("Sample from")));
     range->addWidget(first_);
@@ -258,6 +264,8 @@ QWidget *BuilderDialog::buildSpecBox()
     familyVec_ = new QRadioButton(tr("Vector error correction (VEC)"));
     familyVec_->setObjectName(QStringLiteral("familyVec"));
     familyVar_->setChecked(true);
+    familyVar_->setToolTip(tr("A VAR in the variables as they are: levels, growth rates or a mix."));
+    familyVec_->setToolTip(tr("A vector error correction model: the variables in levels, cointegrated, estimated in differences with the error correction term, and forecast in levels."));
     auto *familyGroup = new QButtonGroup(box);
     familyGroup->addButton(familyVar_);
     familyGroup->addButton(familyVec_);
@@ -273,6 +281,7 @@ QWidget *BuilderDialog::buildSpecBox()
     rank_ = new QSpinBox;
     rank_->setRange(1, 1);
     rank_->setValue(1);
+    rank_->setToolTip(tr("The number of cointegration relations, between 1 and the number of variables less one."));
     form->addRow(tr("Cointegration rank (r)"), rank_);
 
     p_ = new QSpinBox;
@@ -293,7 +302,9 @@ QWidget *BuilderDialog::buildSpecBox()
 
     constant_ = new QCheckBox(tr("Constant"));
     constant_->setChecked(true);
+    constant_->setToolTip(tr("An intercept in every equation."));
     trend_ = new QCheckBox(tr("Linear trend"));
+    trend_->setToolTip(tr("A linear time trend in every equation."));
     auto *det = new QHBoxLayout;
     det->addWidget(constant_);
     det->addWidget(trend_);
@@ -302,6 +313,8 @@ QWidget *BuilderDialog::buildSpecBox()
     restrictConstant_ = new QCheckBox(tr("Constant inside the cointegration space"));
     restrictTrend_ = new QCheckBox(tr("Trend inside the cointegration space"));
     restrictTrend_->setChecked(true);
+    restrictConstant_->setToolTip(tr("Puts the constant inside the cointegration relations rather than in the differences: no drift in the levels."));
+    restrictTrend_->setToolTip(tr("Puts the trend inside the cointegration relations, so the levels can trend without the differences doing so -- the usual choice with a trend."));
     form->addRow(QString(), restrictConstant_);
     form->addRow(QString(), restrictTrend_);
 
@@ -309,6 +322,8 @@ QWidget *BuilderDialog::buildSpecBox()
     coefTvp_ = new QRadioButton(tr("Time-varying (random walk)"));
     coefTvp_->setObjectName(QStringLiteral("coefTvp"));
     coefConstant_->setChecked(true);
+    coefConstant_->setToolTip(tr("One set of coefficients for the whole sample."));
+    coefTvp_->setToolTip(tr("Coefficients that drift as random walks (Primiceri 2005): estimated in every period, the path drawn by a simulation smoother."));
     auto *coefGroup = new QButtonGroup(box);
     coefGroup->addButton(coefConstant_);
     coefGroup->addButton(coefTvp_);
@@ -328,6 +343,9 @@ QWidget *BuilderDialog::buildSpecBox()
     errSv_ = new QRadioButton(tr("Stochastic volatility"));
     errSv_->setObjectName(QStringLiteral("errSv"));
     errWishart_->setChecked(true);
+    errWishart_->setToolTip(tr("An unrestricted error covariance with an inverse Wishart prior, constant over time."));
+    errGamma_->setToolTip(tr("Gamma priors on the error precisions: a diagonal covariance, or with the covariance block the triangular decomposition of Primiceri (2005)."));
+    errSv_->setToolTip(tr("Stochastic volatility: each error variance a log random walk, drawn with the mixture of Omori, Chib, Shephard and Nakajima (2007), so the bands widen after volatile periods."));
     auto *errGroup = new QButtonGroup(box);
     errGroup->addButton(errWishart_);
     errGroup->addButton(errGamma_);
@@ -341,7 +359,9 @@ QWidget *BuilderDialog::buildSpecBox()
 
     covar_ = new QCheckBox(tr("Covariance block (Primiceri 2005)"));
     covar_->setObjectName(QStringLiteral("covar"));
+    covar_->setToolTip(tr("Free covariances between the errors, as the lower triangle of the decomposition of Primiceri (2005). Without it the errors of a gamma or SV model are independent."));
     structural_ = new QCheckBox(tr("Structural form (contemporaneous coefficients)"));
+    structural_->setToolTip(tr("Estimates the contemporaneous coefficients A_0 in the recursive order of the variables. Needs a diagonal error covariance: gamma or SV errors without the covariance block."));
     form->addRow(QString(), covar_);
     form->addRow(QString(), structural_);
 
@@ -350,12 +370,16 @@ QWidget *BuilderDialog::buildSpecBox()
     selection_->addItem(tr("None"));
     selection_->addItem(tr("BVS — Korobilis (2013)"));
     selection_->addItem(tr("SSVS — George, Sun and Ni (2008)"));
+    selection_->setToolTip(tr("Variable selection: each coefficient is in or out draw by draw, and the share of draws it is in is its posterior inclusion probability. BVS is Korobilis (2013); SSVS is George, Sun and Ni (2008), for constant coefficients and variances only."));
     form->addRow(tr("Variable selection"), selection_);
     inprior_ = number(0.5, 0.0, 1.0, 2);
     inprior_->setSingleStep(0.05);
+    inprior_->setToolTip(tr("The prior probability that each coefficient is in the model."));
     form->addRow(tr("Prior inclusion probability"), inprior_);
     selectDet_ = new QCheckBox(tr("Also select deterministic terms"));
     selectCovar_ = new QCheckBox(tr("Also select covariances"));
+    selectDet_->setToolTip(tr("Selection reaches the constant and the trend too; by default they are always in."));
+    selectCovar_->setToolTip(tr("Selection reaches the covariance block as well. Selecting a covariance to zero changes what a generalised impulse response means."));
     form->addRow(QString(), selectDet_);
     form->addRow(QString(), selectCovar_);
 
@@ -381,13 +405,19 @@ QWidget *BuilderDialog::buildPriorBox()
     auto *coef = new QFormLayout;
     minnesota_ = new QCheckBox(tr("Minnesota prior (Appendix A of the article)"));
     coef->addRow(QString(), minnesota_);
+    minnesota_->setToolTip(tr("The Minnesota prior (Litterman 1986; Appendix A of the bvartools article): tighter on longer lags and on other variables' lags, scaled by each variable's residual variance."));
     coefPrecision_ = number(1.0, 1e-6, 1e6, 4);
     detPrecision_ = number(0.1, 1e-6, 1e6, 4);
+    coefPrecision_->setToolTip(tr("Without the Minnesota prior: the prior precision, one over the variance, of every lag coefficient, all centred on zero."));
+    detPrecision_->setToolTip(tr("The prior precision of the constant and the trend."));
     coef->addRow(tr("Coefficient precision"), coefPrecision_);
     coef->addRow(tr("Deterministic precision"), detPrecision_);
     kappa1_ = number(0.2, 1e-6, 1e6, 4);
     kappa2_ = number(0.5, 1e-6, 1e6, 4);
     kappa4_ = number(100.0, 1e-6, 1e9, 2);
+    kappa1_->setToolTip(tr("κ₁, the overall tightness: the prior variance of a variable's own first lag. Smaller shrinks every coefficient harder."));
+    kappa2_->setToolTip(tr("κ₂, the tightness on other variables' lags relative to own lags: below one shrinks them harder."));
+    kappa4_->setToolTip(tr("κ₄, the looseness on the deterministic terms relative to κ₁: large leaves the constant nearly unrestricted."));
     coef->addRow(tr("κ₁ overall tightness"), kappa1_);
     coef->addRow(tr("κ₂ other lags"), kappa2_);
     coef->addRow(tr("κ₄ deterministic"), kappa4_);
@@ -407,6 +437,8 @@ QWidget *BuilderDialog::buildPriorBox()
     cointPTauInv_ = number(1.0, 1e-6, 1e6, 4);
     cointRho_ = number(0.999, 0.0, 0.999999, 6);
     cointRho_->setSingleStep(0.001);
+    cointPTauInv_->setToolTip(tr("P_τ⁻¹ of Koop, León-González and Strachan (2010): the prior precision of the cointegration space, a multiple of the identity."));
+    cointRho_->setToolTip(tr("A time-varying cointegration space follows β_t = ρ β_{t-1} + η_t (Koop, León-González and Strachan 2011); ρ below one keeps it stationary."));
     coint->addRow(tr("Shrinkage v (constant space)"), cointShrinkage_);
     coint->addRow(tr("P_τ⁻¹ (× identity)"), cointPTauInv_);
     coint->addRow(tr("Autocorrelation ρ (time-varying space)"), cointRho_);
@@ -418,6 +450,10 @@ QWidget *BuilderDialog::buildPriorBox()
     stateRate_ = small(1e-4);
     stateRateDet_ = small(0.01);
     omegaV_ = small(0.001);
+    stateShape_->setToolTip(tr("The shape of the inverse gamma prior on each coefficient's random walk variance."));
+    stateRate_->setToolTip(tr("The rate of that prior. A small rate lets the coefficients drift only slowly."));
+    stateRateDet_->setToolTip(tr("The rate for the constant and the trend, which are usually let drift more."));
+    omegaV_->setToolTip(tr("With non-centred random walks: the prior variance of ω, the signed standard deviation of each walk (Frühwirth-Schnatter and Wagner 2010)."));
     state->addRow(tr("Shape"), stateShape_);
     state->addRow(tr("Rate"), stateRate_);
     state->addRow(tr("Rate, deterministic terms"), stateRateDet_);
@@ -430,6 +466,8 @@ QWidget *BuilderDialog::buildPriorBox()
     dfExtra_->setRange(0, 1000);
     dfExtra_->setPrefix(tr("k + "));
     wishartScale_ = number(1.0, 1e-6, 1e6, 4);
+    dfExtra_->setToolTip(tr("The degrees of freedom of the inverse Wishart prior on the error covariance, k plus this. More is a more informative prior."));
+    wishartScale_->setToolTip(tr("The scale matrix of that prior, a multiple of the identity."));
     wishart->addRow(tr("Degrees of freedom"), dfExtra_);
     wishart->addRow(tr("Scale (× identity)"), wishartScale_);
     layout->addWidget(wishartBox_);
@@ -447,6 +485,7 @@ QWidget *BuilderDialog::buildPriorBox()
         break_->addItem(data_.periodLabel(r));
     }
     vb->addRow(tr("From"), break_);
+    break_->setToolTip(tr("The first period whose shocks are scaled: March 2020 for monthly data through the pandemic. None for no break."));
     breakScales_ = new QSpinBox;
     breakScales_->setRange(1, 24);
     breakScales_->setValue(3);
@@ -459,6 +498,8 @@ QWidget *BuilderDialog::buildPriorBox()
     vb->addRow(tr("Pareto shape of the scales"), breakShape_);
     rhoShape1_ = number(3.0357, 1e-3, 1e3, 4);
     rhoShape2_ = number(1.5089, 1e-3, 1e3, 4);
+    rhoShape1_->setToolTip(tr("The first shape of the beta prior on ρ, the rate at which the excess volatility decays."));
+    rhoShape2_->setToolTip(tr("The second shape of the beta prior on ρ. The defaults give a mode of 0.8 and a standard deviation of 0.2."));
     vb->addRow(tr("Beta on the decay ρ, shape 1"), rhoShape1_);
     vb->addRow(tr("shape 2"), rhoShape2_);
     vb->addRow(QString(), hint(tr("Lenza and Primiceri (2022): the outliers of a crisis -- March 2020 on -- "
@@ -472,6 +513,8 @@ QWidget *BuilderDialog::buildPriorBox()
     auto *gamma = new QFormLayout(gammaBox_);
     gammaShape_ = number(3.0, 0.0, 1e6, 3);
     gammaRate_ = small(0.01);
+    gammaShape_->setToolTip(tr("The shape of the gamma prior on each error precision."));
+    gammaRate_->setToolTip(tr("The rate of that prior: its mean precision is shape / rate."));
     gamma->addRow(tr("Shape"), gammaShape_);
     gamma->addRow(tr("Rate"), gammaRate_);
     layout->addWidget(gammaBox_);
@@ -481,6 +524,9 @@ QWidget *BuilderDialog::buildPriorBox()
     svShape_ = number(3.0, 0.0, 1e6, 3);
     svRate_ = small(0.03);
     svState_ = small(0.05);
+    svShape_->setToolTip(tr("The shape of the inverse gamma prior on the variance of each log-volatility's innovation."));
+    svRate_->setToolTip(tr("The rate of that prior: small values keep the volatilities smooth."));
+    svState_->setToolTip(tr("Where the chain starts the variance of each log-volatility's innovation (bvartools' sigma_h)."));
     sv->addRow(tr("Shape of the volatility innovation"), svShape_);
     sv->addRow(tr("Rate"), svRate_);
     sv->addRow(tr("Initial innovation variance"), svState_);
@@ -502,6 +548,9 @@ QWidget *BuilderDialog::buildSamplerBox()
     burnin_->setSingleStep(500);
     thin_ = new QSpinBox;
     thin_->setRange(1, 1000);
+    thin_->setToolTip(tr("Keep every n-th draw: it saves space, not precision."));
+    burnin_->setToolTip(tr("Draws discarded at the start while the chain moves away from its starting values."));
+    iterations_->setToolTip(tr("Draws kept after the burn-in, the size of every posterior summary."));
     form->addRow(tr("Draws kept"), iterations_);
     form->addRow(tr("Burn-in"), burnin_);
     form->addRow(tr("Thinning"), thin_);
@@ -509,6 +558,7 @@ QWidget *BuilderDialog::buildSamplerBox()
     seed_ = new QLineEdit(QString::number(QRandomGenerator::global()->bounded(1, 2000000000)));
     seed_->setValidator(new QRegularExpressionValidator(QRegularExpression(QStringLiteral("\\d{0,19}")), seed_));
     seed_->setPlaceholderText(tr("none: not reproducible"));
+    seed_->setToolTip(tr("The random number seed. With one the same file gives the same draws on the same build; state it in a thesis."));
     form->addRow(tr("Seed"), seed_);
 
     horizon_ = new QSpinBox;
@@ -516,6 +566,8 @@ QWidget *BuilderDialog::buildSamplerBox()
     horizon_->setValue(8);
     holdout_ = new QSpinBox;
     holdout_->setRange(0, 200);
+    holdout_->setToolTip(tr("The last periods of the sample kept out of estimation and scored against the forecast of them."));
+    horizon_->setToolTip(tr("Periods ahead to forecast; 0 writes no forecast."));
     form->addRow(tr("Forecast horizon"), horizon_);
     form->addRow(tr("Hold out for evaluation"), holdout_);
     form->addRow(QString(), hint(tr("Held-out periods are left out of estimation and scored against the "

@@ -497,6 +497,11 @@ EvaluationPage::EvaluationPage(QWidget *parent) : StagePage(parent)
     table_ = new QTableWidget(0, 7);
     table_->setHorizontalHeaderLabels({tr("Model"), tr("Algorithm"), tr("Periods"), tr("lppd"),
                                        tr("p_WAIC"), tr("WAIC"), tr("Log predictive score")});
+    table_->horizontalHeaderItem(2)->setToolTip(tr("Periods the model explains: the sample after the initial lags."));
+    table_->horizontalHeaderItem(3)->setToolTip(tr("The log pointwise predictive density: how well the posterior fits each period, summed over the sample (Gelman, Hwang and Vehtari 2014). Larger is better."));
+    table_->horizontalHeaderItem(4)->setToolTip(tr("The effective number of parameters: the variance of each period's log likelihood over the draws, summed. It is what WAIC charges for flexibility."));
+    table_->horizontalHeaderItem(5)->setToolTip(tr("The widely applicable information criterion of Watanabe (2010), -2 (lppd - p_WAIC), on the deviance scale: smaller is better. Compare models estimated on the same periods."));
+    table_->horizontalHeaderItem(6)->setToolTip(tr("The log predictive density of the held-out periods, /data/test/y: an out-of-sample score. Larger is better."));
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);

@@ -254,6 +254,10 @@ void HorseRaceView::show()
     score_->setColumnCount(4);
     score_->setHorizontalHeaderLabels({tr("Origins"), tr("Log score"), tr("Difference to benchmark"),
                                        tr("Per origin")});
+    score_->horizontalHeaderItem(0)->setToolTip(tr("The forecast origins whose run holds a scored forecast."));
+    score_->horizontalHeaderItem(1)->setToolTip(tr("The log predictive density of what the held-out periods realised, summed over the horizons and the origins. Larger is better."));
+    score_->horizontalHeaderItem(2)->setToolTip(tr("The log score less the benchmark's: a log Bayes factor of the forecasts. Positive favours this model; a few points over a short sample are within noise."));
+    score_->horizontalHeaderItem(3)->setToolTip(tr("The log score per origin, which compares races over different numbers of origins."));
     score_->setRowCount(n);
     QStringList rows;
     double best = -INFINITY;

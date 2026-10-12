@@ -44,3 +44,11 @@ endif()
 add_executable(studio_workflow_test workflow_test.cpp)
 target_link_libraries(studio_workflow_test PRIVATE studio_engine BayesTS::openblas)
 add_test(NAME workflow.assistant COMMAND studio_workflow_test "${CMAKE_CURRENT_SOURCE_DIR}/reference")
+
+# Every input of every dialog with a form has a tooltip: the application,
+# offscreen, opens each on a small data set and names any field without one.
+if(TARGET bayests-studio)
+    add_test(NAME ui.tooltips COMMAND bayests-studio)
+    set_tests_properties(ui.tooltips PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;STUDIO_SMOKE_TOOLTIPS=${CMAKE_CURRENT_SOURCE_DIR}/data/tooltips.csv")
+endif()

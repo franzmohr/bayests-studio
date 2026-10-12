@@ -1,5 +1,6 @@
 #include "app/MainWindow.h"
 #include "app/Theme.h"
+#include "views/AssistantDialogs.h"
 #include "views/BuilderDialog.h"
 #include "views/FigureExport.h"
 #include "views/FontDialog.h"
@@ -24,7 +25,10 @@
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QKeyEvent>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QRadioButton>
+#include <QSpinBox>
 #include <QTimer>
 
 #include <cstdlib>
@@ -103,6 +107,61 @@ int main(int argc, char *argv[])
         studio::setCurrentPalette(QString::fromLatin1(palette), false);
     }
 
+    // Development aid: STUDIO_SMOKE_TOOLTIPS=<csv> opens every dialog with a
+    // form on that data and names each input without a tooltip, then exits:
+    // 1 if any lacks one.
+    if (const QByteArray csv = qgetenv("STUDIO_SMOKE_TOOLTIPS"); !csv.isEmpty())
+    {
+        const studio::DataSet data = studio::readDelimited(QString::fromLocal8Bit(csv));
+        int missing = 0, inputs = 0;
+        const auto audit = [&](QWidget *dialog, const char *name) {
+            QList<QWidget *> fields;
+            for (QWidget *w : dialog->findChildren<QWidget *>())
+            {
+                if (qobject_cast<QAbstractSpinBox *>(w) || qobject_cast<QComboBox *>(w) ||
+                    qobject_cast<QCheckBox *>(w) || qobject_cast<QRadioButton *>(w) ||
+                    qobject_cast<QListWidget *>(w) ||
+                    (qobject_cast<QLineEdit *>(w) && !qobject_cast<QAbstractSpinBox *>(w->parentWidget()) &&
+                     !qobject_cast<QComboBox *>(w->parentWidget())))
+                {
+                    fields << w;
+                }
+            }
+            for (QWidget *w : fields)
+            {
+                ++inputs;
+                if (w->toolTip().isEmpty())
+                {
+                    ++missing;
+                    QString what = w->objectName();
+                    if (auto *b = qobject_cast<QAbstractButton *>(w))
+                    {
+                        what = b->text();
+                    }
+                    std::printf("no tooltip  %s: %s %s\n", name, w->metaObject()->className(),
+                                what.toLocal8Bit().constData());
+                }
+            }
+        };
+        {
+            studio::BuilderDialog d(data, QDir::tempPath());
+            audit(&d, "builder");
+        }
+        {
+            studio::ThesisBaselineDialog d(data, nullptr);
+            audit(&d, "thesis baseline");
+        }
+        {
+            studio::HorseRaceDialog d(data, nullptr);
+            audit(&d, "horse race");
+        }
+        {
+            studio::FontDialog d;
+            audit(&d, "font");
+        }
+        std::printf("smoke: %d of %d inputs without a tooltip\n", missing, inputs);
+        return missing == 0 ? 0 : 1;
+    }
     // Development aid: STUDIO_SMOKE_FONT_DIALOG=<png> draws the font dialog and exits.
     if (const QByteArray png = qgetenv("STUDIO_SMOKE_FONT_DIALOG"); !png.isEmpty())
     {
