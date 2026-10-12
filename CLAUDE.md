@@ -26,3 +26,13 @@ Smoke test without a display: `QT_QPA_PLATFORM=offscreen
 STUDIO_SMOKE_CAPTURE=<prefix> bayests-studio <file-or-folder>` runs every
 stage of the first model and saves a capture per stage as
 `<prefix>-stage<n>.png`.
+
+**Packaging.** `cmake --install <build> --prefix <dir>` lays out a
+self-contained copy (`cmake/StudioInstall.cmake`): both executables, every
+DLL, Qt's plugins, `licenses/`. The Windows package is that layout plus a
+manifest, packed by `packaging/msix/build-msix.ps1`; see the README there.
+Qt Network and its plugins are kept out on purpose -- the application makes
+no network connection, and a new dependency that needs them is a decision,
+not a fix. Test a layout by running it with only `C:\Windows\System32` on
+PATH; it does not contain the `offscreen` platform, so the smoke capture runs
+with a visible window there.

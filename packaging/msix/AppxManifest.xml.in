@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configured by packaging/msix/CMakeLists.txt; the @...@ values come from the
+  CMake cache. Paths are relative to the package root, which is the install
+  prefix that build-msix.ps1 installs the build into.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 desktop4 rescap">
+
+  <Identity
+    Name="@STUDIO_MSIX_IDENTITY_NAME@"
+    Publisher="@STUDIO_MSIX_PUBLISHER@"
+    Version="@STUDIO_MSIX_VERSION@"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>BayesTS Studio</DisplayName>
+    <PublisherDisplayName>@STUDIO_MSIX_PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <Description>@PROJECT_DESCRIPTION@</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <!-- Windows 10 1809 is the oldest release that installs MSIX packages
+       outside the Store without extra tooling. -->
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="BayesTSStudio"
+                 Executable="bin\bayests-studio.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="BayesTS Studio"
+        Description="@PROJECT_DESCRIPTION@"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+
+    <!-- The bayests command line, on the user's PATH as `bayests` through an
+         app execution alias; not shown in the Start menu. -->
+    <Application Id="bayests"
+                 Executable="bin\bayests.exe"
+                 EntryPoint="Windows.FullTrustApplication"
+                 desktop4:Subsystem="console"
+                 desktop4:SupportsMultipleInstances="true">
+      <uap:VisualElements
+        DisplayName="bayests"
+        Description="BayesTS command line"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        AppListEntry="none" />
+      <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias"
+                        Executable="bin\bayests.exe"
+                        EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias desktop4:Subsystem="console">
+            <uap5:ExecutionAlias Alias="bayests.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <!-- A full-trust desktop application: ordinary file system access,
+       including mapped drives and UNC paths. Nothing else is requested. -->
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

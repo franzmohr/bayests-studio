@@ -348,8 +348,10 @@ components it uses.
 2. Analysis: the Savage–Dickey test
    for time variation, PSIS-LOO, expanding windows.
 3. Export: a script reproducing the session.
-4. Packaging: signed installers per platform (Windows MSI, macOS notarised
-   DMG, Linux AppImage), licence activation.
+4. Packaging: signed installers per platform (Windows: an MSIX for managed
+   machines, see `packaging/msix/README.md`, and an NSIS setup.exe for
+   students, see `packaging/nsis/README.md`; macOS notarised DMG, Linux
+   AppImage), offline licence activation.
 
 ## Building
 
