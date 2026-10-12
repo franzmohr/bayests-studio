@@ -476,6 +476,15 @@ int main(int argc, char *argv[])
                     }
                     settle(500);
                     window.grab().save(QStringLiteral("%1-hd-baseline.png").arg(QString::fromLocal8Bit(prefix)));
+                    // And one variable's, the stacked bars.
+                    if (auto *response = app->widget(4)->findChild<QComboBox *>(QStringLiteral("hdResponse"));
+                        response && response->count() > 1)
+                    {
+                        response->setCurrentIndex(response->count() - 1);
+                        settle(2000);
+                        window.grab().save(QStringLiteral("%1-hd-one.png").arg(QString::fromLocal8Bit(prefix)));
+                        response->setCurrentIndex(0);
+                    }
                     app->setCurrentIndex(1);
                 }
                 // STUDIO_SMOKE_SPILLOVER=1: every tab of the spillovers.

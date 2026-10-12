@@ -3,11 +3,16 @@
 #include <QFutureWatcher>
 #include <QWidget>
 
+#include <vector>
+
 #include "engine/HistoricalDecomposition.h"
+#include "views/FigureExport.h"
 
 class QCheckBox;
 class QComboBox;
+class QGridLayout;
 class QLabel;
+class QScrollArea;
 class QTimer;
 class QwtPlot;
 
@@ -18,9 +23,11 @@ namespace studio
 /// of each identified shock to one variable over the sample, stacked as bars
 /// -- the positive parts above zero, the negative below, as bvartools'
 /// plot.bvarhd() draws them -- with their sum as a line, and optionally the
-/// baseline the shocks leave. The numbers are bvartools'
-/// historical_decomposition(); test/structural_test.cpp holds the two
-/// together period by period.
+/// baseline the shocks leave. For every variable at once it is a matrix laid
+/// out as the responses': a column per shock (and the baseline), a row per
+/// variable, each panel the contribution with its band. The numbers are
+/// bvartools' historical_decomposition(); test/structural_test.cpp holds the
+/// two together period by period.
 class HistoricalDecompositionView : public QWidget
 {
     Q_OBJECT
@@ -34,12 +41,16 @@ private:
     struct Result
     {
         QString error;
-        HistoricalDecomposition hd;
+        std::vector<int> variables;                 ///< the variables decomposed
+        std::vector<HistoricalDecomposition> hd;    ///< one per variable
     };
 
     void schedule();
     void compute();
     void show();
+    /// Every variable at once, in the matrix.
+    bool allVariables() const;
+    void rebuildGrid();
 
     QString file_;
     HdSupport support_;
@@ -54,6 +65,13 @@ private:
     QComboBox *statistic_;
     QCheckBox *baseline_;
     QwtPlot *plot_;
+    FigureProvider figure_;
+    QScrollArea *scroll_;
+    QGridLayout *grid_;
+    std::vector<QwtPlot *> plots_;      ///< variable i, part j at i * columns + j
+    std::vector<QWidget *> headers_;
+    int columns_ = 0;                   ///< the shocks, and the baseline when shown
+    bool matrix_ = false;
 };
 
 } // namespace studio
