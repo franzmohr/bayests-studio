@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 // The assistant's workflows: steps that tick themselves off as the project
 // fills, the specification it keeps, the variants it makes, and the methods
 // paragraph it drafts.

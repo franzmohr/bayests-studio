@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 #include "app/MainWindow.h"
 #include "app/Theme.h"
 #include "views/AssistantDialogs.h"
@@ -234,11 +237,11 @@ int main(int argc, char *argv[])
             studio::MainWindow w;
             audit(&w, "views", true);
         }
-        // The licence agreement Help > Licence Agreement shows.
-        if (QFile licence(QStringLiteral(":/licence/EULA.txt")); !licence.open(QIODevice::ReadOnly) ||
-                                                                 licence.size() < 1000)
+        // The licence Help > Licence shows.
+        if (QFile licence(QStringLiteral(":/licence/LICENSE")); !licence.open(QIODevice::ReadOnly) ||
+                                                                licence.size() < 1000)
         {
-            std::printf("the licence agreement is not in the resources\n");
+            std::printf("the licence is not in the resources\n");
             ++missing;
         }
         // The fonts the studio ships, registered and in use: Inter for the

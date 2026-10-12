@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 #####################################################################
 # Installation
 #
@@ -116,9 +119,9 @@ endfunction()
 get_filename_component(_studio_msys_prefix "${_studio_compiler_dir}" DIRECTORY)
 set(_studio_lic "${_studio_msys_prefix}/share/licenses")
 
-# The studio's own: the end-user licence agreement the setup asks the user
-# to accept, and Help > Licence Agreement shows.
-install(FILES "${PROJECT_SOURCE_DIR}/EULA.txt" DESTINATION "licenses/BayesTS Studio")
+# The studio's own licence, BSD-3-Clause, which the setup shows and Help >
+# Licence opens.
+install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION "licenses/BayesTS Studio")
 
 # The font in the resources, SIL OFL 1.1, with its copyright notice.
 install(FILES "${PROJECT_SOURCE_DIR}/src/app/fonts/Inter-LICENSE.txt"

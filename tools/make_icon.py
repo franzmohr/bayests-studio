@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 """Draws the BayesTS Studio icon: a time series running into a fan chart --
 the median forecast in white, its 68% and 90% bands in gold -- on a deep
 blue tile with a soft sheen from above and a fine light rim.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 #include "app/MainWindow.h"
 
 #include "engine/ModelFileTree.h"
@@ -235,7 +238,7 @@ void MainWindow::buildActions()
     QMenu *help = menuBar()->addMenu(tr("&Help"));
     help->addAction(tr("&About %1").arg(QApplication::applicationDisplayName()), this,
                     &MainWindow::showAbout);
-    help->addAction(tr("Licence &Agreement…"), this, &MainWindow::showLicenceAgreement);
+    help->addAction(tr("&Licence…"), this, &MainWindow::showLicenceAgreement);
     help->addAction(tr("Third-party &Licences"), this, &MainWindow::showLicences);
     help->addAction(tr("&Extensions…"), this, [this]() {
         ExtensionsDialog dialog(this);
@@ -711,18 +714,19 @@ void MainWindow::showAbout()
 
 void MainWindow::showLicenceAgreement()
 {
-    // The agreement the setup asked the user to accept, as it shipped.
-    QFile file(QStringLiteral(":/licence/EULA.txt"));
+    // The studio's own licence, BSD-3-Clause, as it shipped.
+    QFile file(QStringLiteral(":/licence/LICENSE"));
     file.open(QIODevice::ReadOnly | QIODevice::Text);
     QDialog dialog(this);
-    dialog.setWindowTitle(tr("Licence Agreement"));
+    dialog.setWindowTitle(tr("Licence"));
     dialog.resize(680, 620);
     auto *layout = new QVBoxLayout(&dialog);
     auto *text = new QPlainTextEdit(QString::fromUtf8(file.readAll()));
     text->setObjectName(QStringLiteral("licenceText"));
     text->setReadOnly(true);
-    text->setToolTip(tr("The end-user licence agreement of %1; the licences of the components it ships are "
-                        "under Help > Third-party Licences.").arg(QApplication::applicationDisplayName()));
+    text->setToolTip(tr("%1 is free and open-source software under this licence; the licences of the "
+                        "components it ships are under Help > Third-party Licences.")
+                         .arg(QApplication::applicationDisplayName()));
     layout->addWidget(text);
     auto *box = new QDialogButtonBox(QDialogButtonBox::Close);
     connect(box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);

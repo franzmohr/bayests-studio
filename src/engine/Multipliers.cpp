@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 #include "engine/Multipliers.h"
 
 #include "engine/ModelFileTree.h"

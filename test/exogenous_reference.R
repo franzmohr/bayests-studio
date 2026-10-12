@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 # Reference models with weakly exogenous variables from bvartools, for
 # test/structural_test.cpp: the builder must write the data bvartools writes
 # for the same specification, and the studio's dynamic multipliers must be

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 # Reference connectedness measures from bvartools' spillover(), for
 # test/structural_test.cpp to hold the studio's engine to, draw by draw.
 #

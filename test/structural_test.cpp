@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 // The studio's impulse responses and variance decompositions against
 // bvartools', draw by draw, on model files bvartools estimated and wrote.
 //

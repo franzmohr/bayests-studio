@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 // Development aid, not a feature: STUDIO_SMOKE_ASSISTANT=<workflow>:<example>
 // drives the assistant through a whole workflow as a user would -- clicking
 // its buttons, accepting its dialogs with what they propose, ticking the

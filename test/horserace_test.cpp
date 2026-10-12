@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 // A forecast horse race end to end: written from a data set, run by the
 // batch runner as bayests processes, and scored.
 //

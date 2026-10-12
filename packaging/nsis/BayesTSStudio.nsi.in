@@ -1,3 +1,6 @@
+; SPDX-License-Identifier: BSD-3-Clause
+; Copyright (c) 2026 Franz X. Mohr
+
 ; BayesTS Studio setup, for students and anyone else installing on their own
 ; machine. It installs just for the current user by default -- no
 ; administrator rights, into %LOCALAPPDATA%\Programs\BayesTS Studio -- or, on
@@ -95,12 +98,14 @@ Var ModeNote
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipWhenElevated
 !insertmacro MUI_PAGE_WELCOME
-; The end-user licence agreement: Next becomes I Agree. A silent install
-; (/S) shows no pages, so whoever deploys it that way accepts it for the
-; users. The elevated copy does not ask again.
+; The licence, for information: the studio is free and open source (BSD
+; 3-Clause), so there is nothing to accept and the button stays Next. The
+; elevated copy does not show it again.
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipWhenElevated
-!define MUI_LICENSEPAGE_TEXT_TOP "Please read the licence agreement before installing ${APP_NAME}."
-!insertmacro MUI_PAGE_LICENSE "@STUDIO_EULA_FILE@"
+!define MUI_LICENSEPAGE_TEXT_TOP "${APP_NAME} is free and open-source software under the BSD 3-Clause License."
+!define MUI_LICENSEPAGE_TEXT_BOTTOM "You may use, copy, change and share it, keeping this notice. The components it includes keep their own licences, installed in the licenses folder."
+!define MUI_LICENSEPAGE_BUTTON "$(^NextBtn)"
+!insertmacro MUI_PAGE_LICENSE "@STUDIO_LICENSE_FILE@"
 Page custom ModeShow ModeLeave
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_COMPONENTS

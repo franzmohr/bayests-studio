@@ -1,12 +1,14 @@
 # CLAUDE.md
 
-BayesTS Studio: a closed-source Qt 6 Widgets desktop application over the
+BayesTS Studio: a free, open-source (BSD-3-Clause) Qt 6 Widgets desktop application over the
 BayesTS library (D:/projects/BayesTS, pulled in by FetchContent; the user
 presets point `FETCHCONTENT_SOURCE_DIR_BAYESTS` at the local checkout).
 
 - **Licensing constrains the dependencies** -- read LICENSING.md before adding
   one. Only LGPL Qt modules, linked dynamically; never Qt Charts, Qt Graphs or
-  another GPL-only module. Plots are Qwt.
+  another GPL-only module, which would make the distributed studio GPL. Plots
+  are Qwt. New source files carry the two-line header every file has,
+  `SPDX-License-Identifier: BSD-3-Clause` and the copyright, as in BayesTS.
 - **The window follows the workflow of the bvartools JSS article** (Section 3,
   Figure 1): Data, Model set-up, Posterior simulation, Evaluation,
   Application -- `StageId` in `src/views/StagePages.h`, one page each. A
@@ -32,8 +34,8 @@ self-contained copy (`cmake/StudioInstall.cmake`): both executables, every
 DLL, Qt's plugins, `licenses/`. Two Windows packages are built from that one
 layout: the MSIX for managed machines (`packaging/msix/build-msix.ps1`) and a
 per-user NSIS setup.exe for students (`packaging/nsis/build-setup.ps1`); see
-the README in each. No .msi: the WiX Toolset asks commercial users a fee from
-version 6 on, which was decided against.
+the README in each. No .msi: the WiX Toolset asks a maintenance fee of
+commercial users from version 6 on, which was decided against.
 Qt Network and its plugins are kept out on purpose -- the application makes
 no network connection, and a new dependency that needs them is a decision,
 not a fix. Test a layout by running it with only `C:\Windows\System32` on

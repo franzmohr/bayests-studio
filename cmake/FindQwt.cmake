@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 # Finds Qwt built against Qt 6 and defines the imported target Qwt::Qwt.
 #
 # MSYS2 (mingw-w64-*-qwt-qt6), Homebrew (qwt) and most Linux distributions

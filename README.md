@@ -5,9 +5,9 @@ time series models of [BayesTS](https://github.com/franzmohr/BayesTS): VARs,
 VECs, dynamic factor models, FAVARs and unobserved components models, with
 constant or time-varying coefficients.
 
-Built with Qt 6 Widgets and Qwt; runs on Windows, macOS and Linux. Closed
-source; see [LICENSING.md](LICENSING.md) for what that requires of the
-components it uses.
+Built with Qt 6 Widgets and Qwt; runs on Windows, macOS and Linux. Free and
+open source under the BSD 3-Clause License, as BayesTS is; see
+[LICENSING.md](LICENSING.md) for the licences of the components it uses.
 
 ## What it does today
 
@@ -362,7 +362,7 @@ components it uses.
 4. Packaging: signed installers per platform (Windows: an MSIX for managed
    machines, see `packaging/msix/README.md`, and an NSIS setup.exe for
    students, see `packaging/nsis/README.md`; macOS notarised DMG, Linux
-   AppImage), offline licence activation.
+   AppImage).
 
 ## Building
 

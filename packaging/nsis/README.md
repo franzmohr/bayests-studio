@@ -36,16 +36,12 @@ warning a student has to click through ("More info › Run anyway").
     packaging\nsis\build-setup.ps1 -BuildDir build\my-windows-release -CertificateThumbprint <thumbprint>
     packaging\nsis\build-setup.ps1 -BuildDir build\my-windows-release -PfxFile cert.pfx
 
-## The licence agreement
+## The licence
 
-The setup shows `EULA.txt` (the repository root) before anything is
-installed; Next becomes I Agree. The same text is installed into
-`licenses\BayesTS Studio\` and opens from Help > Licence Agreement.
-`build-setup.ps1` refuses to build while it is still the draft -- a
-`[PLACEHOLDER]` left or the draft notice at the top -- unless
-`-DraftLicence` is passed, for a setup that is only tested. A silent install
-(`/S`) shows no pages: whoever deploys it that way accepts the agreement
-for the users.
+The studio is free and open source under the BSD 3-Clause License. The setup
+shows `LICENSE` (the repository root) for information before anything is
+installed, with Next rather than I Agree; the same text is installed into
+`licenses\BayesTS Studio\` and opens from Help > Licence.
 
 ## Behaviour
 

@@ -1,7 +1,11 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 #####################################################################
 # Setup program (Windows, NSIS)
 #
-# A setup.exe for students and anyone installing on a machine of their own:
+# A setup.exe for students and anyone installing on a machine of their own,
+# free and open source (BSD-3-Clause):
 # per user by default, no administrator rights, into %LOCALAPPDATA%\Programs,
 # or for all users into Program Files. The MSIX
 # (packaging/msix/) remains the package for machines an IT department manages.
@@ -20,10 +24,9 @@ set(STUDIO_SETUP_PUBLISHER "Franz X. Mohr" CACHE STRING
 
 set(_setup_out "${CMAKE_BINARY_DIR}/nsis")
 set(STUDIO_ICON_FILE "${PROJECT_SOURCE_DIR}/src/app/icons/bayests-studio.ico")
-set(STUDIO_EULA_FILE "${PROJECT_SOURCE_DIR}/EULA.txt")
+set(STUDIO_LICENSE_FILE "${PROJECT_SOURCE_DIR}/LICENSE")
 configure_file(BayesTSStudio.nsi.in "${_setup_out}/BayesTSStudio.nsi" @ONLY)
 file(WRITE "${_setup_out}/package.env"
     "SETUP_FILE=BayesTSStudio-${PROJECT_VERSION}-setup.exe\n"
     "VERSION=${PROJECT_VERSION}\n"
-    "EULA=${STUDIO_EULA_FILE}\n"
 )

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 # The engine: everything that talks to BayesTS and to model files, and nothing
 # that draws. A library of its own so the tests in test/ link exactly what the
 # application runs.
@@ -153,11 +156,11 @@ qt_add_resources(bayests-studio "fonts"
         app/fonts/Inter-BoldItalic.ttf
 )
 
-# The end-user licence agreement, for Help > Licence Agreement.
+# The studio's licence, for Help > Licence.
 qt_add_resources(bayests-studio "licence"
     PREFIX "/licence"
     BASE "${PROJECT_SOURCE_DIR}"
-    FILES "${PROJECT_SOURCE_DIR}/EULA.txt"
+    FILES "${PROJECT_SOURCE_DIR}/LICENSE"
 )
 
 target_link_libraries(bayests-studio PRIVATE

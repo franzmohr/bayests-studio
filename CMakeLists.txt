@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 cmake_minimum_required(VERSION 3.25)
 
 # BayesTS's top level declares Fortran (for the BLAS it finds), so this project
@@ -44,11 +47,11 @@ FetchContent_MakeAvailable(BayesTS)
 #####################################################################
 # Qt and Qwt
 #
-# Licensing constraint (see LICENSING.md): the application is closed source,
-# so only Qt modules available under the LGPL may be used -- Core, Gui, Widgets,
+# Licensing constraint (see LICENSING.md): the application is BSD-3-Clause, so
+# only Qt modules available under the LGPL may be used -- Core, Gui, Widgets,
 # Svg, Concurrent. Qt Charts, Qt Graphs and Qt Data Visualization are GPL-only
-# in the open-source edition and must not be added without a commercial Qt
-# licence. Qt is linked dynamically, which is what the LGPL requires.
+# in the open-source edition and would make the distributed studio GPL. Qt is
+# linked dynamically, which is what the LGPL requires.
 #
 # Plots are drawn with Qwt (Qwt License 1.0: LGPL 2.1 with exceptions that
 # permit any linking).

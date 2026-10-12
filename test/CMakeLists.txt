@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
 add_executable(studio_builder_test builder_test.cpp)
 target_link_libraries(studio_builder_test PRIVATE studio_engine BayesTS::openblas)
 

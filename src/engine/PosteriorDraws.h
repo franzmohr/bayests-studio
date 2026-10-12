@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 #pragma once
 
 // The posterior draws of a VAR or VEC model file, cut into one system per draw

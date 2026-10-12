@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 #include "views/PlotStyle.h"
 #include "views/Fonts.h"
 #include "views/Palettes.h"

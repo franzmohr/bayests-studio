@@ -1,14 +1,14 @@
 # Licensing
 
-BayesTS Studio is intended to be sold as a closed-source commercial
-application. Everything it is built from has been chosen so that this is
-possible without buying a licence for any component. This file records why,
-and the obligations that come with it. It is an engineering summary, not legal
-advice: have it reviewed before the first sale.
+BayesTS Studio is free and open-source software under the BSD 3-Clause
+License (`LICENSE`), the licence of BayesTS beside it. Everything it is built
+from allows that, and allows the binaries to carry the same licence: no
+component is GPL-only. This file records why, and the obligations that come
+with shipping the components. It is an engineering summary, not legal advice.
 
 ## Components
 
-| Component | Licence | Closed-source use | Obligation |
+| Component | Licence | Within a BSD-licensed application | Obligation |
 | --- | --- | --- | --- |
 | BayesTS (samplers, model-file layer) | BSD 3-Clause | Yes | Ship its copyright notice and licence text |
 | Qt 6: Core, Gui, Widgets, Svg, Concurrent, PrintSupport, OpenGL | LGPL v3 | Yes, **if linked dynamically** | See "Qt" below |
@@ -39,7 +39,7 @@ the About box and the shipped licence file reproduce them.
 | tab10, tab20, tab20b, tab20c, petroff10 | matplotlib | Matplotlib licence (PSF-style, BSD-compatible) | Retain "Copyright (c) 2012- Matplotlib Development Team" and the licence |
 | viridis, magma, inferno, plasma, cividis | viridisLite (R); the first four by Nathaniel Smith, Stéfan van der Walt and Eric Firing, released CC0; cividis by Nuñez, Anderton and Renslow (2018) | MIT (viridisLite) | Ship the copyright notice |
 
-None restricts closed-source or commercial use.
+None restricts the studio's licence or anyone's use of it.
 
 ## Fonts
 
@@ -65,8 +65,7 @@ Deutsche Bundesbank, and the change of the log GDP deflator, from the DIW,
 1972Q2 to 1998Q4 (E6). The files are the values of the series only, retyped
 as CSVs with a date column; no code of bvartools, which ships the same
 series, is taken. Official statistics of this kind are facts, not a work, and
-the textbook and JMulTi publish them for use; the examples cite both. Have
-this confirmed in the same review as the licence agreement.
+the textbook and JMulTi publish them for use; the examples cite both.
 
 ## Qt
 
@@ -93,22 +92,16 @@ without changing any code.
 
 ## The studio's own licence
 
-`EULA.txt` is the end-user licence agreement: the setup shows it for
-acceptance, both packages install it into `licenses/BayesTS Studio/`, and
-Help > Licence Agreement opens it. It is a **draft**: the licensor, the
-terms of a free edition and the governing law are `[PLACEHOLDERS]`, and
-`packaging/nsis/build-setup.ps1` refuses to build a setup while any is left
-(`-DraftLicence` builds one for testing only). Have it reviewed with this
-file before the first sale.
+`LICENSE`: BSD 3-Clause, the same text and holder as BayesTS. The setup shows
+it for information, both packages install it into `licenses/BayesTS Studio/`,
+and Help > Licence opens it. Every source file carries
+`SPDX-License-Identifier: BSD-3-Clause` and the copyright line.
 
-Two clauses follow from the components rather than from choice:
-
-- **Reverse engineering.** The ban covers only the studio's own code, and
-  the agreement says expressly that the user may replace the Qt libraries
-  and modify and reverse engineer the application as far as debugging such
-  a replacement needs, as the LGPL requires (section "Qt" above).
-- **Third-party licences prevail** for their components, which the
-  agreement names and points to `licenses/`.
+What keeps the binaries under it: only LGPL Qt modules, linked dynamically --
+a GPL-only module (Qt Charts, Qt Graphs, Qt Data Visualization) would make the
+studio as distributed GPL-licensed as a whole -- and no other GPL-only
+component. Anyone who rebuilds or changes the studio may replace the Qt
+libraries, as the LGPL requires (section "Qt" above).
 
 ## The repository
 

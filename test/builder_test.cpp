@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Franz X. Mohr
+
 // The model builder against BayesTS itself.
 //
 // Every combination the builder's form allows is written from one simulated
