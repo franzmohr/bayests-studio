@@ -22,8 +22,9 @@ namespace studio
 {
 
 /// The structural analysis of the Application stage: impulse responses of
-/// every variable to one shock, and the forecast error variance decomposition
-/// of one variable, from the posterior draws in the file. The numbers are
+/// every variable to every shock -- a matrix laid out as the covariance
+/// matrix, a column per shock and a row per response -- or to one shock, and
+/// the forecast error variance decomposition of one variable, from the posterior draws in the file. The numbers are
 /// bvartools' -- test/structural_test.cpp holds the two together draw by draw.
 ///
 /// Recomputed a moment after any control changes, on a worker thread.
@@ -46,7 +47,8 @@ private:
     struct Result
     {
         QString error;
-        std::vector<arma::mat> responses;   // per draw: horizons x responses
+        std::vector<int> shocks;            // the shocks computed
+        std::vector<std::vector<arma::mat>> responses;   // per shock, per draw: horizons x responses
         std::vector<arma::mat> shares;      // per draw: horizons x shocks
     };
 
@@ -55,6 +57,8 @@ private:
     void compute();
     void show(const Result &result);
     void rebuildGrid(int k);
+    /// Every shock at once, in the matrix, rather than the one chosen.
+    bool allShocks() const;
 
     QString file_;
     StructuralSupport support_;
@@ -75,7 +79,9 @@ private:
     QTabWidget *tabs_;
     QWidget *gridHost_;
     QGridLayout *grid_;
-    std::vector<QwtPlot *> plots_;
+    std::vector<QwtPlot *> plots_;   // row by row: response i, shock j at i * k + j in the matrix
+    std::vector<QWidget *> headers_;
+    bool matrix_ = false;            // what the grid was built for
     QwtPlot *fevd_;
     QLabel *fevdNote_;
     int columns_ = 1;

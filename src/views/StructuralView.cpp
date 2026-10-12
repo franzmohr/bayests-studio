@@ -123,13 +123,25 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
             spec.subtitle = fevdNote_->text();
             return spec;
         }
-        spec.title = tr("Responses to %1: %2").arg(impulse_->currentText(), responseTypeName(req.type).toLower());
         spec.subtitle = tr("Median, 68% and 90% bands%1").arg(req.cumulative ? tr(", cumulative") : QString());
         spec.columns = columns_;
         for (QwtPlot *p : plots_)
         {
             spec.cells.push_back({p, {}});
         }
+        if (matrix_)
+        {
+            // As on screen: a column per shock, a row per response.
+            spec.title = tr("Impulse responses: %1").arg(responseTypeName(req.type).toLower());
+            for (int j = 0; j < support_.k; ++j)
+            {
+                spec.columnLabels << tr("Shock to %1").arg(impulse_->itemText(j + 1));
+            }
+            spec.rowLabels = support_.variables;
+            spec.name = QStringLiteral("irf-%1-all").arg(responseTypeName(req.type));
+            return spec;
+        }
+        spec.title = tr("Responses to %1: %2").arg(impulse_->currentText(), responseTypeName(req.type).toLower());
         spec.name = QStringLiteral("irf-%1-%2").arg(responseTypeName(req.type), impulse_->currentText());
         return spec;
     };
@@ -153,7 +165,8 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
         }
     });
 
-    // Impulse responses: one plot per response, in a grid.
+    // Impulse responses: the matrix of every shock, or one plot per response
+    // to the shock chosen.
     gridHost_ = new QWidget;
     grid_ = new QGridLayout(gridHost_);
     grid_->setSpacing(12);
@@ -226,7 +239,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
         standardDeviation_->setEnabled(t == ResponseType::Feir || t == ResponseType::Sir);
         // Under sign restrictions a shock is named for the variable whose
         // column it is, and only the restricted ones mean anything.
-        for (int v = 0; v < impulse_->count(); ++v)
+        for (int v = 0; v < support_.k; ++v)
         {
             QString label = support_.variables.value(v);
             if (t == ResponseType::Sign && support_.sign)
@@ -239,9 +252,23 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
                 label = restricted ? tr("%1 shock (restricted)").arg(label)
                                    : tr("%1 shock (unrestricted: no interpretation)").arg(label);
             }
-            impulse_->setItemText(v, label);
+            impulse_->setItemText(v + 1, label);
         }
         period_->setEnabled(t != ResponseType::Sign);
+        for (int j = 0; matrix_ && j < support_.k && j < static_cast<int>(headers_.size()); ++j)
+        {
+            if (auto *l = qobject_cast<QLabel *>(headers_[static_cast<std::size_t>(j)]))
+            {
+                l->setText(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
+            }
+        }
+    });
+    // All shocks and one need grids of their own.
+    connect(impulse_, &QComboBox::currentIndexChanged, this, [this]() {
+        if (support_.ok && allShocks() != matrix_)
+        {
+            rebuildGrid(support_.k);
+        }
     });
     setModel(QString());
 }
@@ -288,10 +315,14 @@ void StructuralView::setModel(const QString &file)
         }
         impulse_->clear();
         response_->clear();
+        impulse_->addItem(tr("All shocks"));
         for (int v = 0; v < support_.k; ++v)
         {
             impulse_->addItem(support_.variables.value(v));
         }
+        // The whole matrix while it stays legible; for a larger model the
+        // first shock, the matrix a choice away.
+        impulse_->setCurrentIndex(support_.k <= 6 ? 0 : 1);
         response_->addItems(support_.variables);
         period_->setMaximum(std::max(1, support_.periods));
         period_->setValue(std::max(1, support_.periods));
@@ -340,14 +371,29 @@ void StructuralView::compute()
     status_->setText(tr("Computing…"));
     const QString file = file_;
     const ResponseRequest req = request();
-    const int impulse = impulse_->currentIndex();
+    std::vector<int> shocks;
+    if (allShocks())
+    {
+        for (int j = 0; j < support_.k; ++j)
+        {
+            shocks.push_back(j);
+        }
+    }
+    else
+    {
+        shocks.push_back(impulse_->currentIndex() - 1);
+    }
     const int response = response_->currentIndex();
-    watcher_->setFuture(QtConcurrent::run([file, req, impulse, response]() {
+    watcher_->setFuture(QtConcurrent::run([file, req, shocks, response]() {
         const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
         Result r;
         try
         {
-            r.responses = impulseResponses(file, req, impulse);
+            r.shocks = shocks;
+            for (const int j : shocks)
+            {
+                r.responses.push_back(impulseResponses(file, req, j));
+            }
             if (req.type == ResponseType::Oir || req.type == ResponseType::Sir || req.type == ResponseType::Sign)
             {
                 r.shares = varianceDecomposition(file, req, response);
@@ -361,6 +407,11 @@ void StructuralView::compute()
     }));
 }
 
+bool StructuralView::allShocks() const
+{
+    return impulse_->currentIndex() == 0;
+}
+
 void StructuralView::rebuildGrid(int k)
 {
     for (QwtPlot *p : plots_)
@@ -368,19 +419,62 @@ void StructuralView::rebuildGrid(int k)
         p->deleteLater();
     }
     plots_.clear();
+    for (QWidget *h : headers_)
+    {
+        h->deleteLater();
+    }
+    headers_.clear();
+    matrix_ = k > 0 && allShocks();
+    QFont bold = font();
+    bold.setBold(true);
+    if (matrix_)
+    {
+        // Laid out as the covariance matrix: shock j's column, response i's
+        // row, the headers along the top and the left.
+        columns_ = k;
+        for (int j = 0; j < k; ++j)
+        {
+            auto *head = new QLabel(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
+            head->setAlignment(Qt::AlignCenter);
+            head->setFont(bold);
+            head->setWordWrap(true);
+            grid_->addWidget(head, 0, j + 1);
+            headers_.push_back(head);
+        }
+        for (int i = 0; i < k; ++i)
+        {
+            auto *row = new QLabel(support_.variables.value(i));
+            row->setAlignment(Qt::AlignCenter);
+            row->setFont(bold);
+            row->setMinimumWidth(70);
+            row->setToolTip(tr("The responses of %1, to each shock along the row.").arg(support_.variables.value(i)));
+            grid_->addWidget(row, i + 1, 0);
+            headers_.push_back(row);
+            for (int j = 0; j < k; ++j)
+            {
+                auto *plot = new QwtPlot;
+                attachFigureExport(plot, figure_);
+                plot->setToolTip(tr("The response of %1 to a shock to %2: the posterior median with 68% and 90% bands. Right-click to copy or save the figure.")
+                                     .arg(support_.variables.value(i), support_.variables.value(j)));
+                plot->setMinimumHeight(170);
+                styleAxes(plot, i + 1 == k ? tr("Horizon") : QString(), QString());
+                grid_->addWidget(plot, i + 1, j + 1);
+                plots_.push_back(plot);
+            }
+        }
+        return;
+    }
     const int columns = k <= 4 ? std::max(1, std::min(k, 2)) : 3;
     columns_ = columns;
     for (int i = 0; i < k; ++i)
     {
         auto *plot = new QwtPlot;
         attachFigureExport(plot, figure_);
-    plot->setToolTip(tr("The response of this variable: the posterior median with 68% and 90% bands. Right-click to copy or save the figure."));
+        plot->setToolTip(tr("The response of this variable: the posterior median with 68% and 90% bands. Right-click to copy or save the figure."));
         plot->setMinimumHeight(220);
         styleAxes(plot, tr("Horizon"), QString());
         QwtText title(support_.variables.value(i));
-        QFont f = plot->font();
-        f.setBold(true);
-        title.setFont(f);
+        title.setFont(bold);
         plot->setTitle(title);
         grid_->addWidget(plot, i / columns, i % columns);
         plots_.push_back(plot);
@@ -395,17 +489,36 @@ void StructuralView::show(const Result &result)
         return;
     }
     const ResponseRequest req = request();
-    const int draws = static_cast<int>(result.responses.size());
-    status_->setText(tr("%1 of %2 shocked; median, 68% and 90% bands over %3 draws%4.")
-                         .arg(responseTypeName(req.type), impulse_->currentText())
-                         .arg(draws)
-                         .arg(support_.moving ? tr(", at period %1").arg(period_->value()) : QString()));
-
-    // Impulse responses.
-    const int horizons = req.horizon + 1;
-    for (std::size_t v = 0; v < plots_.size(); ++v)
+    // A result computed for the other layout is stale; the next one is coming.
+    if (result.responses.empty() || (result.shocks.size() > 1) != (matrix_ && support_.k > 1))
     {
-        QwtPlot *plot = plots_[v];
+        return;
+    }
+    const int draws = static_cast<int>(result.responses.front().size());
+    const QString period = support_.moving ? tr(", at period %1").arg(period_->value()) : QString();
+    status_->setText(matrix_ ? tr("%1 responses, a column per shock and a row per response; median, 68% and 90% "
+                                  "bands over %2 draws%3.")
+                                   .arg(responseTypeName(req.type))
+                                   .arg(draws)
+                                   .arg(period)
+                             : tr("%1 of %2 shocked; median, 68% and 90% bands over %3 draws%4.")
+                                   .arg(responseTypeName(req.type), impulse_->currentText())
+                                   .arg(draws)
+                                   .arg(period));
+
+    // Impulse responses: plot p is the response of v to shock s.
+    const int horizons = req.horizon + 1;
+    const std::size_t k = static_cast<std::size_t>(std::max(1, support_.k));
+    for (std::size_t p = 0; p < plots_.size(); ++p)
+    {
+        const std::size_t v = matrix_ ? p / k : p;
+        const std::size_t s = matrix_ ? p % k : 0;
+        if (s >= result.responses.size())
+        {
+            continue;
+        }
+        const std::vector<arma::mat> &shock = result.responses[s];
+        QwtPlot *plot = plots_[p];
         plot->detachItems(QwtPlotItem::Rtti_PlotCurve, true);
         plot->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
         plot->detachItems(QwtPlotItem::Rtti_PlotMarker, true);
@@ -418,7 +531,7 @@ void StructuralView::show(const Result &result)
             for (int d = 0; d < draws; ++d)
             {
                 column[static_cast<std::size_t>(d)] =
-                    result.responses[static_cast<std::size_t>(d)](static_cast<arma::uword>(h), static_cast<arma::uword>(v));
+                    shock[static_cast<std::size_t>(d)](static_cast<arma::uword>(h), static_cast<arma::uword>(v));
             }
             std::sort(column.begin(), column.end());
             b90.append({double(h), QwtInterval(sortedQuantile(column, 0.05), sortedQuantile(column, 0.95))});
