@@ -1,5 +1,7 @@
 #include "engine/Examples.h"
 
+#include <algorithm>
+
 #include <QDir>
 #include <QFile>
 #include <QObject>
@@ -301,10 +303,44 @@ QString convertDate(const QString &raw, DataRecipe::Dates style)
 
 } // namespace
 
-const std::vector<WorkflowExample> &examples()
+const std::vector<WorkflowExample> &builtinExamples()
 {
     static const std::vector<WorkflowExample> all = make();
     return all;
+}
+
+namespace
+{
+
+std::vector<WorkflowExample> &registry()
+{
+    static std::vector<WorkflowExample> all = builtinExamples();
+    return all;
+}
+
+} // namespace
+
+const std::vector<WorkflowExample> &examples()
+{
+    return registry();
+}
+
+void setExtensionExamples(std::vector<WorkflowExample> extensions)
+{
+    std::vector<WorkflowExample> all = builtinExamples();
+    for (WorkflowExample &e : extensions)
+    {
+        const auto same = std::find_if(all.begin(), all.end(), [&](const WorkflowExample &b) { return b.id == e.id; });
+        if (same != all.end())
+        {
+            *same = std::move(e);
+        }
+        else
+        {
+            all.push_back(std::move(e));
+        }
+    }
+    registry() = std::move(all);
 }
 
 std::vector<const WorkflowExample *> examplesFor(const QString &workflow)

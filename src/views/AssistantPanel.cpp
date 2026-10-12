@@ -120,48 +120,7 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
     // The chooser.
     auto *chooserHost = new QWidget;
     chooser_ = new QVBoxLayout(chooserHost);
-    chooser_->addWidget(subtle(tr("The assistant guides you through a workflow step by step: what to do, why, the "
-                                  "usual choices and their references, and the buttons that do it. Start from your "
-                                  "own data, or follow a published paper.")));
-    for (const Workflow &w : workflows())
-    {
-        auto *box = new QGroupBox(w.title);
-        auto *bl = new QVBoxLayout(box);
-        auto *audience = new QLabel(QStringLiteral("<b>%1</b>").arg(w.audience));
-        bl->addWidget(audience);
-        bl->addWidget(subtle(w.summary));
-        auto *scratch = new QPushButton(tr("Start with My Own Data"));
-        scratch->setObjectName(QStringLiteral("start-%1").arg(w.id));
-        scratch->setToolTip(tr("Follow this workflow on a data set of your own, from importing it to the write-up."));
-        connect(scratch, &QPushButton::clicked, this, [this, id = w.id]() { start(id); });
-        bl->addWidget(scratch);
-        QStringList later;
-        for (const WorkflowExample *e : examplesFor(w.id))
-        {
-            if (!e->supported)
-            {
-                later << QStringLiteral("<li>%1 -- <i>%2</i></li>").arg(e->title.toHtmlEscaped(), e->missing.toHtmlEscaped());
-                continue;
-            }
-            // "Topic: Authors (year)": the topic as a line, the authors on the button.
-            const QString topic = e->title.section(QStringLiteral(": "), 0, 0);
-            const QString who = e->title.section(QStringLiteral(": "), 1);
-            bl->addWidget(subtle(tr("Worked example -- %1").arg(topic)));
-            auto *b = new QPushButton(who.isEmpty() ? e->title : who);
-            b->setObjectName(QStringLiteral("example-%1").arg(e->id));
-            b->setToolTip(e->question);
-            connect(b, &QPushButton::clicked, this, [this, wid = w.id, eid = e->id]() { start(wid, eid); });
-            bl->addWidget(b);
-        }
-        if (!later.isEmpty())
-        {
-            auto *note = subtle(tr("Not yet guided:<ul>%1</ul>").arg(later.join(QString())));
-            note->setTextFormat(Qt::RichText);
-            bl->addWidget(note);
-        }
-        chooser_->addWidget(box);
-    }
-    chooser_->addStretch(1);
+    rebuildChooser();
     auto *chooserScroll = new QScrollArea;
     chooserScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     chooserScroll->setWidget(chooserHost);
@@ -285,6 +244,68 @@ AssistantPanel::AssistantPanel(AssistantHost *host, QWidget *parent) : QWidget(p
         refreshSteps(true);
     });
     showChooser();
+}
+
+void AssistantPanel::rebuildChooser()
+{
+    while (QLayoutItem *item = chooser_->takeAt(0))
+    {
+        delete item->widget();
+        delete item;
+    }
+    chooser_->addWidget(subtle(tr("The assistant guides you through a workflow step by step: what to do, why, the "
+                                  "usual choices and their references, and the buttons that do it. Start from your "
+                                  "own data, or follow a published paper.")));
+    for (const Workflow &w : workflows())
+    {
+        auto *box = new QGroupBox(w.title);
+        auto *bl = new QVBoxLayout(box);
+        auto *audience = new QLabel(QStringLiteral("<b>%1</b>").arg(w.audience));
+        bl->addWidget(audience);
+        bl->addWidget(subtle(w.summary));
+        auto *scratch = new QPushButton(tr("Start with My Own Data"));
+        scratch->setObjectName(QStringLiteral("start-%1").arg(w.id));
+        scratch->setToolTip(tr("Follow this workflow on a data set of your own, from importing it to the write-up."));
+        connect(scratch, &QPushButton::clicked, this, [this, id = w.id]() { start(id); });
+        bl->addWidget(scratch);
+        QStringList later;
+        for (const WorkflowExample *e : examplesFor(w.id))
+        {
+            if (!e->supported)
+            {
+                later << QStringLiteral("<li>%1 -- <i>%2</i></li>").arg(e->title.toHtmlEscaped(), e->missing.toHtmlEscaped());
+                continue;
+            }
+            // "Topic: Authors (year)": the topic as a line, the authors on the button.
+            const QString topic = e->title.section(QStringLiteral(": "), 0, 0);
+            const QString who = e->title.section(QStringLiteral(": "), 1);
+            bl->addWidget(subtle(tr("Worked example -- %1").arg(topic)));
+            auto *b = new QPushButton(who.isEmpty() ? e->title : who);
+            b->setObjectName(QStringLiteral("example-%1").arg(e->id));
+            b->setToolTip(e->question);
+            connect(b, &QPushButton::clicked, this, [this, wid = w.id, eid = e->id]() { start(wid, eid); });
+            bl->addWidget(b);
+        }
+        if (!later.isEmpty())
+        {
+            auto *note = subtle(tr("Not yet guided:<ul>%1</ul>").arg(later.join(QString())));
+            note->setTextFormat(Qt::RichText);
+            bl->addWidget(note);
+        }
+        chooser_->addWidget(box);
+    }
+    chooser_->addStretch(1);
+}
+
+void AssistantPanel::extensionsReloaded()
+{
+    // The examples were read again: every pointer to one is stale.
+    example_ = findExample(record_.example);
+    rebuildChooser();
+    if (workflow_)
+    {
+        refreshSteps(false);
+    }
 }
 
 void AssistantPanel::showChooser()
@@ -543,6 +564,11 @@ bool AssistantPanel::ensureProject()
 QString AssistantPanel::reproductionsFolder()
 {
     QSettings settings;
+    // An extension's data lie beside its file.
+    if (example_ && !example_->dataRoot.isEmpty())
+    {
+        return example_->dataRoot;
+    }
     QString root = settings.value(QStringLiteral("assistant/reproductions"), defaultReproductionsFolder()).toString();
     if (example_ && !QDir(QDir(root).filePath(example_->folder)).exists())
     {

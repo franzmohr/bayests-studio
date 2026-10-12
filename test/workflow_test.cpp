@@ -6,12 +6,15 @@
 
 #include "engine/DataSet.h"
 #include "engine/Examples.h"
+#include "engine/Extensions.h"
 #include "engine/ModelRunner.h"
 #include "engine/Workflow.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -132,6 +135,124 @@ int main(int argc, char **argv)
         }
     }
     check(complete, "every step has guidance and a way to be done");
+
+    // -- Extensions: every built-in example survives a round trip through its
+    // file form; a folder of files loads, a broken one says why and gives
+    // nothing, an id of a built-in replaces it, and the template loads clean.
+    {
+        bool roundTrip = true;
+        for (const WorkflowExample &e : builtinExamples())
+        {
+            const QJsonObject once = exampleToJson(e);
+            QStringList warnings;
+            const WorkflowExample back = exampleFromJson(once, QStringLiteral("/somewhere"), &warnings);
+            roundTrip = roundTrip && exampleToJson(back) == once && warnings.isEmpty() &&
+                        back.candidates == e.candidates && back.benchmark == e.benchmark &&
+                        back.restrictions.size() == e.restrictions.size() && back.notes == e.notes;
+            if (!roundTrip)
+            {
+                // Both forms beside each other, to diff.
+                for (const auto &[name, json] : {std::pair{"once", once}, std::pair{"back", exampleToJson(back)}})
+                {
+                    QFile f(QDir::temp().filePath(QStringLiteral("roundtrip-%1.json").arg(QLatin1String(name))));
+                    f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+                    f.write(QJsonDocument(json).toJson());
+                }
+                std::printf("      round trip of %s: %s (both forms in %s)\n", e.id.toStdString().c_str(),
+                            warnings.join(QStringLiteral("; ")).toStdString().c_str(),
+                            QDir::tempPath().toStdString().c_str());
+                break;
+            }
+        }
+        check(roundTrip, "every built-in example survives its file form, race candidates by key");
+
+        QTemporaryDir t;
+        const QDir user(t.filePath(QStringLiteral("extensions")));
+        QDir().mkpath(user.path());
+        const QDir repro(t.filePath(QStringLiteral("reproductions")));
+        QDir().mkpath(repro.filePath(QStringLiteral("2020-someone")));
+        const auto write = [](const QString &path, const QByteArray &text) {
+            QFile f(path);
+            f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+            f.write(text);
+        };
+        // A race on data beside the file, with a typo, and a palette.
+        write(repro.filePath(QStringLiteral("2020-someone/data.csv")),
+              "DATE,a,b\n2000-01-01,1,2\n2000-02-01,2,3\n2000-03-01,3,5\n");
+        write(repro.filePath(QStringLiteral("2020-someone/studio-example.json")), R"js({
+  "studio-extension": 1,
+  "examples": [{
+    "id": "someone2020", "workflow": "horserace", "title": "Forecasting: Someone (2020)",
+    "data": {"file": "data.csv", "dateColumn": "DATE", "columns": [{"source": "a"}, {"source": "b", "name": "bee"}]},
+    "model": {"lags": 2, "iterations": 300, "burnin": 100, "seed": 7},
+    "race": {"firstOrigin": "2000-02", "horizon": 1, "candidates": ["minnesota", "one-lag"], "benchmark": "one-lag"},
+    "notes": {"design": "Two models.", "nosuchstep": "never shown"},
+    "colour": "a typo"
+  }],
+  "palettes": [{"id": "two", "name": "Two", "colours": ["#000000", "#ff0000"]}]
+})js");
+        // Broken JSON, and a candidate the field does not have.
+        write(user.filePath(QStringLiteral("broken.json")), "{ \"studio-extension\": 1, ");
+        write(user.filePath(QStringLiteral("vec.json")), R"js({"studio-extension": 1, "examples": [{
+            "id": "v", "workflow": "horserace", "title": "V",
+            "race": {"candidates": ["vec"]}}]})js");
+        // A built-in replaced.
+        write(user.filePath(QStringLiteral("override.json")), R"js({"studio-extension": 1, "examples": [{
+            "id": "arw2018", "workflow": "thesis", "title": "Optimism shocks: replaced"}]})js");
+
+        const QStringList files = extensionFiles(user.path(), repro.path());
+        check(files.size() == 4, "the user's *.json and each reproduction's studio-example.json found");
+        const std::vector<ExtensionReport> r = loadExtensions(files);
+        const auto report = [&](const QString &name) -> const ExtensionReport * {
+            for (const ExtensionReport &x : r)
+            {
+                if (x.file.endsWith(name))
+                {
+                    return &x;
+                }
+            }
+            return nullptr;
+        };
+        const ExtensionReport *broken = report(QStringLiteral("broken.json"));
+        const ExtensionReport *vec = report(QStringLiteral("vec.json"));
+        const ExtensionReport *someone = report(QStringLiteral("studio-example.json"));
+        check(broken && broken->error.contains(QStringLiteral("not JSON")) && broken->examples.isEmpty(),
+              "broken JSON is reported and gives nothing");
+        check(vec && vec->error.contains(QStringLiteral("levels")),
+              "a VEC in a race on growth rates is refused, saying it needs levels");
+        check(someone && someone->error.isEmpty() && someone->examples == QStringList{QStringLiteral("someone2020")} &&
+                  someone->palettes == QStringList{QStringLiteral("two")} && someone->warnings.size() == 2,
+              "a reproduction's example and palette read, its typo and its unknown step warned about");
+        const WorkflowExample *ex = findExample(QStringLiteral("someone2020"));
+        check(ex && ex->benchmark == 1 && ex->candidates == std::vector<int>({0, 4}) &&
+                  ex->series == QStringList({QStringLiteral("a"), QStringLiteral("bee")}),
+              "its candidates by key, the benchmark among them, the series from the columns");
+        const DataSet d = ex ? prepareExampleData(ex->recipe, ex->dataRoot) : DataSet{};
+        check(d.series() == 2 && d.length() == 3 && d.names.back() == QStringLiteral("bee"),
+              "its data read beside its file");
+        const WorkflowExample *arw = findExample(QStringLiteral("arw2018"));
+        check(arw && arw->title.endsWith(QStringLiteral("replaced")) && !arw->source.isEmpty(),
+              "an extension with a built-in's id replaces it");
+        check(extensionPalettes().size() == 1, "the palette kept for the views");
+
+        loadExtensions({});
+        check(findExample(QStringLiteral("someone2020")) == nullptr && findExample(QStringLiteral("arw2018")) &&
+                  findExample(QStringLiteral("arw2018"))->source.isEmpty(),
+              "loading none restores the studio's own");
+
+        const QString templ = writeExtensionTemplate(t.filePath(QStringLiteral("template")));
+        const QString asJson = t.filePath(QStringLiteral("template/template.json"));
+        QFile::copy(templ, asJson);
+        const std::vector<ExtensionReport> tr = loadExtensions({asJson});
+        QFile readme(t.filePath(QStringLiteral("template/README.md")));
+        readme.open(QIODevice::ReadOnly);
+        const QString md = QString::fromUtf8(readme.readAll());
+        check(tr.size() == 1 && tr[0].error.isEmpty() && tr[0].warnings.isEmpty() && tr[0].examples.size() == 1 &&
+                  tr[0].palettes.size() == 1 && md.contains(QStringLiteral("`inspect`")) &&
+                  md.contains(QStringLiteral("`stability`")),
+              "the template loads clean, and its README lists every step id");
+        loadExtensions({});
+    }
 
     if (dir.isEmpty() || !QFile::exists(dir + "/e1.csv"))
     {

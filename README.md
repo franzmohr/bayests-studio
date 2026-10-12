@@ -271,6 +271,18 @@ components it uses.
   themselves by `tools/make_palettes.py`; their licences, none restrictive,
   are in LICENSING.md and the Third-party Licences box.
 
+- **Extensions** (Help › Extensions…): worked examples and colour palettes as
+  JSON files, without a rebuild. The studio reads every `*.json` in the user's
+  extensions folder (or the folder `STUDIO_EXTENSIONS` names, for a lab or a
+  portable install) and the `studio-example.json` of every reproduction
+  project, so a paper added there with one is offered by the assistant. An
+  example with a built-in's id replaces it; race candidates are named by key
+  (`minnesota`, `sv`, `one-lag`, `vec`, `break`, ...); data paths are
+  relative to the file. Unknown keys and notes for steps a workflow lacks are
+  reported, and a file with an error gives nothing and says why. Write a
+  Template puts a working example and a README of every field in the folder.
+  `engine/Extensions`; `workflow_test` round-trips every built-in example.
+
 - **Volatility break** (Posterior simulation › Volatility break): for a
   model estimated with one, the path of the scale s_t from before the break
   to the end of the forecast horizon, median with 68% and 90% bands; the

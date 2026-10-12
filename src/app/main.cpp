@@ -2,7 +2,9 @@
 #include "app/Theme.h"
 #include "views/AssistantDialogs.h"
 #include "views/BuilderDialog.h"
+#include "engine/Extensions.h"
 #include "views/FigureExport.h"
+#include "views/ExtensionsDialog.h"
 #include "views/FontDialog.h"
 #include "views/Fonts.h"
 #include "views/PaletteDialog.h"
@@ -85,6 +87,8 @@ int main(int argc, char *argv[])
 
     studio::applyTheme(app);
     studio::applySavedFonts();
+    // The extensions' examples and palettes, before anything lists either.
+    studio::loadExtensions(studio::defaultExtensionFiles());
     // Development aid: STUDIO_SMOKE_FONT=<family>[,<figure family>] sets the
     // interface's font, and the figures' where a second is given, for this run.
     if (const QByteArray font = qgetenv("STUDIO_SMOKE_FONT"); !font.isEmpty())
@@ -219,6 +223,17 @@ int main(int argc, char *argv[])
         QApplication::processEvents();
         const bool ok = dialog.grab().save(QString::fromLocal8Bit(png));
         std::printf("smoke: font dialog %s\n", ok ? "saved" : "NOT saved");
+        return ok ? 0 : 1;
+    }
+    // Development aid: STUDIO_SMOKE_EXTENSIONS_DIALOG=<png> draws Help >
+    // Extensions as the start-up load left it, and exits.
+    if (const QByteArray png = qgetenv("STUDIO_SMOKE_EXTENSIONS_DIALOG"); !png.isEmpty())
+    {
+        studio::ExtensionsDialog dialog;
+        dialog.show();
+        QApplication::processEvents();
+        const bool ok = dialog.grab().save(QString::fromLocal8Bit(png));
+        std::printf("smoke: extensions dialog %s\n", ok ? "saved" : "NOT saved");
         return ok ? 0 : 1;
     }
     // Development aid: STUDIO_SMOKE_PALETTE_DIALOG=<png> draws the palette

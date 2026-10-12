@@ -79,9 +79,21 @@ struct WorkflowExample
 
     std::map<QString, QString> notes;           ///< per step id: what this example does there
     QString findings;                           ///< what the paper finds, and the reproduction
+
+    // Where it came from: empty for the studio's own, else the extension file
+    // and the folder its data recipe is read relative to.
+    QString source;
+    QString dataRoot;
 };
 
+/// The worked examples: the studio's own, then those of the extensions
+/// loaded (engine/Extensions.h), one with the id of a built-in replacing it.
+/// Pointers stay valid until the extensions are loaded again.
 const std::vector<WorkflowExample> &examples();
+/// The studio's own examples alone.
+const std::vector<WorkflowExample> &builtinExamples();
+/// Replaces the extension examples; examples() is rebuilt.
+void setExtensionExamples(std::vector<WorkflowExample> extensions);
 std::vector<const WorkflowExample *> examplesFor(const QString &workflow);
 const WorkflowExample *findExample(const QString &id);
 

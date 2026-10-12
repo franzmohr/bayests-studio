@@ -66,8 +66,11 @@ public:
     /// Starts `workflow` from scratch, or with `example`.
     void start(const QString &workflow, const QString &example = {});
     void showChooser();
+    /// After Help > Extensions > Reload: the chooser and the example again.
+    void extensionsReloaded();
 
 private:
+    void rebuildChooser();
     ProjectState state() const;
     void saveRecord();
     void refreshSteps(bool follow);

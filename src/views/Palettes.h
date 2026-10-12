@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QString>
+#include <QStringList>
 
 #include <vector>
 
@@ -36,6 +37,11 @@ struct Palette
 
 /// The palettes the studio ships, the user's own last.
 const std::vector<Palette> &palettes();
+
+/// Builds the list again with the extensions' palettes (engine/Extensions.h)
+/// last before the user's own, keeping the current one; returns what was
+/// wrong with any that were left out.
+QStringList reloadPalettes();
 
 /// The palette plots draw from; set from the settings at start-up.
 const Palette &currentPalette();

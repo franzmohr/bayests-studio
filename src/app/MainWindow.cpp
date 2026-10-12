@@ -3,6 +3,7 @@
 #include "engine/ModelFileTree.h"
 #include "engine/QtReporter.h"
 #include "views/BuilderDialog.h"
+#include "views/ExtensionsDialog.h"
 #include "views/FontDialog.h"
 #include "views/PaletteDialog.h"
 #include "views/Palettes.h"
@@ -232,6 +233,15 @@ void MainWindow::buildActions()
     help->addAction(tr("&About %1").arg(QApplication::applicationDisplayName()), this,
                     &MainWindow::showAbout);
     help->addAction(tr("Third-party &Licences"), this, &MainWindow::showLicences);
+    help->addAction(tr("&Extensions…"), this, [this]() {
+        ExtensionsDialog dialog(this);
+        connect(&dialog, &ExtensionsDialog::reloaded, this, [this]() {
+            assistant_->extensionsReloaded();
+            // Plots draw again, in a palette an extension may have changed.
+            reloadProject();
+        });
+        dialog.exec();
+    });
 
     QToolBar *bar = addToolBar(tr("Main"));
     bar->setObjectName(QStringLiteral("mainToolBar"));

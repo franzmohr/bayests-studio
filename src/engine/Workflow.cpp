@@ -275,7 +275,7 @@ Workflow horseRace()
         "<p>A horse race on <b>final</b> data overstates how well any model would have done in real time, as it "
         "forecasts revised figures with revised figures (Croushore and Stark 2001). Say which you use.</p>"));
     s.done = [](const ProjectState &st) { return st.hasData; };
-    s.actions = {{QStringLiteral("import"), QObject::tr("Import Data…"), {}}};
+    s.actions = {{QStringLiteral("import"), QObject::tr("Import Data…"), QObject::tr("A CSV with dates in the first column")}};
     w.steps.push_back(s);
 
     s = step(QStringLiteral("design"), QObject::tr("Design the race"), QObject::tr("Models, origins, horizon and benchmark"),

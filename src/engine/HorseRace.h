@@ -23,6 +23,7 @@ struct HorseRaceCandidate
     QString name;               ///< "BVAR, Minnesota prior"
     QString description;
     VarBuilderSpec spec;        ///< everything but the data, the sample and the horizon
+    QString key;                ///< "minnesota", "sv", ...: how an extension names it
 };
 
 struct HorseRaceDesign

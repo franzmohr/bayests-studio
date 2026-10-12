@@ -133,6 +133,7 @@ std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int vo
                              QObject::tr("The workhorse: constant coefficients, a Wishart error precision and "
                                          "the Minnesota prior of Litterman (1986). The usual benchmark."),
                              base()};
+        c.key = QStringLiteral("minnesota");
         out.push_back(c);
     }
     {
@@ -142,6 +143,7 @@ std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int vo
                              base()};
         c.spec.errors = Errors::Stochvol;
         c.spec.covar = true;
+        c.key = QStringLiteral("sv");
         out.push_back(c);
     }
     {
@@ -154,6 +156,7 @@ std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int vo
         c.spec.timeVarying = true;
         c.spec.errors = Errors::Stochvol;
         c.spec.covar = true;
+        c.key = QStringLiteral("tvp-sv");
         out.push_back(c);
     }
     {
@@ -164,6 +167,7 @@ std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int vo
         c.spec.minnesota = false;
         c.spec.coefPrecision = 1.0 / 9.0;
         c.spec.selection = VarBuilderSpec::Selection::Bvs;
+        c.key = QStringLiteral("bvs");
         out.push_back(c);
     }
     {
@@ -172,6 +176,7 @@ std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int vo
                                          "further lags add?"),
                              base()};
         c.spec.p = 1;
+        c.key = QStringLiteral("one-lag");
         out.push_back(c);
     }
     if (levels)
@@ -183,6 +188,7 @@ std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int vo
         c.spec.family = VarBuilderSpec::Family::Vec;
         c.spec.rank = 1;
         c.spec.minnesota = false;
+        c.key = QStringLiteral("vec");
         out.push_back(c);
     }
     if (volatilityBreak >= 0)
@@ -195,6 +201,7 @@ std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int vo
                                  .arg(breakLabel),
                              base()};
         c.spec.volatilityBreak = volatilityBreak;
+        c.key = QStringLiteral("break");
         out.push_back(c);
     }
     return out;

@@ -1,5 +1,11 @@
 #include "views/Palettes.h"
 
+#include "engine/Extensions.h"
+
+#include <QFileInfo>
+#include <QJsonArray>
+#include <optional>
+
 #include <QObject>
 #include <QSettings>
 #include <QStringList>
@@ -33,9 +39,9 @@ std::vector<QColor> okabeIto()
             QColor(0xCC, 0x79, 0xA7), QColor(0xE6, 0x9F, 0x00), QColor(0x56, 0xB4, 0xE9)};
 }
 
-std::vector<Palette> &registry()
+std::vector<Palette> builtin()
 {
-    static std::vector<Palette> all = []() {
+    {
         std::vector<Palette> p;
         const auto qualitative = [&](const QString &id, const QString &name, const QString &family,
                                      const QString &source, std::vector<QColor> c) {
@@ -109,7 +115,88 @@ std::vector<Palette> &registry()
         custom.kind = Palette::Kind::Qualitative;
         p.push_back(std::move(custom));
         return p;
-    }();
+    }
+}
+
+/// An extension's palette, or the reason it is not one.
+std::optional<Palette> fromExtension(const ExtensionPalette &e, QString *why)
+{
+    const QJsonObject &o = e.json;
+    Palette x;
+    x.id = o.value(QStringLiteral("id")).toString();
+    x.name = o.value(QStringLiteral("name")).toString(x.id);
+    x.family = o.value(QStringLiteral("family")).toString(QStringLiteral("Extensions"));
+    x.source = o.value(QStringLiteral("source")).toString(QFileInfo(e.file).fileName());
+    const QString kind = o.value(QStringLiteral("kind")).toString(QStringLiteral("qualitative"));
+    if (kind == QLatin1String("qualitative"))
+    {
+        x.kind = Palette::Kind::Qualitative;
+    }
+    else if (kind == QLatin1String("sequential"))
+    {
+        x.kind = Palette::Kind::Sequential;
+    }
+    else
+    {
+        *why = QObject::tr("palette \"%1\": \"kind\" must be \"qualitative\" or \"sequential\"").arg(x.id);
+        return std::nullopt;
+    }
+    for (const QJsonValue &v : o.value(QStringLiteral("colours")).toArray())
+    {
+        const QColor c = QColor::fromString(v.toString());
+        if (!c.isValid())
+        {
+            *why = QObject::tr("palette \"%1\": \"%2\" is not a colour").arg(x.id, v.toString());
+            return std::nullopt;
+        }
+        x.colours.push_back(c);
+    }
+    if (x.colours.size() < 2)
+    {
+        *why = QObject::tr("palette \"%1\": \"colours\" needs at least two").arg(x.id);
+        return std::nullopt;
+    }
+    return x;
+}
+
+QStringList &problems()
+{
+    static QStringList list;
+    return list;
+}
+
+/// The studio's palettes, then the extensions', then the user's own.
+std::vector<Palette> compose()
+{
+    std::vector<Palette> p = builtin();
+    Palette custom = std::move(p.back());
+    p.pop_back();
+    problems().clear();
+    for (const ExtensionPalette &e : extensionPalettes())
+    {
+        QString why;
+        std::optional<Palette> x = fromExtension(e, &why);
+        if (!x)
+        {
+            problems() << QStringLiteral("%1: %2").arg(QFileInfo(e.file).fileName(), why);
+            continue;
+        }
+        const auto same = std::find_if(p.begin(), p.end(), [&](const Palette &b) { return b.id == x->id; });
+        if (same != p.end() || x->id == QLatin1String("custom"))
+        {
+            problems() << QStringLiteral("%1: %2").arg(QFileInfo(e.file).fileName(),
+                                                      QObject::tr("palette \"%1\" is already taken").arg(x->id));
+            continue;
+        }
+        p.push_back(std::move(*x));
+    }
+    p.push_back(std::move(custom));
+    return p;
+}
+
+std::vector<Palette> &registry()
+{
+    static std::vector<Palette> all = compose();
     return all;
 }
 
@@ -131,6 +218,22 @@ int &currentIndex()
 }
 
 } // namespace
+
+QStringList reloadPalettes()
+{
+    const QString id = currentPalette().id;
+    registry() = compose();
+    int &index = currentIndex();
+    index = 0;
+    for (std::size_t i = 0; i < registry().size(); ++i)
+    {
+        if (registry()[i].id == id)
+        {
+            index = static_cast<int>(i);
+        }
+    }
+    return problems();
+}
 
 QColor Palette::colour(int index, int count) const
 {
