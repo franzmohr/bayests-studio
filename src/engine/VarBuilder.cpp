@@ -170,6 +170,18 @@ arma::mat endogenous(const VarBuilderSpec &s)
     return y;
 }
 
+/// Values not observed (NaN in the data set) in the rows a model reads: the
+/// estimation sample, its presample -- the lags of its first period -- and the
+/// held-out periods, and the exogenous variables over all of them.
+struct MissingCount
+{
+    int sample = 0;
+    int presample = 0;
+    int test = 0;
+    int exogenous = 0;
+    bool any() const { return sample + presample + test + exogenous > 0; }
+};
+
 /// The exogenous data, data-set rows by exogenous variables, in levels.
 arma::mat exogenousData(const VarBuilderSpec &s)
 {
@@ -301,10 +313,36 @@ QString VarBuilderSpec::algorithm() const
     return name;
 }
 
+MissingCount countMissing(const VarBuilderSpec &s, int estFirst, int estLast, int lags, int testRows)
+{
+    MissingCount c;
+    if (s.data.empty())
+    {
+        return c;
+    }
+    const int rows = static_cast<int>(s.data.values.n_rows);
+    for (int r = std::max(0, estFirst - lags); r <= std::min(rows - 1, estLast + testRows); ++r)
+    {
+        for (const int col : s.columns)
+        {
+            if (!std::isfinite(s.data.values(static_cast<arma::uword>(r), static_cast<arma::uword>(col))))
+            {
+                (r < estFirst ? c.presample : r <= estLast ? c.sample : c.test) += 1;
+            }
+        }
+        for (const int col : s.exogenous)
+        {
+            c.exogenous += std::isfinite(s.data.values(static_cast<arma::uword>(r), static_cast<arma::uword>(col))) ? 0 : 1;
+        }
+    }
+    return c;
+}
+
 VarBuilderSummary summarise(const VarBuilderSpec &s)
 {
     VarBuilderSummary out;
     const Layout l = layoutOf(s);
+    const MissingCount missing = countMissing(s, l.estFirst, l.estLast, l.p, l.testRows);
     out.k = l.k;
     out.periods = l.tt;
     out.nx = l.nx;
@@ -396,7 +434,8 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
         out.refusal = QObject::tr("A structural model cannot be scored against held-out periods; "
                                   "set the holdout to 0.");
     }
-    else if (s.selection == Selection::Ssvs && s.minnesota && s.randomWalkMean && !l.vec)
+    else if (s.selection == Selection::Ssvs && s.minnesota && !l.vec &&
+             (s.randomWalkMean || std::any_of(s.ownLagMean.begin(), s.ownLagMean.end(), [](double v) { return v != 0.0; })))
     {
         // George, Sun and Ni's sweep scores each coefficient against a
         // spike at zero; BayesTS refuses a prior mean elsewhere.
@@ -427,6 +466,46 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
     else if (s.volatilityBreak >= 0 && (s.volatilityShape <= 0.0 || s.rhoShape1 <= 0.0 || s.rhoShape2 <= 0.0))
     {
         out.refusal = QObject::tr("The prior of the volatility break needs positive shapes.");
+    }
+    else if (missing.any() && l.vec)
+    {
+        out.refusal = QObject::tr("A VEC needs every value observed; %n value(s) are missing. A VAR estimates "
+                                  "them with its coefficients.", nullptr, missing.sample + missing.presample);
+    }
+    else if (missing.exogenous > 0)
+    {
+        out.refusal = QObject::tr("The exogenous variables must be observed in every period the model reads; "
+                                  "%n value(s) are missing.", nullptr, missing.exogenous);
+    }
+    else if (missing.test > 0)
+    {
+        out.refusal = QObject::tr("The held-out periods must be observed to score the forecast against; %n "
+                                  "value(s) are missing there.", nullptr, missing.test);
+    }
+    else if (s.nIid < 0 || (s.nIid > 0 && s.nIid >= l.k))
+    {
+        out.refusal = QObject::tr("Some variables must keep their coefficients: at most %1 of the %2 can be "
+                                  "surprises.").arg(l.k - 1).arg(l.k);
+    }
+    else if (s.nIid > 0 && (l.vec || s.timeVarying))
+    {
+        out.refusal = QObject::tr("Surprise equations without coefficients need a VAR with constant "
+                                  "coefficients.");
+    }
+    else if (s.nIid > 0 && (s.structural || s.selection != Selection::None))
+    {
+        // BayesTS: a structural form lays its contemporaneous block out by
+        // another rule, and selection is a second way to switch coefficients off.
+        out.refusal = QObject::tr("Surprise equations cannot be combined with a structural form or "
+                                  "variable selection.");
+    }
+    else if (!s.ownLagMean.empty() && static_cast<int>(s.ownLagMean.size()) != l.k)
+    {
+        out.refusal = QObject::tr("Give a prior mean of the own first lag for each of the %1 variables.").arg(l.k);
+    }
+    else if (s.minnesota && !(s.lagDecay > 0.0))
+    {
+        out.refusal = QObject::tr("The lag decay of the Minnesota prior must be positive.");
     }
     else if (l.tt < 2)
     {
@@ -474,6 +553,21 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
             out.notes << QObject::tr("The model is estimated in differences and forecast in levels; "
                                      "selection never reaches the %1 loadings.").arg(l.nAlpha);
         }
+        if (s.nIid > 0)
+        {
+            out.notes << QObject::tr("The first %n variable(s) carry no coefficients: white noise, related to "
+                                     "the others only through the error covariance.", nullptr, s.nIid);
+        }
+        if (missing.sample > 0)
+        {
+            out.notes << QObject::tr("%n value(s) not observed in the sample are drawn in every sweep, given "
+                                     "everything else -- the panel completed draw by draw.", nullptr, missing.sample);
+        }
+        if (missing.presample > 0)
+        {
+            out.notes << QObject::tr("%n value(s) not observed before the sample, among the first period's "
+                                     "lags, are conditioned on at zero.", nullptr, missing.presample);
+        }
     }
     return out;
 }
@@ -492,7 +586,13 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     const auto npsi = static_cast<arma::uword>(l.npsi);
     const auto nAlpha = static_cast<arma::uword>(l.nAlpha);
     const auto nBeta = static_cast<arma::uword>(l.kBeta * l.rank);
-    const arma::mat y = endogenous(s);   // levels
+    // Levels. A value not observed is NaN in the data set; the file holds a
+    // zero in its place and the observed entries as hard constraints, from
+    // which BayesTS completes the panel every sweep (model-file.md,
+    // /data/train/constraints). Before the sample the zero is conditioned on.
+    arma::mat y = endogenous(s);
+    const arma::umat observed = arma::conv_to<arma::umat>::from(y == y);   // NaN != NaN
+    y.replace(arma::datum::nan, 0.0);
     const arma::mat xo = exogenousData(s);
     const auto m = static_cast<arma::uword>(l.m);
     std::vector<std::string> exoNames;
@@ -644,20 +744,98 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
 
     // -- Least squares given the starting beta, for the starting values and
     // the Minnesota scales.
+    // Periods whose response and lags were all observed: least squares and
+    // the residual variances read those alone.
+    std::vector<arma::uword> completeRows;
+    std::vector<arma::uword> completePeriods;
+    for (arma::uword t = 0; t < tt; ++t)
+    {
+        bool complete = true;
+        const int row = l.estFirst + static_cast<int>(t);
+        for (int r = row - l.p; r <= row && complete; ++r)
+        {
+            complete = r < 0 || arma::all(observed.row(static_cast<arma::uword>(r)) == 1);
+        }
+        if (complete)
+        {
+            completePeriods.push_back(t);
+            for (arma::uword i = 0; i < k; ++i)
+            {
+                completeRows.push_back(t * k + i);
+            }
+        }
+    }
+    const arma::uvec keepRows(completeRows);
+    const arma::uvec keepPeriods(completePeriods);
+    const arma::mat zc = z.rows(keepRows);
     arma::vec ols(nparams, arma::fill::zeros);
     arma::vec olsSe(nparams, arma::fill::ones);
     bool haveOls = false;
     arma::mat ztzInv;
-    if (tt * k > nparams && arma::inv_sympd(ztzInv, arma::mat(z.t() * z)))
+    if (keepRows.n_elem > nparams && arma::inv_sympd(ztzInv, arma::mat(zc.t() * zc)))
     {
-        ols = ztzInv * (z.t() * yStacked);
+        ols = ztzInv * (zc.t() * yStacked.elem(keepRows));
         haveOls = true;
     }
     arma::mat u = arma::reshape(yStacked - z * ols, k, tt);   // k x tt
+    if (keepPeriods.n_elem > 1 && keepPeriods.n_elem < tt)
+    {
+        u = arma::mat(u.cols(keepPeriods));
+    }
     arma::vec residVar(k);
     for (arma::uword i = 0; i < k; ++i)
     {
         residVar(i) = std::max(arma::var(u.row(i).t()), 1e-8);
+    }
+    // The Minnesota scales sigma_i^2: the VAR's residual variances, or each
+    // variable's from an AR(p) with a constant over the estimation sample and
+    // its p presample periods -- R's sd(lm.fit(cbind(1, lags), y)$residuals)^2.
+    arma::vec scaleVar = residVar;
+    if (s.minnesotaScale == VarBuilderSpec::MinnesotaScale::Autoregressions && !l.vec)
+    {
+        const auto p = static_cast<arma::uword>(l.p);
+        for (arma::uword i = 0; i < k; ++i)
+        {
+            // A series not observed throughout: as the replication codes of
+            // Jarociński and Karadi (2020) do, its presample gaps at zero and
+            // its other gaps dropped, the regression on what is left.
+            std::vector<double> series;
+            const auto first = static_cast<arma::uword>(l.estFirst) - p;
+            for (arma::uword row = first; row <= static_cast<arma::uword>(l.estLast); ++row)
+            {
+                if (observed(row, i) == 1 || row < first + p)
+                {
+                    series.push_back(y(row, i));
+                }
+            }
+            const arma::uword n = series.size() > p ? series.size() - p : 0;
+            arma::mat ar(n, p + 1, arma::fill::ones);
+            arma::vec target(n);
+            for (arma::uword t = 0; t < n; ++t)
+            {
+                target(t) = series[t + p];
+                for (arma::uword lag = 1; lag <= p; ++lag)
+                {
+                    ar(t, lag) = series[t + p - lag];
+                }
+            }
+            arma::vec b;
+            if (arma::solve(b, ar, target))
+            {
+                scaleVar(i) = std::max(arma::var(arma::vec(target - ar * b)), 1e-8);
+            }
+        }
+    }
+    if (s.nIid > 0)
+    {
+        // The surprises' equations start, and stay, at zero.
+        for (arma::uword q = nAlpha; q < nparams; ++q)
+        {
+            if ((q - nAlpha) % k < static_cast<arma::uword>(s.nIid))
+            {
+                ols(q) = 0.0;
+            }
+        }
     }
     if (haveOls)
     {
@@ -699,7 +877,7 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
             double variance = 0.0;
             if (det)
             {
-                variance = s.kappa1 * s.kappa4 * residVar(i);
+                variance = s.minnesotaDetVariance > 0.0 ? s.minnesotaDetVariance : s.kappa1 * s.kappa4 * scaleVar(i);
             }
             else if (exo)
             {
@@ -707,15 +885,15 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
                 // / (l + 1)^2 sigma_i^2 / s_j^2, s_j the regressor's sample
                 // standard deviation.
                 const double lag = static_cast<double>((q - endoRegressors) / m);
-                variance = s.kappa1 * s.kappa2 / ((lag + 1.0) * (lag + 1.0)) * residVar(i) /
+                variance = s.kappa1 * s.kappa2 / std::pow(lag + 1.0, 2.0 * s.lagDecay) * scaleVar(i) /
                            exoVar(q - endoRegressors);
             }
             else
             {
                 const double lag = static_cast<double>(q / k + 1);
                 const arma::uword j = q % k;
-                variance = (i == j) ? s.kappa1 / (lag * lag)
-                                    : s.kappa1 * s.kappa2 / (lag * lag) * residVar(i) / residVar(j);
+                const double decay = std::pow(lag, 2.0 * s.lagDecay);
+                variance = (i == j) ? s.kappa1 / decay : s.kappa1 * s.kappa2 / decay * scaleVar(i) / scaleVar(j);
             }
             precision(pos) = 1.0 / variance;
         }
@@ -778,6 +956,10 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     writeAttribute<int>(file, "/model", "thin", s.thin);
     writeAttribute<std::string>(file, "/model", "varsel", varsel);
     writeAttribute<bool>(file, "/model", "structural", s.structural);
+    if (s.nIid > 0)
+    {
+        writeAttribute<int>(file, "/model", "n_iid", s.nIid);
+    }
     const std::string prefix = s.errors == Errors::Wishart ? "wishart" : gamma ? "gamma" : "sv";
     writeAttribute<std::string>(file, "/model", "error", s.covar ? prefix + "+covar" : prefix);
     if (s.breakInSample())
@@ -810,6 +992,35 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
         }
     }
     writeSeries(file, "/data/train/y", response, responseNames, sample);
+    if (arma::any(arma::vectorise(observed.rows(static_cast<arma::uword>(l.estFirst),
+                                                static_cast<arma::uword>(l.estLast))) == 0))
+    {
+        // Every observed entry of the sample one hard row of weight one.
+        std::vector<double> value, group, rowOf, period, variable, weight;
+        for (arma::uword t = 0; t < tt; ++t)
+        {
+            for (arma::uword i = 0; i < k; ++i)
+            {
+                if (observed(static_cast<arma::uword>(l.estFirst) + t, i) == 1)
+                {
+                    value.push_back(response(t, i));
+                    group.push_back(0.0);
+                    rowOf.push_back(static_cast<double>(value.size()));
+                    period.push_back(static_cast<double>(t + 1));
+                    variable.push_back(static_cast<double>(i + 1));
+                    weight.push_back(1.0);
+                }
+            }
+        }
+        for (const auto &[name, data] : {std::pair{"value", &value}, std::pair{"group", &group},
+                                         std::pair{"row", &rowOf}, std::pair{"period", &period},
+                                         std::pair{"variable", &variable}, std::pair{"weight", &weight}})
+        {
+            const std::string path = std::string("/data/train/constraints/") + name;
+            ensureGroup(file, "/data/train/constraints");
+            file.createDataSet<double>(path, HighFive::DataSpace::From(*data)).write(*data);
+        }
+    }
     writeMat(file, "/data/train/z", z);
     writeDatasetAttribute(file, "/data/train/z", "coefficients", names);
     if (l.m > 0)
@@ -887,12 +1098,12 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     // zero-centred and uncoupled (their block is rebuilt from /priors/beta every
     // draw), which a zero mean and a diagonal precision are.
     arma::vec mu(nparams, arma::fill::zeros);
-    if (s.minnesota && s.randomWalkMean && !l.vec)
+    if (s.minnesota && !l.vec && (s.randomWalkMean || !s.ownLagMean.empty()))
     {
         // Equation i's coefficient on its own first lag: regressor i.
         for (arma::uword i = 0; i < k; ++i)
         {
-            mu(nAlpha + i * k + i) = 1.0;
+            mu(nAlpha + i * k + i) = s.ownLagMean.empty() ? 1.0 : s.ownLagMean[i];
         }
     }
     writeRow(file, "/priors/a/mu", mu);
@@ -1028,7 +1239,9 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     case Errors::Wishart:
     {
         writeScalar<int>(file, "/priors/u_sigma/df", l.k + s.wishartDfExtra);
-        writeMat(file, "/priors/u_sigma/scale", s.wishartScale * arma::eye<arma::mat>(k, k));
+        writeMat(file, "/priors/u_sigma/scale", s.wishartScaleFromResiduals
+                                                    ? arma::mat(arma::diagmat(scaleVar))
+                                                    : arma::mat(s.wishartScale * arma::eye<arma::mat>(k, k)));
         arma::mat sigmaInv;
         if (!arma::inv_sympd(sigmaInv, arma::mat(u * u.t() / static_cast<double>(tt))))
         {

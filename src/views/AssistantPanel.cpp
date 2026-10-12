@@ -479,7 +479,8 @@ void AssistantPanel::refreshSteps(bool follow)
     {
         return;
     }
-    title_->setText(workflow_->title);
+    // A paper reproduced is under its own heading, as in the chooser.
+    title_->setText(example_ && example_->reproduction ? tr("Reproducing papers") : workflow_->title);
     exampleLabel_->setText(example_ ? tr("Following %1").arg(example_->reference) : workflow_->audience);
     const ProjectState st = state();
     const int current = currentStep(*workflow_, st);
@@ -774,11 +775,11 @@ void AssistantPanel::act(const QString &id)
             const int j = static_cast<int>(names.indexOf(r.response));
             if (i >= 0 && j >= 0)
             {
-                preset.push_back({i, j, r.sign, r.horizon});
+                preset.push_back({i, j, r.sign, r.horizon, r.threshold});
             }
         }
         host_->showStageTab(WorkflowStage::Application, tr("Structural analysis"));
-        host_->openSignRestrictions(preset);
+        host_->openSignRestrictions(preset, example_->signRotated);
     }
     else if (id == QLatin1String("exportThesis"))
     {

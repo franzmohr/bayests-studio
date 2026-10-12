@@ -14,6 +14,7 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QCheckBox;
+class QDoubleSpinBox;
 class QGroupBox;
 class QLineEdit;
 class QSpinBox;
@@ -46,7 +47,9 @@ public:
 
     /// Fills the grids with `restrictions` -- a worked example's, for the user
     /// to read and run -- in place of what the dialog started with.
-    void preset(const std::vector<SignRestriction> &restrictions);
+    /// The grid, the threshold (the first restriction's) and the shocks
+    /// rotated (0: all) an example names.
+    void preset(const std::vector<SignRestriction> &restrictions, int rotated = 0);
 
 private:
     struct Outcome
@@ -81,6 +84,8 @@ private:
     /// Horizon (-1 the long run) to the k x k signs, row-major by response.
     std::map<int, std::vector<int>> signs_;
     QSpinBox *maxTries_;
+    QDoubleSpinBox *threshold_;
+    QSpinBox *rotated_;
     QSpinBox *period_;
     QGroupBox *arwBox_;
     QSpinBox *arwTries_;

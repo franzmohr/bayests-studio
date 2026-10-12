@@ -43,7 +43,8 @@ public:
     virtual void runAllStages() = 0;
     virtual bool isRunning() const = 0;
     virtual void showStageTab(WorkflowStage stage, const QString &tab) = 0;
-    virtual void openSignRestrictions(const std::vector<SignRestriction> &preset) = 0;
+    /// `rotated`: the shocks the search rotates, the first n; 0 for all.
+    virtual void openSignRestrictions(const std::vector<SignRestriction> &preset, int rotated) = 0;
     virtual void reloadProject() = 0;
 };
 

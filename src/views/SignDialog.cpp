@@ -27,6 +27,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRandomGenerator>
+#include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -146,8 +147,31 @@ SignDialog::SignDialog(const QString &file, const StructuralSupport &support, QW
     period_ = new QSpinBox;
     period_->setRange(1, std::max(1, support.periods));
     period_->setValue(std::max(1, support.periods));
+    threshold_ = new QDoubleSpinBox;
+    threshold_->setObjectName(QStringLiteral("signThreshold"));
+    threshold_->setRange(0.0, 1e6);
+    threshold_->setDecimals(4);
+    threshold_->setSingleStep(0.01);
+    threshold_->setToolTip(tr("How far beyond zero a restricted response must lie: 0 for the sign alone, as "
+                              "bvartools; Pinchetti (2026) asks for 0.01. In the response's own units."));
+    rotated_ = new QSpinBox;
+    rotated_->setObjectName(QStringLiteral("signRotated"));
+    rotated_->setRange(0, std::max(0, support.k));
+    rotated_->setSpecialValueText(tr("all shocks"));
+    rotated_->setToolTip(tr("Rotate the first n shocks only and keep the others as the Cholesky factor gives "
+                            "them -- recursive, in the variables' order -- as Jarociński and Karadi (2020) "
+                            "do with their surprises ordered first. Every restricted shock must be among them."));
+    connect(rotated_, &QSpinBox::valueChanged, this, [this](int n) {
+        if (n == 1)
+        {
+            rotated_->setValue(rotated_->property("last").toInt() > 1 ? 0 : 2);   // one shock has no rotation
+        }
+        rotated_->setProperty("last", rotated_->value());
+    });
     auto *settings = new QFormLayout;
     settings->addRow(tr("Tries per draw"), maxTries_);
+    settings->addRow(tr("Threshold"), threshold_);
+    settings->addRow(tr("Rotate"), rotated_);
     if (support.moving)
     {
         settings->addRow(tr("Period"), period_);
@@ -265,6 +289,11 @@ SignDialog::SignDialog(const QString &file, const StructuralSupport &support, QW
             setSign(r.horizon < 0 ? -1 : r.horizon, r.response, r.impulse, r.sign);
         }
         maxTries_->setValue(support.sign->maxTries);
+        rotated_->setValue(support.sign->rotated);
+        if (!support.sign->restrictions.empty())
+        {
+            threshold_->setValue(support.sign->restrictions.front().threshold);
+        }
         if (support.sign->period > 0)
         {
             period_->setValue(support.sign->period);
@@ -524,8 +553,10 @@ bool SignDialog::eventFilter(QObject *watched, QEvent *event)
     return QDialog::eventFilter(watched, event);
 }
 
-void SignDialog::preset(const std::vector<SignRestriction> &restrictions)
+void SignDialog::preset(const std::vector<SignRestriction> &restrictions, int rotated)
 {
+    rotated_->setValue(rotated);
+    threshold_->setValue(restrictions.empty() ? 0.0 : restrictions.front().threshold);
     signs_.clear();
     for (const SignRestriction &r : restrictions)
     {
@@ -556,6 +587,9 @@ void SignDialog::updateMode()
     const bool zero = hasZero();
     arwBox_->setVisible(zero);
     maxTries_->setEnabled(!zero);
+    // The sign and zero sampler draws over every shock, against zero.
+    threshold_->setEnabled(!zero);
+    rotated_->setEnabled(!zero);
     mode_->setText(zero ? tr("A zero restriction: the importance sampler, into a new model file.")
                         : tr("Signs alone: rotations tried per draw, written into this model."));
     const SignIdentification id = readTable();
@@ -594,12 +628,13 @@ SignIdentification SignDialog::readTable() const
                 const int v = cells.empty() ? Free : cells[static_cast<std::size_t>(response * k + shock)];
                 if (v != Free)
                 {
-                    id.restrictions.push_back({shock, response, v, h});
+                    id.restrictions.push_back({shock, response, v, h, threshold_->value()});
                 }
             }
         }
     }
     id.maxTries = maxTries_->value();
+    id.rotated = rotated_->value();
     id.period = support_.moving ? period_->value() : -1;
     return id;
 }

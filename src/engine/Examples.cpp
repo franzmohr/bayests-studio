@@ -8,6 +8,7 @@
 #include <QTextStream>
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace studio
@@ -327,6 +328,234 @@ std::vector<WorkflowExample> make()
         out.push_back(e);
     }
 
+    // -- Pinchetti (2026): geopolitical risk shocks from high-frequency
+    // surprises inside a monthly VAR, two shocks told apart by oil.
+    {
+        WorkflowExample e;
+        e.id = QStringLiteral("pinchetti2026");
+        e.workflow = QStringLiteral("thesis");
+        e.title = QObject::tr("Geopolitical risk and inflation: Pinchetti (2026)");
+        e.reference = QStringLiteral("Pinchetti, M. (2026). Geopolitical Risk and Inflation: The Role of Energy "
+                                     "Markets.");
+        e.question = QObject::tr("Is geopolitical risk inflationary? The paper separates a macro geopolitical "
+                                 "shock, which lowers oil prices, from an energy one, which raises them, and asks "
+                                 "what each does to US prices and activity.");
+        e.folder = QStringLiteral("2026-pinchetti");
+        e.recipe.file = e.folder + QStringLiteral("/data/var/var_data_3day.csv");
+        e.recipe.delimiter = QLatin1Char(';');
+        e.recipe.dateColumn = QStringLiteral("year");
+        e.recipe.monthColumn = QStringLiteral("month");
+        e.recipe.dates = DataRecipe::Dates::YearAndMonth;
+        e.recipe.columns = {{QStringLiteral("gpr_surprise"), QStringLiteral("gpr_surprise")},
+                            {QStringLiteral("oil_surprise_spot"), QStringLiteral("oil_surprise_spot")},
+                            {QStringLiteral("GPR"), QStringLiteral("GPR")},
+                            {QStringLiteral("POIL"), QStringLiteral("POIL")},
+                            {QStringLiteral("US_CPI"), QStringLiteral("US_CPI")},
+                            {QStringLiteral("US_IP"), QStringLiteral("US_IP")},
+                            {QStringLiteral("US_1Y"), QStringLiteral("US_1Y")}};
+        e.recipe.first = QStringLiteral("1986-01");
+        e.recipe.last = QStringLiteral("2019-12");
+        e.p = 12;
+        e.minnesota = true;
+        // The paper's prior: standard deviation lambda l^-2 sigma_i / sigma_j
+        // with lambda = 0.1, so kappa1 = lambda^2 and no extra cross-variable
+        // shrinkage; sigma_i from AR(12)s; random walks for the four trending
+        // series; a diffuse intercept; Wishart with k + 2 degrees of freedom
+        // and scale diag(sigma_i^2).
+        ExamplePrior prior;
+        prior.kappa1 = 0.01;
+        prior.kappa2 = 1.0;
+        prior.lagDecay = 2.0;
+        prior.autoregressions = true;
+        prior.deterministicVariance = 1e10;
+        prior.randomWalk = {QStringLiteral("GPR"), QStringLiteral("POIL"), QStringLiteral("US_CPI"),
+                            QStringLiteral("US_IP")};
+        prior.wishartScaleFromResiduals = true;
+        prior.description = QObject::tr("The paper's Minnesota prior: λ = 0.1, lag decay l⁻², AR(12) scales");
+        e.paperPrior = prior;
+        e.wishartDf = 9;
+        e.nIid = 2;
+        e.iterations = 2000;
+        e.burnin = 2000;
+        e.thin = 4;
+        e.seed = 12345;
+        // Both shocks raise geopolitical risk for three months; oil tells them
+        // apart on impact. Beyond 0.01 each, the paper's thresholds.
+        const QString gs = QStringLiteral("gpr_surprise"), os = QStringLiteral("oil_surprise_spot"),
+                      gpr = QStringLiteral("GPR");
+        e.restrictions = {{gs, gs, 1, 0, 0.01},  {gs, os, -1, 0, 0.01}, {gs, gpr, 1, 0, 0.01},
+                          {gs, gpr, 1, 1, 0.01}, {gs, gpr, 1, 2, 0.01}, {os, gs, 1, 0, 0.01},
+                          {os, os, 1, 0, 0.01},  {os, gpr, 1, 0, 0.01}, {os, gpr, 1, 1, 0.01},
+                          {os, gpr, 1, 2, 0.01}};
+        e.signRotated = 2;
+        e.forecastHorizon = 0;
+        e.notes = {
+            {QStringLiteral("question"),
+             QObject::tr("The replication package's 3-day surprises (data/var/var_data_3day.csv): the change in "
+                         "the geopolitical risk index and in the WTI spot price over three days around "
+                         "geopolitical events, zero in the other months -- 30 of the 408 carry one -- and the "
+                         "monthly geopolitical risk index, WTI, US CPI and industrial production, all 100 x log, "
+                         "and the one-year yield in percent, 1986-01 to 2019-12. The 1-, 5- and 7-day windows "
+                         "beside it are the paper's robustness checks.")},
+            {QStringLiteral("inspect"),
+             QObject::tr("The surprises are spikes on a line at zero; the other five trend, and stay in log "
+                         "levels, as a Bayesian VAR in levels may (Sims, Stock and Watson 1990).")},
+            {QStringLiteral("baseline"),
+             QObject::tr("Twelve lags and a constant, the two surprises first. Their equations carry no "
+                         "coefficients at all -- white noise, related to the rest only through the error "
+                         "covariance, which is what identifies the shocks (Jarociński and Karadi 2020); the "
+                         "example sets them so. The paper's prior is preselected: a Minnesota prior with "
+                         "standard deviation 0.1 l⁻² sigma_i / sigma_j, the sigmas from AR(12)s, own first lags "
+                         "centred on one for GPR, WTI, CPI and IP, a diffuse intercept, and a Wishart with 9 "
+                         "degrees of freedom and scale diag(sigma_i^2). 2,000 draws after 2,000, every fourth "
+                         "kept, seed 12345.")},
+            {QStringLiteral("convergence"),
+             QObject::tr("The surprise equations' coefficients are exactly zero in every draw -- a restriction, "
+                         "not a tight prior.")},
+            {QStringLiteral("lags"),
+             QObject::tr("The paper fixes twelve lags, a year of monthly dynamics; the comparison is for "
+                         "practice.")},
+            {QStringLiteral("identify"),
+             QObject::tr("Two shocks, from the two surprises: both raise the geopolitical risk surprise and the "
+                         "index on impact and for two months after; the macro shock (the gpr_surprise column) "
+                         "lowers the oil price surprise on impact, the energy shock (oil_surprise_spot) raises "
+                         "it -- each by more than 0.01. Only those two shocks are rotated; the other five stay "
+                         "the Cholesky factor's. The assistant fills in the restrictions, the threshold and the "
+                         "rotated shocks; every draw should be identified.")},
+            {QStringLiteral("responses"),
+             QObject::tr("Choose Sign restrictions in the responses view and read the gpr_surprise and "
+                         "oil_surprise_spot columns over 36 months: Figure 2 of the paper. The paper scales each "
+                         "shock so that the median peak response of the index is one standard deviation of it "
+                         "(33.8); the studio shows one-standard-deviation shocks, so multiply its macro "
+                         "responses by about 4.2 and its energy responses by about 3.2 to read the paper's.")},
+        };
+        e.findings = QObject::tr(
+            "As the bvartools reproduction finds, in the studio's units (the paper's scale in brackets): the macro "
+            "shock raises the index by about 8.0 on impact (33.8), lowers WTI by about 1.5 (6.5) and by 2.4 "
+            "(10.2) two months on, and with it consumer prices, about 0.05 (0.22) below by three years, and "
+            "industrial production, 0.13 (0.54) at six months -- the 68% bands excluding zero; the one-year yield "
+            "barely moves. The energy shock raises the index by about 10.7 (33.8), WTI by about 1.5 (4.6), and "
+            "consumer prices with it, by about 0.03 (0.10) at seven months, the band excluding zero; the yield "
+            "falls by about 0.03 (0.10) at eight months, and industrial production dips about two years on. So "
+            "geopolitical risk is inflationary or disinflationary depending on which of the two moves -- the "
+            "paper's point. Every draw admits a rotation. The random numbers are not MATLAB's, so the bands "
+            "agree with the paper's in distribution, not draw by draw.");
+        out.push_back(e);
+    }
+
+    // -- Jarociński and Karadi (2020): monetary policy and central bank
+    // information shocks, the surprises missing before 1990 drawn every sweep.
+    {
+        WorkflowExample e;
+        e.id = QStringLiteral("jk2020");
+        e.workflow = QStringLiteral("thesis");
+        e.title = QObject::tr("Monetary policy and information shocks: Jarociński and Karadi (2020)");
+        e.reference = QStringLiteral("Jarociński, M. and Karadi, P. (2020). Deconstructing Monetary Policy "
+                                     "Surprises -- The Role of Information Shocks. American Economic Journal: "
+                                     "Macroeconomics 12(2), 1-43.");
+        e.question = QObject::tr("An FOMC announcement that raises interest rates and lowers stock prices is a "
+                                 "monetary tightening; one that raises both reveals the Fed's view of the economy. "
+                                 "What does each do to output, prices and financial conditions -- and what does "
+                                 "the standard identification, which ignores stocks, get wrong?");
+        e.folder = QStringLiteral("2020-jarocinski karadi");
+        e.recipe.file = e.folder + QStringLiteral("/data/data_var/data.csv");
+        e.recipe.dateColumn = QStringLiteral("year");
+        e.recipe.monthColumn = QStringLiteral("month");
+        e.recipe.dates = DataRecipe::Dates::YearAndMonth;
+        e.recipe.columns = {{QStringLiteral("ff4_hf"), QStringLiteral("ff4_hf")},
+                            {QStringLiteral("sp500_hf"), QStringLiteral("sp500_hf")},
+                            {QStringLiteral("gs1"), QStringLiteral("gs1")},
+                            {QStringLiteral("logsp500"), QStringLiteral("logsp500")},
+                            {QStringLiteral("us_rgdp"), QStringLiteral("us_rgdp")},
+                            {QStringLiteral("us_gdpdef"), QStringLiteral("us_gdpdef")},
+                            {QStringLiteral("ebpnew"), QStringLiteral("ebpnew")}};
+        e.recipe.first = QStringLiteral("1984-02");
+        e.recipe.last = QStringLiteral("2016-12");
+        e.recipe.keepMissing = true;   // the surprises before 1990-02 and the S&P 500 one of 2001-09
+        e.p = 12;
+        e.minnesota = true;
+        // The paper's prior: standard deviation 0.2 l^-1 sigma_i / sigma_j,
+        // sigma_i from AR(12)s on each series with its gaps dropped, random
+        // walks for the three series in log levels, a free constant; Wishart
+        // with k + 2 degrees of freedom and scale diag(sigma_i^2).
+        ExamplePrior prior;
+        prior.kappa1 = 0.04;
+        prior.kappa2 = 1.0;
+        prior.lagDecay = 1.0;
+        prior.autoregressions = true;
+        prior.deterministicVariance = 1e10;
+        prior.randomWalk = {QStringLiteral("logsp500"), QStringLiteral("us_rgdp"), QStringLiteral("us_gdpdef")};
+        prior.wishartScaleFromResiduals = true;
+        prior.description = QObject::tr("The paper's Minnesota prior: λ = 0.2, lag decay 1/l, AR(12) scales");
+        e.paperPrior = prior;
+        e.wishartDf = 9;
+        e.nIid = 2;
+        e.iterations = 2000;
+        e.burnin = 2000;
+        e.thin = 4;
+        e.seed = 12345;
+        // Signs on impact: monetary policy moves the surprises apart, central
+        // bank information together. The other five shocks stay recursive.
+        const QString ff = QStringLiteral("ff4_hf"), sp = QStringLiteral("sp500_hf");
+        e.restrictions = {{ff, ff, 1, 0}, {ff, sp, -1, 0}, {sp, ff, 1, 0}, {sp, sp, 1, 0}};
+        e.signRotated = 2;
+        e.forecastHorizon = 0;
+        e.notes = {
+            {QStringLiteral("question"),
+             QObject::tr("The replication package's data/data_var/data.csv: the surprises in the three-month fed "
+                         "funds futures and the S&P 500 in the thirty minutes around FOMC announcements, in "
+                         "percentage points; the one-year yield and the excess bond premium in percent; the S&P "
+                         "500, real GDP and the GDP deflator in 100 x log, GDP interpolated to months by the "
+                         "authors. 1984-02 to 2016-12. The surprises start in 1990-02, and the S&P 500 one is "
+                         "missing in 2001-09: the assistant keeps those months, as the paper does, for the "
+                         "sampler to draw.")},
+            {QStringLiteral("inspect"),
+             QObject::tr("The surprises are white noise around zero and blank before 1990; the other five trend "
+                         "or wander, and stay in levels.")},
+            {QStringLiteral("baseline"),
+             QObject::tr("Twelve lags and a constant, the two surprises first and without coefficients -- white "
+                         "noise reaching the macro variables only through the error covariance. The 121 "
+                         "surprises not observed in the sample are drawn in every sweep from their distribution "
+                         "given everything else; the twelve presample months are conditioned on at zero. The "
+                         "paper's prior is preselected: a Minnesota prior with standard deviation 0.2 l⁻¹ "
+                         "sigma_i / sigma_j, the sigmas from AR(12)s on each series with its gaps dropped, own "
+                         "first lags centred on one for the S&P 500, GDP and the deflator, a free constant, and "
+                         "a Wishart with 9 degrees of freedom and scale diag(sigma_i^2). 2,000 draws after 2,000, "
+                         "every fourth kept, seed 12345.")},
+            {QStringLiteral("convergence"),
+             QObject::tr("The surprise equations' coefficients are exactly zero in every draw. A drawn surprise "
+                         "has a posterior standard deviation close to that of the observed ones: the monthly "
+                         "variables say little about a thirty-minute window, which is why the paper can keep "
+                         "those months without the gaps steering the results.")},
+            {QStringLiteral("lags"),
+             QObject::tr("The paper fixes twelve lags; the comparison is for practice.")},
+            {QStringLiteral("identify"),
+             QObject::tr("On impact, a monetary policy shock (the ff4_hf column) raises the fed funds futures and "
+                         "lowers stocks; a central bank information shock (sp500_hf) raises both. Only those two "
+                         "shocks are rotated; the other five stay the Cholesky factor's. The assistant fills in "
+                         "the signs and the rotated shocks; every draw admits a rotation.")},
+            {QStringLiteral("responses"),
+             QObject::tr("Figure 2: choose Sign restrictions, 36 months, and read the ff4_hf and sp500_hf columns "
+                         "for the five macro variables; panel B, the standard high-frequency identification, is "
+                         "the Orthogonalised (oir) ff4_hf column of the same model. Table 2 is the impact "
+                         "responses of the two surprises, in percentage points -- times 100 for the paper's "
+                         "basis points. Figure 4 is the historical decomposition of ff4_hf under the sign "
+                         "restrictions, from 1990.")},
+        };
+        e.findings = QObject::tr(
+            "Table 2 of the paper: on impact the monetary policy shock raises the fed funds futures by 5 basis "
+            "points (3 to 6) and lowers the S&P 500 by 42 (52 to 23); the information shock raises them by 3 (0 to "
+            "5) and 28 (3 to 45); the standard identification gives 6 and -21. The bvartools reproduction is within "
+            "two basis points of each. A monetary policy shock lowers real GDP and the deflator persistently, by "
+            "about 0.08 and 0.05 percent after two years, and raises the excess bond premium; an information "
+            "shock raises the one-year yield by about 0.10 a year on, against 0.03 after the policy shock, lowers "
+            "the bond premium and raises output and prices. The standard identification mixes the two: its "
+            "deflator response, about -0.03 after two years, is the weak one the literature had puzzled over -- "
+            "the paper's result. The random numbers are not MATLAB's, so the bands agree in distribution, not draw "
+            "by draw.");
+        out.push_back(e);
+    }
+
     // -- The papers the studio cannot yet implement step by step.
     const auto later = [&](const QString &id, const QString &workflow, const QString &title, const QString &folder,
                            const QString &missing) {
@@ -339,15 +568,6 @@ std::vector<WorkflowExample> make()
         e.missing = missing;
         out.push_back(e);
     };
-    later(QStringLiteral("jk2020"), QStringLiteral("thesis"),
-          QObject::tr("Monetary policy and information shocks: Jarociński and Karadi (2020)"),
-          QStringLiteral("2020-jarocinski karadi"),
-          QObject::tr("High-frequency surprises as equations without coefficients (n_iid), their missing months "
-                      "estimated, and a rotation of two shocks only, the others recursive."));
-    later(QStringLiteral("pinchetti2026"), QStringLiteral("thesis"),
-          QObject::tr("Geopolitical risk and inflation: Pinchetti (2026)"), QStringLiteral("2026-pinchetti"),
-          QObject::tr("As Jarociński and Karadi, and sign restrictions with thresholds over three horizons and a "
-                      "Minnesota prior with quadratic lag decay."));
     later(QStringLiteral("esrb2026"), QStringLiteral("thesis"),
           QObject::tr("Political risk and euro area markets: ESRB (2026)"),
           QStringLiteral("2026-esrb-geoeconomic fragmentation"),
@@ -475,7 +695,7 @@ DataSet prepareExampleData(const DataRecipe &recipe, const QString &root)
     }
     const auto unquote = [](QString s) { return s.trimmed().remove(QLatin1Char('"')); };
     QStringList header;
-    for (const QString &h : lines.takeFirst().split(QLatin1Char(',')))
+    for (const QString &h : lines.takeFirst().split(recipe.delimiter))
     {
         header << unquote(h);
     }
@@ -483,6 +703,12 @@ DataSet prepareExampleData(const DataRecipe &recipe, const QString &root)
     if (dateAt < 0)
     {
         throw std::runtime_error(QObject::tr("%1 has no column %2.").arg(path, recipe.dateColumn).toStdString());
+    }
+    const bool yearAndMonth = recipe.dates == DataRecipe::Dates::YearAndMonth;
+    const qsizetype monthAt = yearAndMonth ? header.indexOf(recipe.monthColumn) : -1;
+    if (yearAndMonth && monthAt < 0)
+    {
+        throw std::runtime_error(QObject::tr("%1 has no column %2.").arg(path, recipe.monthColumn).toStdString());
     }
     std::vector<qsizetype> at;
     for (const auto &[source, name] : recipe.columns)
@@ -504,8 +730,12 @@ DataSet prepareExampleData(const DataRecipe &recipe, const QString &root)
     bool inSample = recipe.first.isEmpty();
     for (const QString &line : lines)
     {
-        const QStringList cells = line.split(QLatin1Char(','));
-        const QString label = convertDate(unquote(cells.value(dateAt)), recipe.dates);
+        const QStringList cells = line.split(recipe.delimiter);
+        // "1986-01", as an ISO date's month is labelled.
+        const QString label = yearAndMonth ? QStringLiteral("%1-%2")
+                                                 .arg(unquote(cells.value(dateAt)))
+                                                 .arg(unquote(cells.value(monthAt)).toInt(), 2, 10, QLatin1Char('0'))
+                                           : convertDate(unquote(cells.value(dateAt)), recipe.dates);
         if (!inSample && label == recipe.first)
         {
             inSample = true;
@@ -520,6 +750,11 @@ DataSet prepareExampleData(const DataRecipe &recipe, const QString &root)
         {
             bool ok = false;
             const double v = unquote(cells.value(i)).toDouble(&ok);
+            if (recipe.keepMissing && !ok)
+            {
+                row.push_back(std::numeric_limits<double>::quiet_NaN());
+                continue;
+            }
             complete = complete && ok && std::isfinite(v);
             row.push_back(v);
         }
@@ -601,7 +836,13 @@ void writeDataSet(const DataSet &data, const QString &path)
         out << data.periodLabel(r);
         for (int c = 0; c < data.series(); ++c)
         {
-            out << ',' << QString::number(data.values(static_cast<arma::uword>(r), static_cast<arma::uword>(c)), 'g', 17);
+            // A value not observed is an empty cell, which the reader takes back as one.
+            const double v = data.values(static_cast<arma::uword>(r), static_cast<arma::uword>(c));
+            out << ',';
+            if (std::isfinite(v))
+            {
+                out << QString::number(v, 'g', 17);
+            }
         }
         out << '\n';
     }

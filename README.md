@@ -331,17 +331,22 @@ components it uses.
     tab plots. `test/horserace_test.cpp` runs a race end to end and
     `test/horserace_reference.R` recomputes every score with bvartools from
     the same files: 1.8e-15.
-  - **Worked examples**, from the reproductions in
-    `D:\projects\reproduction-projects` (located once, then remembered): the
-    assistant prepares the paper's data from its replication files, fills in
-    its specification and identification, and says at every step what the
-    paper does there and what to expect -- Arias, Rubio-Ramírez and
-    Waggoner (2018) and Nam and Wang (2018) for the thesis workflow,
-    forecasting through the pandemic on Lenza and Primiceri's (2022) data
-    for the horse race. The papers the studio cannot yet implement step by
-    step -- Jarociński and Karadi (2020), Pinchetti (2026), ESRB (2026), Lenza
-    and Primiceri's hierarchical prior and scenarios -- are listed with what
-    they need.
+  - **Worked examples**: Lütkepohl's (2006) VAR, as the bvartools
+    introduction runs it, on data the studio ships; and, from the
+    reproductions in `D:\projects\reproduction-projects` (located once, then
+    remembered), the papers under "Reproducing papers", for which the
+    assistant prepares the data from the replication files, fills in the
+    specification and identification, and says at every step what the paper
+    does there and what to expect -- Arias, Rubio-Ramírez and Waggoner
+    (2018), Nam and Wang (2018), Leduc and Liu (2016), Jarociński and
+    Karadi (2020) and Pinchetti (2026) for structural analysis, the last two
+    with their high-frequency surprises as equations without coefficients,
+    their own Minnesota priors and two shocks rotated, Jarociński and
+    Karadi's missing surprises drawn every sweep and Pinchetti's
+    restrictions with thresholds; forecasting through the pandemic on Lenza
+    and Primiceri's (2022) data for the horse race. The papers the studio
+    cannot yet implement step by step -- ESRB (2026), Lenza and Primiceri's
+    hierarchical prior and scenarios -- are listed with what they need.
 
 ## Roadmap
 

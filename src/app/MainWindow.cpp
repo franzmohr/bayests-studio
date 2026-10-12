@@ -619,7 +619,7 @@ void MainWindow::showStageTab(WorkflowStage stage, const QString &tab)
     }
 }
 
-void MainWindow::openSignRestrictions(const std::vector<SignRestriction> &preset)
+void MainWindow::openSignRestrictions(const std::vector<SignRestriction> &preset, int rotated)
 {
     if (file_.isEmpty())
     {
@@ -633,7 +633,7 @@ void MainWindow::openSignRestrictions(const std::vector<SignRestriction> &preset
         return;
     }
     SignDialog dialog(file_, support, this);
-    dialog.preset(preset);
+    dialog.preset(preset, rotated);
     if (dialog.exec() == QDialog::Accepted)
     {
         if (!dialog.createdFile().isEmpty())

@@ -481,8 +481,41 @@ QJsonObject specToJson(const VarBuilderSpec &s)
     o[QStringLiteral("kappa4")] = s.kappa4;
     o[QStringLiteral("coefPrecision")] = s.coefPrecision;
     o[QStringLiteral("detPrecision")] = s.detPrecision;
+    o[QStringLiteral("wishartDfExtra")] = s.wishartDfExtra;
+    o[QStringLiteral("wishartScale")] = s.wishartScale;
+    if (s.nIid > 0)
+    {
+        o[QStringLiteral("nIid")] = s.nIid;
+    }
+    if (s.lagDecay != 1.0)
+    {
+        o[QStringLiteral("lagDecay")] = s.lagDecay;
+    }
+    if (s.minnesotaScale == VarBuilderSpec::MinnesotaScale::Autoregressions)
+    {
+        o[QStringLiteral("minnesotaScale")] = QStringLiteral("autoregressions");
+    }
+    if (!s.ownLagMean.empty())
+    {
+        // By variable, as the columns are, so a reordering keeps each its own.
+        QJsonObject means;
+        for (std::size_t i = 0; i < s.ownLagMean.size() && i < s.columns.size(); ++i)
+        {
+            means[s.data.names.value(s.columns[i])] = s.ownLagMean[i];
+        }
+        o[QStringLiteral("ownLagMean")] = means;
+    }
+    if (s.minnesotaDetVariance > 0.0)
+    {
+        o[QStringLiteral("minnesotaDetVariance")] = s.minnesotaDetVariance;
+    }
+    if (s.wishartScaleFromResiduals)
+    {
+        o[QStringLiteral("wishartScaleFromResiduals")] = true;
+    }
     o[QStringLiteral("iterations")] = s.iterations;
     o[QStringLiteral("burnin")] = s.burnin;
+    o[QStringLiteral("thin")] = s.thin;
     o[QStringLiteral("seed")] = s.seed ? static_cast<double>(*s.seed) : -1.0;
     o[QStringLiteral("horizon")] = s.horizon;
     o[QStringLiteral("holdout")] = s.holdout;
@@ -553,8 +586,25 @@ std::optional<VarBuilderSpec> specFromJson(const QJsonObject &o, const DataSet &
     s.kappa4 = o[QStringLiteral("kappa4")].toDouble(100.0);
     s.coefPrecision = o[QStringLiteral("coefPrecision")].toDouble(1.0);
     s.detPrecision = o[QStringLiteral("detPrecision")].toDouble(0.1);
+    s.wishartDfExtra = o[QStringLiteral("wishartDfExtra")].toInt(0);
+    s.wishartScale = o[QStringLiteral("wishartScale")].toDouble(1.0);
+    s.nIid = o[QStringLiteral("nIid")].toInt(0);
+    s.lagDecay = o[QStringLiteral("lagDecay")].toDouble(1.0);
+    s.minnesotaScale = o[QStringLiteral("minnesotaScale")].toString() == QLatin1String("autoregressions")
+                           ? VarBuilderSpec::MinnesotaScale::Autoregressions
+                           : VarBuilderSpec::MinnesotaScale::VarResiduals;
+    if (const QJsonObject means = o[QStringLiteral("ownLagMean")].toObject(); !means.isEmpty())
+    {
+        for (const int c : s.columns)
+        {
+            s.ownLagMean.push_back(means[data.names.value(c)].toDouble(0.0));
+        }
+    }
+    s.minnesotaDetVariance = o[QStringLiteral("minnesotaDetVariance")].toDouble(0.0);
+    s.wishartScaleFromResiduals = o[QStringLiteral("wishartScaleFromResiduals")].toBool(false);
     s.iterations = o[QStringLiteral("iterations")].toInt(20000);
     s.burnin = o[QStringLiteral("burnin")].toInt(2000);
+    s.thin = std::max(1, o[QStringLiteral("thin")].toInt(1));
     const double seed = o[QStringLiteral("seed")].toDouble(-1.0);
     if (seed >= 0)
     {
@@ -584,10 +634,15 @@ std::vector<std::pair<QString, VarBuilderSpec>> lagVariants(const VarBuilderSpec
 std::vector<std::pair<QString, VarBuilderSpec>> robustnessVariants(const VarBuilderSpec &b)
 {
     std::vector<std::pair<QString, VarBuilderSpec>> out;
-    if (b.columns.size() > 1)
+    // The surprises stay first: their position is what restricts them.
+    if (b.columns.size() > static_cast<std::size_t>(b.nIid) + 1)
     {
         VarBuilderSpec s = b;
-        std::reverse(s.columns.begin(), s.columns.end());
+        std::reverse(s.columns.begin() + b.nIid, s.columns.end());
+        if (s.ownLagMean.size() == s.columns.size())
+        {
+            std::reverse(s.ownLagMean.begin() + b.nIid, s.ownLagMean.end());
+        }
         out.emplace_back(QStringLiteral("robust-reverse-order"), s);
     }
     {
@@ -723,17 +778,81 @@ QString methodsParagraph(const QString &file, const std::optional<VarBuilderSpec
     {
         sentences << QObject::tr("The cointegration space has the prior of Koop, León-González and Strachan (2010).");
     }
+    if (spec && spec->nIid > 0)
+    {
+        QStringList surprises;
+        for (int i = 0; i < spec->nIid && i < static_cast<int>(variables.size()); ++i)
+        {
+            surprises << variables.value(i);
+        }
+        sentences << QObject::tr("%1 %2 high-frequency %3: %4 no coefficients, so that %5 the other variables "
+                                 "only through the error covariance (Jarociński and Karadi 2020).")
+                         .arg(listing(surprises))
+                         .arg(spec->nIid == 1 ? QObject::tr("is a") : QObject::tr("are"))
+                         .arg(spec->nIid == 1 ? QObject::tr("surprise") : QObject::tr("surprises"))
+                         .arg(spec->nIid == 1 ? QObject::tr("its equation carries") : QObject::tr("their equations carry"))
+                         .arg(spec->nIid == 1 ? QObject::tr("it relates to") : QObject::tr("they relate to"));
+    }
+    // A panel not observed whole: the entries observed are the constraints,
+    // the rest drawn with the parameters.
+    try
+    {
+        const HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+        if (h5.exist("/data/train/constraints/value"))
+        {
+            const auto observed = static_cast<int>(h5.getDataSet("/data/train/constraints/value").getElementCount());
+            const int missing = r.periods * static_cast<int>(variables.size()) - observed;
+            if (missing > 0)
+            {
+                sentences << QObject::tr("The %1 values not observed in the sample are drawn in every sweep of the "
+                                         "Gibbs sampler from their distribution given the data and the parameters, "
+                                         "so that the results integrate over them rather than condition on a "
+                                         "guess.")
+                                 .arg(missing);
+            }
+        }
+    }
+    catch (const std::exception &)
+    {
+    }
     if (spec && spec->minnesota)
     {
-        sentences << QObject::tr("The coefficients have a Minnesota prior (Litterman 1986) centred on %4, with "
-                                 "overall tightness %1, cross-variable tightness %2 and a relative tightness of %3 "
-                                 "on the deterministic terms, the prior variances scaled by the residual variances "
-                                 "of least squares estimates.")
+        // Centred on a random walk for every variable, for some, or none.
+        QString centre = spec->randomWalkMean ? QObject::tr("a random walk for every variable") : QObject::tr("white noise");
+        if (!spec->ownLagMean.empty())
+        {
+            QStringList walks;
+            for (std::size_t i = 0; i < spec->ownLagMean.size() && i < static_cast<std::size_t>(variables.size()); ++i)
+            {
+                if (spec->ownLagMean[i] != 0.0)
+                {
+                    walks << variables.value(static_cast<qsizetype>(i));
+                }
+            }
+            centre = walks.isEmpty() ? QObject::tr("white noise")
+                     : walks.size() == static_cast<qsizetype>(spec->ownLagMean.size())
+                         ? QObject::tr("a random walk for every variable")
+                         : QObject::tr("a random walk for %1 and white noise for the others").arg(listing(walks));
+        }
+        // In words: the paragraph is escaped for LaTeX, where l^-2 would not survive.
+        const QString decay = spec->lagDecay == 1.0   ? QObject::tr("inversely with l")
+                              : spec->lagDecay == 2.0 ? QObject::tr("inversely with the square of l")
+                                                      : QObject::tr("as l to the power -%1").arg(spec->lagDecay);
+        const QString deterministic =
+            spec->minnesotaDetVariance > 0.0
+                ? QObject::tr("a prior variance of %1 on the deterministic terms").arg(spec->minnesotaDetVariance)
+                : QObject::tr("a relative tightness of %1 on the deterministic terms").arg(spec->kappa4);
+        const QString scales = spec->minnesotaScale == VarBuilderSpec::MinnesotaScale::Autoregressions
+                                   ? QObject::tr("of univariate AR(%1) regressions").arg(spec->p)
+                                   : QObject::tr("of least squares estimates");
+        sentences << QObject::tr("The coefficients have a Minnesota prior (Litterman 1986) centred on %1, with "
+                                 "overall tightness %2, cross-variable tightness %3, the prior standard deviation of "
+                                 "lag l falling %4, and %5, the prior variances scaled by the residual variances "
+                                 "%6.")
+                         .arg(centre)
                          .arg(spec->kappa1)
                          .arg(spec->kappa2)
-                         .arg(spec->kappa4)
-                         .arg(spec->randomWalkMean ? QObject::tr("a random walk for every variable")
-                                                   : QObject::tr("white noise"));
+                         .arg(decay, deterministic, scales);
     }
     else if (spec)
     {
@@ -744,9 +863,12 @@ QString methodsParagraph(const QString &file, const std::optional<VarBuilderSpec
     }
     if (r.errorSpec == QLatin1String("wishart") || r.algorithm.endsWith(QLatin1String("Wishart")))
     {
-        sentences << QObject::tr("The error covariance has an inverse Wishart prior with %1 degrees of freedom.")
+        sentences << QObject::tr("The error covariance has an inverse Wishart prior with %1 degrees of freedom%2.")
                          .arg(spec ? QString::number(static_cast<int>(variables.size()) + spec->wishartDfExtra)
-                                   : QObject::tr("k"));
+                                   : QObject::tr("k"))
+                         .arg(spec && spec->wishartScaleFromResiduals
+                                  ? QObject::tr(" and a diagonal scale of the same residual variances")
+                                  : QString());
     }
     if (spec && spec->breakInSample())
     {
@@ -831,11 +953,27 @@ QString methodsParagraph(const QString &file, const std::optional<VarBuilderSpec
                 shocks << name;
             }
         }
+        double threshold = 0.0;
+        for (const SignRestriction &x : id->restrictions)
+        {
+            threshold = std::max(threshold, x.threshold);
+        }
+        QStringList rotated;
+        for (int i = 0; i < id->rotated && i < static_cast<int>(variables.size()); ++i)
+        {
+            rotated << variables.value(i);
+        }
         sentences << QObject::tr("The shocks to %1 are identified by sign restrictions on the impulse responses "
-                                 "(Rubio-Ramírez, Waggoner and Zha 2010), with %2 restrictions; %3 of the %4 "
+                                 "(Rubio-Ramírez, Waggoner and Zha 2010), with %2 restrictions%3%4; %5 of the %6 "
                                  "posterior draws admit a rotation that satisfies them.")
                          .arg(listing(shocks))
                          .arg(id->restrictions.size())
+                         .arg(threshold > 0.0 ? QObject::tr(", each response beyond %1 in size").arg(threshold)
+                                              : QString())
+                         .arg(rotated.isEmpty() ? QString()
+                                                : QObject::tr(", rotating the shocks to %1 alone and keeping the "
+                                                              "others recursive")
+                                                      .arg(listing(rotated)))
                          .arg(id->accepted)
                          .arg(id->draws);
     }

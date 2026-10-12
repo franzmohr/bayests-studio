@@ -140,7 +140,10 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     auto *list = new QHBoxLayout;
     list->addWidget(variables_, 1);
     list->addLayout(arrows);
-    layout->addWidget(new QLabel(tr("Variables, in the recursive order: slow-moving first, the policy instrument last")));
+    layout->addWidget(new QLabel(example && example->nIid > 0
+                                     ? tr("Variables, in the recursive order: the %n surprise(s) first, as the "
+                                          "example sets them, then the others", nullptr, example->nIid)
+                                     : tr("Variables, in the recursive order: slow-moving first, the policy instrument last")));
     layout->addLayout(list);
 
     auto *form = new QFormLayout;
@@ -175,13 +178,20 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     prior_->addItem(tr("Minnesota prior, for growth rates (recommended)"));
     prior_->addItem(tr("Flat: the data alone"));
     prior_->addItem(tr("Minnesota prior, random walks, for series in levels"));
-    prior_->setCurrentIndex(example && !example->minnesota ? 1 : 0);
+    if (example && example->paperPrior)
+    {
+        // The paper's own, which none of the three is.
+        prior_->addItem(example->paperPrior->description.isEmpty() ? tr("The paper's prior")
+                                                                   : example->paperPrior->description);
+    }
+    prior_->setCurrentIndex(example && example->paperPrior ? 3 : (example && !example->minnesota ? 1 : 0));
     prior_->setToolTip(tr("The Minnesota prior (Litterman 1986) shrinks towards white noise for growth rates, or towards random walks for series in levels; flat lets the data alone speak, which a small sample with many lags cannot afford."));
     form->addRow(tr("Coefficient prior"), prior_);
     kappa1_ = new QDoubleSpinBox;
-    kappa1_->setRange(0.01, 10.0);
+    kappa1_->setRange(0.0001, 10.0);
+    kappa1_->setDecimals(4);
     kappa1_->setSingleStep(0.05);
-    kappa1_->setValue(0.2);
+    kappa1_->setValue(example && example->paperPrior ? example->paperPrior->kappa1 : 0.2);
     kappa1_->setToolTip(tr("Overall tightness of the Minnesota prior: smaller shrinks every coefficient harder towards the prior mean -- white noise, or random walks with the prior for levels."));
     form->addRow(tr("Tightness κ₁"), kappa1_);
     iterations_ = new QSpinBox;
@@ -237,6 +247,26 @@ VarBuilderSpec ThesisBaselineDialog::spec() const
     s.minnesota = prior_->currentIndex() != 1;
     s.randomWalkMean = prior_->currentIndex() == 2;
     s.kappa1 = kappa1_->value();
+    if (prior_->currentIndex() == 3 && example_ && example_->paperPrior)
+    {
+        const ExamplePrior &pp = *example_->paperPrior;
+        s.kappa2 = pp.kappa2;
+        s.lagDecay = pp.lagDecay;
+        s.minnesotaScale = pp.autoregressions ? VarBuilderSpec::MinnesotaScale::Autoregressions
+                                              : VarBuilderSpec::MinnesotaScale::VarResiduals;
+        s.minnesotaDetVariance = pp.deterministicVariance;
+        s.wishartScaleFromResiduals = pp.wishartScaleFromResiduals;
+        for (const int c : s.columns)
+        {
+            s.ownLagMean.push_back(pp.randomWalk.contains(data_.names.value(c)) ? 1.0 : 0.0);
+        }
+    }
+    if (example_)
+    {
+        // The surprises are the example's first series, wherever they are checked.
+        s.nIid = example_->nIid;
+        s.thin = std::max(1, example_->thin);
+    }
     if (!s.minnesota)
     {
         s.coefPrecision = example_ ? example_->coefPrecision : 1e-4;
@@ -271,7 +301,9 @@ void ThesisBaselineDialog::update()
     }
     else
     {
-        summary_->setText(tr("%1 variables, %2 periods, %3 coefficients.").arg(s.k).arg(s.periods).arg(s.nparams));
+        // What the builder notes -- surprises, values to draw -- after the counts.
+        summary_->setText(tr("%1 variables, %2 periods, %3 coefficients.").arg(s.k).arg(s.periods).arg(s.nparams) +
+                          (s.notes.isEmpty() ? QString() : QLatin1Char(' ') + s.notes.join(QLatin1Char(' '))));
     }
     ok_->setEnabled(s.refusal.isEmpty());
 }

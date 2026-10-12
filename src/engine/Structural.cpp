@@ -341,6 +341,15 @@ std::optional<SignIdentification> readSignIdentification(const QString &file)
         };
         id.maxTries = intAttribute("max_tries", 1000);
         id.period = intAttribute("period", -1);
+        id.rotated = intAttribute("rotated", 0);
+        if (g.hasAttribute("thresholds"))
+        {
+            const auto thresholds = g.getAttribute("thresholds").read<std::vector<double>>();
+            for (std::size_t r = 0; r < id.restrictions.size() && r < thresholds.size(); ++r)
+            {
+                id.restrictions[r].threshold = thresholds[r];
+            }
+        }
         const Matrix q = readMatrix(file, QStringLiteral("/posterior/q/coeffs"));
         id.draws = static_cast<int>(q.cols);
         for (std::size_t d = 0; d < q.cols; ++d)
@@ -369,12 +378,30 @@ SignIdentification identifySigns(const QString &file, const SignIdentification &
     for (const SignRestriction &r : spec.restrictions)
     {
         if (r.impulse < 0 || r.impulse >= k || r.response < 0 || r.response >= k || r.horizon < 0 ||
-            (r.sign != 1 && r.sign != -1))
+            (r.sign != 1 && r.sign != -1) || !(r.threshold >= 0.0))
         {
-            throw std::runtime_error(QObject::tr("A restriction names a variable, a sign or a horizon "
-                                                 "that does not exist.").toStdString());
+            throw std::runtime_error(QObject::tr("A restriction names a variable, a sign, a horizon or a "
+                                                 "threshold that does not exist.").toStdString());
         }
         hMax = std::max(hMax, r.horizon);
+    }
+    if (spec.rotated < 0 || spec.rotated > k || spec.rotated == 1)
+    {
+        throw std::runtime_error(QObject::tr("Rotate two shocks or more, or all of them; one shock alone has "
+                                             "no rotation but its sign.").toStdString());
+    }
+    const int block = spec.rotated > 0 ? spec.rotated : k;
+    for (const SignRestriction &r : spec.restrictions)
+    {
+        if (r.impulse >= block)
+        {
+            throw std::runtime_error(QObject::tr("The %1 shock is restricted but not among the %2 rotated: "
+                                                 "outside them the shocks are the Cholesky factor's, which "
+                                                 "no rotation changes.")
+                                         .arg(r.impulse + 1)
+                                         .arg(block)
+                                         .toStdString());
+        }
     }
     // bvartools' .check_sign_restrictions(): both signs of one response at
     // one horizon reject every rotation, and would only after the whole budget.
@@ -421,7 +448,10 @@ SignIdentification identifySigns(const QString &file, const SignIdentification &
         {
             theta.push_back(f * P);
         }
-        arma::mat draw(kk, kk), qFactor, rFactor;
+        // Uniform on the orthogonal group of the rotated block, the identity
+        // outside it.
+        const auto nb = static_cast<arma::uword>(block);
+        arma::mat draw(nb, nb), qFactor, rFactor;
         for (int attempt = 0; attempt < spec.maxTries; ++attempt)
         {
             draw.imbue([&]() { return normal(rng); });
@@ -431,7 +461,8 @@ SignIdentification identifySigns(const QString &file, const SignIdentification &
             }
             arma::vec diagSign = arma::sign(rFactor.diag());
             diagSign.replace(0.0, 1.0);
-            arma::mat candidate = qFactor * arma::diagmat(diagSign);
+            arma::mat candidate = arma::eye<arma::mat>(kk, kk);
+            candidate.submat(0, 0, nb - 1, nb - 1) = qFactor * arma::diagmat(diagSign);
             bool ok = true;
             for (std::size_t si = 0; si < shocks.size() && ok; ++si)
             {
@@ -447,15 +478,17 @@ SignIdentification identifySigns(const QString &file, const SignIdentification &
                     const double value = arma::dot(theta[static_cast<std::size_t>(r.horizon)].row(
                                                        static_cast<arma::uword>(r.response)),
                                                    candidate.col(j));
+                    // Beyond the threshold on the side of the sign; flipped,
+                    // the column satisfies it on the other.
                     if (r.sign > 0)
                     {
-                        asDrawn = asDrawn && value > 0;
-                        flipped = flipped && value < 0;
+                        asDrawn = asDrawn && value > r.threshold;
+                        flipped = flipped && value < -r.threshold;
                     }
                     else
                     {
-                        asDrawn = asDrawn && value < 0;
-                        flipped = flipped && value > 0;
+                        asDrawn = asDrawn && value < -r.threshold;
+                        flipped = flipped && value > r.threshold;
                     }
                 }
                 if (!asDrawn)
@@ -521,6 +554,23 @@ SignIdentification identifySigns(const QString &file, const SignIdentification &
     const std::vector<std::string> columns{"impulse", "response", "sign", "horizon"};
     h5.getDataSet("/model/sign_restrictions/restrictions").createAttribute("columns", columns);
     g.createAttribute("max_tries", std::vector<int>{spec.maxTries});
+    // The studio's additions, which bvartools does not read: written only when
+    // they say something, so a plain identification's file is bvartools' own.
+    bool thresholds = false;
+    std::vector<double> threshold;
+    for (const SignRestriction &x : spec.restrictions)
+    {
+        threshold.push_back(x.threshold);
+        thresholds = thresholds || x.threshold > 0.0;
+    }
+    if (thresholds)
+    {
+        g.createAttribute("thresholds", threshold);
+    }
+    if (spec.rotated > 0 && spec.rotated < k)
+    {
+        g.createAttribute("rotated", std::vector<int>{spec.rotated});
+    }
     if (spec.period > 0)
     {
         g.createAttribute("period", std::vector<int>{spec.period});

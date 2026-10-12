@@ -42,22 +42,34 @@ enum class ResponseType
 };
 
 /// One sign restriction: the response of `response` to the shock of
-/// `impulse` at `horizon` has the sign of `sign` (+1 or -1). Variables are
-/// 0-based here and 1-based in the file, as bvartools writes them.
+/// `impulse` at `horizon` has the sign of `sign` (+1 or -1), and exceeds
+/// `threshold` in size -- 0 for a sign alone, bvartools' rule; Pinchetti (2026)
+/// asks for 0.01. Variables are 0-based here and 1-based in the file, as
+/// bvartools writes them.
 struct SignRestriction
 {
     int impulse = 0;
     int response = 0;
     int sign = 1;
     int horizon = 0;
+    double threshold = 0.0;
 };
 
 /// A sign restricted identification as bvartools' add_sign_restrictions()
 /// stores it: the table under /model/sign_restrictions, the rotations under
 /// /posterior/q/coeffs.
+///
+/// `rotated` limits the search to the first n shocks: the rotation is the
+/// identity outside its leading n x n block, so the other shocks stay those of
+/// the Cholesky factor -- recursive, in the variables' order. That is the set
+/// Jarociński and Karadi (2020) and Pinchetti (2026) search over, with their
+/// surprises ordered first; 0 rotates every shock, bvartools' rule. The
+/// thresholds and `rotated` are stored beside bvartools' table, as attributes
+/// it does not read, so R reads the rotations back unchanged.
 struct SignIdentification
 {
     std::vector<SignRestriction> restrictions;
+    int rotated = 0;
     int maxTries = 1000;
     int period = -1;          ///< 1-based, -1 for the last; meaningful where Sigma moves
     int accepted = 0;         ///< draws a rotation was found for

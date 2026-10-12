@@ -24,7 +24,10 @@ struct DataRecipe
     {
         YearDotQuarter,                         ///< "1955.1"
         IsoDate,                                ///< "1947-01-01", monthly
+        YearAndMonth,                           ///< the year in dateColumn, the month in monthColumn
     } dates = Dates::IsoDate;
+    QString monthColumn;                        ///< YearAndMonth: the column of the month, 1 to 12
+    QChar delimiter = QLatin1Char(',');         ///< ';' for a file written by Stata or a European Excel
     std::vector<std::pair<QString, QString>> columns;   ///< source name, name in the model
     /// Applied to every column within the sample, before the scale: log
     /// differences lose the sample's first period.
@@ -36,6 +39,24 @@ struct DataRecipe
     double scale = 1.0;                         ///< every column multiplied by it, after the transform
     QString first, last;                        ///< the sample, as the converted labels; empty for all
     bool dropIncomplete = true;                 ///< rows with an empty cell in a chosen column
+    /// Keep a value not observed, as NaN, for a model that estimates it --
+    /// rather than dropping its row or refusing.
+    bool keepMissing = false;
+};
+
+/// A paper's own Minnesota prior, where it is not one of the baseline
+/// dialog's: VarBuilderSpec's Minnesota settings, the random walk centring by
+/// variable name.
+struct ExamplePrior
+{
+    double kappa1 = 0.2;
+    double kappa2 = 0.5;
+    double lagDecay = 1.0;
+    bool autoregressions = false;               ///< the scales from univariate AR(p)s
+    double deterministicVariance = 0.0;         ///< > 0: every deterministic term's prior variance
+    QStringList randomWalk;                     ///< the variables whose own first lag is centred on one
+    bool wishartScaleFromResiduals = false;     ///< the Wishart's scale diag(sigma_i^2)
+    QString description;                        ///< the dialog's line for it
 };
 
 /// A restriction of a worked example, by variable name.
@@ -45,6 +66,7 @@ struct ExampleRestriction
     QString response;
     int sign = 1;                               ///< +1, -1, 0
     int horizon = 0;
+    double threshold = 0.0;                     ///< how far beyond zero, in the response's units
 };
 
 /// A published paper a user can implement step by step with one of the
@@ -73,11 +95,15 @@ struct WorkflowExample
     bool minnesota = false;
     double wishartScale = 1.0;
     int wishartDf = 0;                          ///< the Wishart's degrees of freedom; 0: the builder's, k
+    std::optional<ExamplePrior> paperPrior;     ///< the paper's Minnesota prior, preselected
+    int nIid = 0;                               ///< the first n series are surprises without coefficients
+    int thin = 1;
     int forecastHorizon = 8;                    ///< the baseline's forecast, periods after the sample
     int iterations = 5000;
     int burnin = 1000;
     std::uint64_t seed = 1;
     std::vector<ExampleRestriction> restrictions;
+    int signRotated = 0;                        ///< the first n shocks rotated, the rest recursive; 0: all
 
     // The horse race: the design.
     QStringList variables;

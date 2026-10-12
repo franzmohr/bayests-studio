@@ -244,7 +244,16 @@ QJsonObject exampleToJson(const WorkflowExample &e)
         d[QStringLiteral("file")] = file;
         d[QStringLiteral("dateColumn")] = e.recipe.dateColumn;
         d[QStringLiteral("dates")] = e.recipe.dates == DataRecipe::Dates::YearDotQuarter ? QStringLiteral("year.quarter")
+                                     : e.recipe.dates == DataRecipe::Dates::YearAndMonth ? QStringLiteral("year-month")
                                                                                          : QStringLiteral("iso");
+        if (e.recipe.dates == DataRecipe::Dates::YearAndMonth)
+        {
+            d[QStringLiteral("monthColumn")] = e.recipe.monthColumn;
+        }
+        if (e.recipe.delimiter != QLatin1Char(','))
+        {
+            d[QStringLiteral("delimiter")] = QString(e.recipe.delimiter);
+        }
         QJsonArray columns;
         for (const auto &[from, name] : e.recipe.columns)
         {
@@ -271,6 +280,10 @@ QJsonObject exampleToJson(const WorkflowExample &e)
         {
             d[QStringLiteral("dropIncomplete")] = false;
         }
+        if (e.recipe.keepMissing)
+        {
+            d[QStringLiteral("keepMissing")] = true;
+        }
         o[QStringLiteral("data")] = d;
     }
     // Stated whole, as the reader takes the data's columns where it is absent.
@@ -296,6 +309,38 @@ QJsonObject exampleToJson(const WorkflowExample &e)
     {
         m[QStringLiteral("wishartDf")] = e.wishartDf;
     }
+    if (e.nIid > 0)
+    {
+        m[QStringLiteral("surprises")] = e.nIid;
+    }
+    if (e.thin > 1)
+    {
+        m[QStringLiteral("thin")] = e.thin;
+    }
+    if (e.paperPrior)
+    {
+        const ExamplePrior &pp = *e.paperPrior;
+        QJsonObject prior;
+        prior[QStringLiteral("kappa1")] = pp.kappa1;
+        prior[QStringLiteral("kappa2")] = pp.kappa2;
+        prior[QStringLiteral("lagDecay")] = pp.lagDecay;
+        prior[QStringLiteral("scales")] = pp.autoregressions ? QStringLiteral("autoregressions")
+                                                             : QStringLiteral("residuals");
+        if (pp.deterministicVariance > 0.0)
+        {
+            prior[QStringLiteral("deterministicVariance")] = pp.deterministicVariance;
+        }
+        prior[QStringLiteral("randomWalk")] = QJsonArray::fromStringList(pp.randomWalk);
+        if (pp.wishartScaleFromResiduals)
+        {
+            prior[QStringLiteral("wishartScale")] = QStringLiteral("residuals");
+        }
+        if (!pp.description.isEmpty())
+        {
+            prior[QStringLiteral("description")] = pp.description;
+        }
+        m[QStringLiteral("paperPrior")] = prior;
+    }
     if (e.forecastHorizon != 8)
     {
         m[QStringLiteral("forecastHorizon")] = e.forecastHorizon;
@@ -312,9 +357,14 @@ QJsonObject exampleToJson(const WorkflowExample &e)
             r.append(QJsonObject{{QStringLiteral("shock"), x.impulse},
                                  {QStringLiteral("response"), x.response},
                                  {QStringLiteral("sign"), signText(x.sign)},
-                                 {QStringLiteral("horizon"), x.horizon}});
+                                 {QStringLiteral("horizon"), x.horizon},
+                                 {QStringLiteral("threshold"), x.threshold}});
         }
         o[QStringLiteral("restrictions")] = r;
+        if (e.signRotated > 0)
+        {
+            o[QStringLiteral("rotate")] = e.signRotated;
+        }
     }
     if (e.workflow == QLatin1String("horserace"))
     {
@@ -369,7 +419,8 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
                  QStringLiteral("question"), QStringLiteral("folder"), QStringLiteral("reproduction"),
                  QStringLiteral("supported"),
                  QStringLiteral("missing"), QStringLiteral("data"), QStringLiteral("series"), QStringLiteral("model"),
-                 QStringLiteral("restrictions"), QStringLiteral("race"), QStringLiteral("notes"),
+                 QStringLiteral("restrictions"), QStringLiteral("rotate"), QStringLiteral("race"),
+                 QStringLiteral("notes"),
                  QStringLiteral("findings")},
                 where, warnings);
     e.workflow = text(o, QStringLiteral("workflow"), where, true);
@@ -392,6 +443,7 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         const QString at = where + QObject::tr(", data");
         unknownKeys(d,
                     {QStringLiteral("file"), QStringLiteral("dateColumn"), QStringLiteral("dates"),
+                     QStringLiteral("monthColumn"), QStringLiteral("delimiter"), QStringLiteral("keepMissing"),
                      QStringLiteral("columns"), QStringLiteral("transform"), QStringLiteral("scale"),
                      QStringLiteral("first"),
                      QStringLiteral("last"), QStringLiteral("dropIncomplete")},
@@ -407,10 +459,24 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         {
             e.recipe.dates = DataRecipe::Dates::YearDotQuarter;
         }
+        else if (dates == QLatin1String("year-month"))
+        {
+            e.recipe.dates = DataRecipe::Dates::YearAndMonth;
+            e.recipe.monthColumn = text(d, QStringLiteral("monthColumn"), at, true);
+        }
         else
         {
-            refuse(QObject::tr("%1: \"dates\" must be \"iso\" (1947-01-01) or \"year.quarter\" (1955.1), not \"%2\"")
+            refuse(QObject::tr("%1: \"dates\" must be \"iso\" (1947-01-01), \"year.quarter\" (1955.1) or "
+                               "\"year-month\" (a year and a month column), not \"%2\"")
                        .arg(at, dates));
+        }
+        if (const QString delimiter = text(d, QStringLiteral("delimiter"), at); !delimiter.isEmpty())
+        {
+            if (delimiter.size() != 1)
+            {
+                refuse(QObject::tr("%1: \"delimiter\" is one character, such as \";\"").arg(at));
+            }
+            e.recipe.delimiter = delimiter.front();
         }
         const QJsonValue columns = d.value(QStringLiteral("columns"));
         if (!columns.isArray() || columns.toArray().isEmpty())
@@ -441,6 +507,7 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         e.recipe.first = text(d, QStringLiteral("first"), at);
         e.recipe.last = text(d, QStringLiteral("last"), at);
         e.recipe.dropIncomplete = flag(d, QStringLiteral("dropIncomplete"), true, at);
+        e.recipe.keepMissing = flag(d, QStringLiteral("keepMissing"), false, at);
     }
     e.series = strings(o, QStringLiteral("series"), where);
     if (e.series.isEmpty())
@@ -457,7 +524,8 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         unknownKeys(m,
                     {QStringLiteral("lags"), QStringLiteral("minnesota"), QStringLiteral("coefPrecision"),
                      QStringLiteral("detPrecision"), QStringLiteral("wishartScale"), QStringLiteral("wishartDf"),
-                     QStringLiteral("forecastHorizon"),
+                     QStringLiteral("forecastHorizon"), QStringLiteral("surprises"), QStringLiteral("thin"),
+                     QStringLiteral("paperPrior"),
                      QStringLiteral("iterations"),
                      QStringLiteral("burnin"), QStringLiteral("seed")},
                     at, warnings);
@@ -468,6 +536,35 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         e.wishartScale = number(m, QStringLiteral("wishartScale"), e.wishartScale, at);
         e.wishartDf = static_cast<int>(number(m, QStringLiteral("wishartDf"), e.wishartDf, at));
         e.forecastHorizon = integer(m, QStringLiteral("forecastHorizon"), e.forecastHorizon, at);
+        e.nIid = integer(m, QStringLiteral("surprises"), 0, at);
+        e.thin = integer(m, QStringLiteral("thin"), 1, at);
+        if (const QJsonObject prior = object(m, QStringLiteral("paperPrior"), at); !prior.isEmpty())
+        {
+            const QString pat = at + QObject::tr(", paperPrior");
+            unknownKeys(prior,
+                        {QStringLiteral("kappa1"), QStringLiteral("kappa2"), QStringLiteral("lagDecay"),
+                         QStringLiteral("scales"), QStringLiteral("deterministicVariance"),
+                         QStringLiteral("randomWalk"), QStringLiteral("wishartScale"), QStringLiteral("description")},
+                        pat, warnings);
+            ExamplePrior pp;
+            pp.kappa1 = number(prior, QStringLiteral("kappa1"), pp.kappa1, pat);
+            pp.kappa2 = number(prior, QStringLiteral("kappa2"), pp.kappa2, pat);
+            pp.lagDecay = number(prior, QStringLiteral("lagDecay"), pp.lagDecay, pat);
+            pp.autoregressions = text(prior, QStringLiteral("scales"), pat) == QLatin1String("autoregressions");
+            pp.deterministicVariance = number(prior, QStringLiteral("deterministicVariance"), 0.0, pat);
+            pp.randomWalk = strings(prior, QStringLiteral("randomWalk"), pat);
+            pp.wishartScaleFromResiduals = text(prior, QStringLiteral("wishartScale"), pat) == QLatin1String("residuals");
+            pp.description = text(prior, QStringLiteral("description"), pat);
+            if (pp.kappa1 <= 0.0 || pp.kappa2 <= 0.0 || pp.lagDecay <= 0.0)
+            {
+                refuse(QObject::tr("%1: kappa1, kappa2 and lagDecay must be positive").arg(pat));
+            }
+            e.paperPrior = pp;
+        }
+        if (e.nIid < 0 || e.thin < 1)
+        {
+            refuse(QObject::tr("%1: \"surprises\" must not be negative, \"thin\" at least 1").arg(at));
+        }
         e.iterations = integer(m, QStringLiteral("iterations"), e.iterations, at);
         e.burnin = integer(m, QStringLiteral("burnin"), e.burnin, at);
         const double seed = number(m, QStringLiteral("seed"), static_cast<double>(e.seed), at);
@@ -494,7 +591,8 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
     {
         const QJsonObject x = r.toObject();
         const QString at = where + QObject::tr(", restriction");
-        unknownKeys(x, {QStringLiteral("shock"), QStringLiteral("response"), QStringLiteral("sign"), QStringLiteral("horizon")},
+        unknownKeys(x, {QStringLiteral("shock"), QStringLiteral("response"), QStringLiteral("sign"), QStringLiteral("horizon"),
+                        QStringLiteral("threshold")},
                     at, warnings);
         ExampleRestriction rr;
         rr.impulse = text(x, QStringLiteral("shock"), at, true);
@@ -506,11 +604,17 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         }
         rr.sign = sign == QLatin1String("+") ? 1 : sign == QLatin1String("-") ? -1 : 0;
         rr.horizon = integer(x, QStringLiteral("horizon"), 0, at);
+        rr.threshold = number(x, QStringLiteral("threshold"), 0.0, at);
         if (!e.series.isEmpty() && (!e.series.contains(rr.impulse) || !e.series.contains(rr.response)))
         {
             refuse(QObject::tr("%1: \"%2\" or \"%3\" is not one of the series").arg(at, rr.impulse, rr.response));
         }
         e.restrictions.push_back(rr);
+    }
+    e.signRotated = integer(o, QStringLiteral("rotate"), 0, where);
+    if (e.signRotated < 0 || e.signRotated == 1)
+    {
+        refuse(QObject::tr("%1: \"rotate\" names two shocks or more, or is absent for all").arg(where));
     }
 
     if (e.workflow == QLatin1String("horserace"))
@@ -736,10 +840,11 @@ built-in example replaces it.
 | `reference`, `question`, `findings` | the citation, the question it answers, what the paper finds |
 | `reproduction` | `false` for a textbook example, listed with its workflow rather than under "Reproducing papers" |
 | `supported`, `missing` | `false` and what is missing, to list a paper as not yet guided |
-| `data` | `file` (CSV), `dateColumn`, `dates` (`"iso"`: 1947-01-01; `"year.quarter"`: 1955.1), `columns` (each `{"source", "name"}`), and optionally `transform` (`"log-difference"`, before the scale; the first period is lost), `scale`, `first`, `last`, `dropIncomplete` |
+| `data` | `file` (CSV), `dateColumn`, `dates` (`"iso"`: 1947-01-01; `"year.quarter"`: 1955.1; `"year-month"`: the year in `dateColumn`, the month in `monthColumn`), `delimiter` (`","` unless given), `columns` (each `{"source", "name"}`), and optionally `transform` (`"log-difference"`, before the scale; the first period is lost), `scale`, `first`, `last`, `dropIncomplete`, `keepMissing` (a value not observed kept for the model to estimate) |
 | `series` | the model's variables in their order; the data's columns by default |
-| `model` | `lags`, `minnesota`, `coefPrecision`, `detPrecision`, `wishartScale`, `wishartDf` (the builder's k when absent), `forecastHorizon` (thesis: the baseline's forecast, 8 when absent), `iterations`, `burnin`, `seed` |
-| `restrictions` | thesis: each `{"shock", "response", "sign": "+", "-" or "0", "horizon"}` |
+| `model` | `lags`, `minnesota`, `coefPrecision`, `detPrecision`, `wishartScale`, `wishartDf` (the builder's k when absent), `forecastHorizon` (thesis: the baseline's forecast, 8 when absent), `surprises` (the first n series carry no coefficients), `paperPrior` (`kappa1`, `kappa2`, `lagDecay`, `scales`: `"autoregressions"` or `"residuals"`, `deterministicVariance`, `randomWalk`: the series centred on a random walk, `wishartScale`: `"residuals"`, `description`), `iterations`, `burnin`, `thin`, `seed` |
+| `restrictions` | thesis: each `{"shock", "response", "sign": "+", "-" or "0", "horizon", "threshold"}` |
+| `rotate` | thesis: rotate the first n shocks only, the others recursive |
 | `race` | horse race: `variables`, `firstOrigin`, `lastOrigin`, `step`, `horizon`, `levels`, `volatilityBreak`, `candidates`, `benchmark` |
 | `notes` | per step id, what the example does there |
 

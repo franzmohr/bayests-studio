@@ -1,5 +1,7 @@
 #include "engine/DataSet.h"
 
+#include <limits>
+
 #include <QFile>
 #include <QLocale>
 #include <QRegularExpression>
@@ -48,6 +50,15 @@ QStringList splitRow(const QString &line, QChar delimiter)
     }
     fields << field.trimmed();
     return fields;
+}
+
+/// An empty cell, NA, NaN or a lone dot: a value not observed, which the
+/// data set holds as NaN.
+bool isMissing(const QString &text)
+{
+    const QString t = text.trimmed().remove(QLatin1Char('"'));
+    return t.isEmpty() || t.compare(QLatin1String("NA"), Qt::CaseInsensitive) == 0 ||
+           t.compare(QLatin1String("NaN"), Qt::CaseInsensitive) == 0 || t == QLatin1String(".");
 }
 
 bool toNumber(const QString &text, QChar delimiter, double &out)
@@ -226,7 +237,11 @@ DataSet readDelimited(const QString &path)
         for (int c = first; c < names.size(); ++c)
         {
             double v = 0.0;
-            if (!toNumber(rows[r][c], delimiter, v))
+            if (isMissing(rows[r][c]))
+            {
+                v = std::numeric_limits<double>::quiet_NaN();
+            }
+            else if (!toNumber(rows[r][c], delimiter, v))
             {
                 throw std::runtime_error(QStringLiteral("line %1, column '%2': '%3' is not a number")
                                              .arg(static_cast<int>(r) + 2)

@@ -84,7 +84,7 @@ public:
     void runAllStages() override { runAll(); }
     bool isRunning() const override;
     void showStageTab(WorkflowStage stage, const QString &tab) override;
-    void openSignRestrictions(const std::vector<SignRestriction> &preset) override;
+    void openSignRestrictions(const std::vector<SignRestriction> &preset, int rotated) override;
     void reloadProject() override;
     AssistantPanel *assistant() const { return assistant_; }
 

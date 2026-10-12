@@ -42,6 +42,13 @@ struct VarBuilderSpec
     bool restrictTrend = false;       ///< VEC: the trend inside the cointegration space
     int rank = 1;                     ///< VEC: cointegration rank
     bool timeVarying = false;
+    /// The first `nIid` endogenous variables carry no coefficients at all --
+    /// no lags, no deterministic terms: white noise reaching the others only
+    /// through the error covariance. High-frequency surprises as variables of
+    /// a monthly VAR, Jarociński and Karadi (2020); BayesTS's /model/n_iid,
+    /// for the constant-coefficient VARs, without a structural form or
+    /// variable selection.
+    int nIid = 0;
     enum class Errors { Wishart, Gamma, Stochvol } errors = Errors::Wishart;
     bool covar = false;       ///< the covariance block, gamma or SV only
     bool structural = false;  ///< contemporaneous coefficients, gamma or SV without covar
@@ -60,6 +67,20 @@ struct VarBuilderSpec
     double coefPrecision = 1.0;       ///< v_i
     double detPrecision = 0.1;        ///< v_i_det
     double kappa1 = 0.2, kappa2 = 0.5, kappa4 = 100.0; ///< Minnesota: overall, cross, deterministic
+    /// Minnesota: the prior standard deviation of lag l falls as l^-lagDecay,
+    /// its variance as l^-2 lagDecay -- 1 is bvartools' minnesota_prior(),
+    /// Pinchetti (2026) takes 2.
+    double lagDecay = 1.0;
+    /// Minnesota: where the scales sigma_i come from -- the VAR's least
+    /// squares residuals, bvartools' rule, or a univariate AR(p) with a
+    /// constant per variable, Litterman's and most replication codes'.
+    enum class MinnesotaScale { VarResiduals, Autoregressions } minnesotaScale = MinnesotaScale::VarResiduals;
+    /// Minnesota, a VAR: each variable's own first lag's prior mean, in the
+    /// order of `columns`; empty for `randomWalkMean`'s all-or-nothing rule.
+    std::vector<double> ownLagMean;
+    /// Minnesota: the prior variance of every deterministic term, when
+    /// positive; else kappa1 kappa4 sigma_i^2.
+    double minnesotaDetVariance = 0.0;
     double covarPrecision = 1.0;      ///< psi v_i
 
     // Cointegration space (VEC). Constant: Koop, León-González and Strachan
@@ -77,6 +98,9 @@ struct VarBuilderSpec
     // Errors
     int wishartDfExtra = 0;           ///< df = k + this
     double wishartScale = 1.0;
+    /// The Wishart's scale diag(sigma_i^2) from the Minnesota scales' source
+    /// rather than wishartScale times I.
+    bool wishartScaleFromResiduals = false;
     double gammaShape = 3.0, gammaRate = 0.01;
     double svMu = 0.0, svPrecision = 1.0, svShape = 3.0, svRate = 0.03, svStateVariance = 0.05,
            svOffset = 1e-4, svOmegaV = 0.1;

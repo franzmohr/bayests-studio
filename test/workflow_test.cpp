@@ -7,8 +7,10 @@
 #include "engine/CoefficientSummary.h"
 #include "engine/DataSet.h"
 #include "engine/Examples.h"
+#include "engine/HistoricalDecomposition.h"
 #include "engine/Structural.h"
 #include "engine/Extensions.h"
+#include "engine/ModelFileTree.h"
 #include "engine/ModelRunner.h"
 #include "engine/Multipliers.h"
 #include "engine/Workflow.h"
@@ -129,13 +131,13 @@ int main(int argc, char **argv)
         }
     }
 
-    // -- Lütkepohl's E1, which the studio ships: the recipe's log differences
+    // -- LÃ¼tkepohl's E1, which the studio ships: the recipe's log differences
     // are bvartools' diff(log(e1)) * 100, and the example estimated as it is
     // specified gives the numbers of the bvartools introduction.
     {
         const WorkflowExample *e1 = findExample(QStringLiteral("luetkepohl2006"));
         check(e1 && isBuiltinData(e1->recipe) && examplesFor(QStringLiteral("thesis")).front() == e1,
-              "Lütkepohl (2006): the first thesis example, on data the studio ships");
+              "LÃ¼tkepohl (2006): the first thesis example, on data the studio ships");
         bool papers = !e1->reproduction;
         for (const WorkflowExample *e : examplesFor(QStringLiteral("thesis")))
         {
@@ -242,6 +244,322 @@ int main(int argc, char **argv)
                       std::abs(arma::mean(share8) - 0.344) < 0.03,
                   "... the response of cons to income and its variance share as bvartools has them");
         }
+    }
+
+    // -- Pinchetti (2026), from the reproduction's files: the semicolon file
+    // with its year and month columns, the paper's prior against the scales
+    // the bvartools reproduction prints, the surprise equations held at zero,
+    // and the two shocks identified by a rotation of the surprises alone, with
+    // thresholds -- and the responses where that reproduction has them.
+    if (const QString root = defaultReproductionsFolder(); QDir(root).exists(QStringLiteral("2026-pinchetti")))
+    {
+        const WorkflowExample *ex = findExample(QStringLiteral("pinchetti2026"));
+        check(ex && ex->supported && ex->nIid == 2 && ex->signRotated == 2 && ex->paperPrior,
+              "Pinchetti (2026): a guided example, two surprises and two rotated shocks");
+        const DataSet d = prepareExampleData(ex->recipe, root);
+        int surpriseMonths = 0;
+        for (arma::uword t = 0; t < d.values.n_rows; ++t)
+        {
+            surpriseMonths += (d.values(t, 0) != 0.0 || d.values(t, 1) != 0.0) ? 1 : 0;
+        }
+        check(d.length() == 408 && d.series() == 7 && d.periods.front() == QStringLiteral("1986-01") &&
+                  d.periods.back() == QStringLiteral("2019-12") && surpriseMonths == 30,
+              "... 408 months of seven series from the semicolon file, 30 of them with a surprise");
+
+        // The baseline as the dialog builds it with the paper's prior chosen;
+        // fewer draws than the paper's, for the test's time.
+        VarBuilderSpec s;
+        s.data = d;
+        s.columns = {0, 1, 2, 3, 4, 5, 6};
+        s.p = ex->p;
+        s.minnesota = true;
+        s.kappa1 = ex->paperPrior->kappa1;
+        s.kappa2 = ex->paperPrior->kappa2;
+        s.lagDecay = ex->paperPrior->lagDecay;
+        s.minnesotaScale = VarBuilderSpec::MinnesotaScale::Autoregressions;
+        s.minnesotaDetVariance = ex->paperPrior->deterministicVariance;
+        s.wishartScaleFromResiduals = true;
+        for (const int c : s.columns)
+        {
+            s.ownLagMean.push_back(ex->paperPrior->randomWalk.contains(d.names.value(c)) ? 1.0 : 0.0);
+        }
+        s.wishartDfExtra = ex->wishartDf - 7;
+        s.nIid = ex->nIid;
+        s.iterations = 400;
+        s.burnin = 400;
+        s.seed = ex->seed;
+        QTemporaryDir t;
+        const QString file = t.filePath(QStringLiteral("pinchetti.h5"));
+        check(summarise(s).refusal.isEmpty(), "... its baseline a model the builder accepts");
+        writeVarModel(s, file);
+        // bvartools' reproduction: round(sigma_i, 3), from AR(12)s with a constant.
+        const double reference[] = {0.419, 1.994, 21.181, 7.654, 0.218, 0.549, 0.227};
+        const Matrix scale = readMatrix(file, QStringLiteral("/priors/u_sigma/scale"));
+        double worstScale = 0.0;
+        for (std::size_t i = 0; i < 7; ++i)
+        {
+            worstScale = std::max(worstScale, std::abs(std::sqrt(scale.at(i, i)) - reference[i]));
+        }
+        // The prior variance of equation 3 (CPI) on WTI's twelfth lag:
+        // (0.1 * 12^-2 * sigma_CPI / sigma_WTI)^2 -- coefficient q*k + i.
+        const Matrix vInv = readMatrix(file, QStringLiteral("/priors/a/v_inv"));
+        const std::size_t pos = (11 * 7 + 3) * 7 + 4;
+        const double expected = std::pow(0.1 / 144.0 * std::sqrt(scale.at(4, 4) / scale.at(3, 3)), 2.0);
+        check(worstScale < 6e-4 && std::abs(1.0 / vInv.at(pos, pos) / expected - 1.0) < 1e-9,
+              "... the paper's prior: the AR(12) scales as bvartools prints them, the variance falling as l^-4");
+
+        ModelRunner runner;
+        QEventLoop loop;
+        bool ran = false;
+        QObject::connect(&runner, &ModelRunner::runFinished, &loop, [&](bool ok, bool, const QString &error) {
+            ran = ok;
+            if (!ok)
+            {
+                std::printf("      %s\n", error.toStdString().c_str());
+            }
+            loop.quit();
+        });
+        runner.start(file, QString(), {Stage::Coefficients});
+        loop.exec();
+        const Matrix a = ran ? readMatrix(file, QStringLiteral("/posterior/a/coeffs")) : Matrix{};
+        double surpriseCoefficient = ran ? 0.0 : 1.0;
+        for (std::size_t q = 0; q < a.rows; ++q)
+        {
+            for (std::size_t dr = 0; q % 7 < 2 && dr < a.cols; ++dr)
+            {
+                surpriseCoefficient = std::max(surpriseCoefficient, std::abs(a.at(q, dr)));
+            }
+        }
+        check(ran && a.rows == 7 * 85 && surpriseCoefficient == 0.0,
+              "... estimated, the surprise equations' coefficients exactly zero in every draw");
+
+        if (ran)
+        {
+            SignIdentification spec;
+            spec.rotated = ex->signRotated;
+            for (const ExampleRestriction &r : ex->restrictions)
+            {
+                spec.restrictions.push_back({static_cast<int>(d.names.indexOf(r.impulse)),
+                                             static_cast<int>(d.names.indexOf(r.response)), r.sign, r.horizon,
+                                             r.threshold});
+            }
+            const SignIdentification id = identifySigns(file, spec, 12345);
+            const auto stored = readSignIdentification(file);
+            const Matrix q = readMatrix(file, QStringLiteral("/posterior/q/coeffs"));
+            bool block = q.rows == 49;
+            for (std::size_t dr = 0; dr < q.cols && block; ++dr)
+            {
+                // Column-major k x k: the identity outside the leading 2 x 2.
+                for (std::size_t c = 0; c < 7; ++c)
+                {
+                    for (std::size_t r = 0; r < 7; ++r)
+                    {
+                        if (r >= 2 || c >= 2)
+                        {
+                            block = block && q.at(c * 7 + r, dr) == (r == c ? 1.0 : 0.0);
+                        }
+                    }
+                }
+            }
+            check(id.accepted == id.draws && block && stored && stored->rotated == 2 &&
+                      stored->restrictions.front().threshold == 0.01,
+                  "... every draw identified by a rotation of the two surprise shocks alone, thresholds kept");
+
+            ResponseRequest r;
+            r.type = ResponseType::Sign;
+            r.horizon = 36;
+            const auto median = [](const std::vector<arma::mat> &draws, arma::uword h, arma::uword v) {
+                arma::vec x(draws.size());
+                for (std::size_t i = 0; i < draws.size(); ++i)
+                {
+                    x(i) = draws[i](h, v);
+                }
+                return arma::median(x);
+            };
+            const auto macro = impulseResponses(file, r, 0);
+            const auto energy = impulseResponses(file, r, 1);
+            double energyCpi = -1.0;
+            for (arma::uword h = 0; h <= 12; ++h)
+            {
+                energyCpi = std::max(energyCpi, median(energy, h, 4));
+            }
+            // bvartools' impact medians, unscaled: GPR 8.02 and 10.67, WTI -1.55 and 1.46.
+            std::printf("      impact GPR %.2f / %.2f, WTI %.2f / %.2f; energy CPI peak in the first year %.3f\n",
+                        median(macro, 0, 2), median(energy, 0, 2), median(macro, 0, 3), median(energy, 0, 3), energyCpi);
+            check(std::abs(median(macro, 0, 2) / 8.02 - 1.0) < 0.25 && std::abs(median(energy, 0, 2) / 10.67 - 1.0) < 0.25 &&
+                      median(macro, 0, 3) < 0.0 && median(energy, 0, 3) > 0.0 && energyCpi > 0.0,
+                  "... the responses as the bvartools reproduction has them: oil tells the shocks apart, the energy "
+                  "one raises prices");
+        }
+    }
+    else
+    {
+        std::printf("skip  Pinchetti (2026): no reproductions in %s\n", defaultReproductionsFolder().toStdString().c_str());
+    }
+
+    // -- JarociÅ„ski and Karadi (2020): the surprises missing before 1990 kept,
+    // written as constraints and drawn every sweep, the scales from AR(12)s
+    // with the gaps dropped as the replication code does, and Table 2 and
+    // Figure 4 where the bvartools reproduction has them.
+    if (const QString root = defaultReproductionsFolder(); QDir(root).exists(QStringLiteral("2020-jarocinski karadi")))
+    {
+        const WorkflowExample *ex = findExample(QStringLiteral("jk2020"));
+        check(ex && ex->supported && ex->recipe.keepMissing && ex->nIid == 2 && ex->signRotated == 2,
+              "JarociÅ„ski and Karadi (2020): a guided example, its missing surprises kept");
+        const DataSet d = prepareExampleData(ex->recipe, root);
+        const arma::uword missingFf4 = arma::accu(d.values.col(0) != d.values.col(0));
+        const arma::uword missingSp = arma::accu(d.values.col(1) != d.values.col(1));
+        check(d.length() == 395 && d.periods.front() == QStringLiteral("1984-02") && missingFf4 == 72 &&
+                  missingSp == 73 && d.values.cols(2, 6).is_finite(),
+              "... 395 months, 72 and 73 surprises missing, as bvartools counts them");
+        {
+            // A data set written and read back keeps its gaps as gaps.
+            QTemporaryDir t;
+            writeDataSet(d, t.filePath(QStringLiteral("jk.csv")));
+            const DataSet back = readDelimited(t.filePath(QStringLiteral("jk.csv")));
+            check(arma::accu(back.values.col(1) != back.values.col(1)) == 73 &&
+                      arma::approx_equal(back.values.cols(2, 6), d.values.cols(2, 6), "absdiff", 1e-12),
+                  "... and written and read back with them");
+        }
+
+        VarBuilderSpec s;
+        s.data = d;
+        s.columns = {0, 1, 2, 3, 4, 5, 6};
+        s.p = ex->p;
+        s.minnesota = true;
+        s.kappa1 = ex->paperPrior->kappa1;
+        s.kappa2 = ex->paperPrior->kappa2;
+        s.lagDecay = ex->paperPrior->lagDecay;
+        s.minnesotaScale = VarBuilderSpec::MinnesotaScale::Autoregressions;
+        s.minnesotaDetVariance = ex->paperPrior->deterministicVariance;
+        s.wishartScaleFromResiduals = true;
+        for (const int c : s.columns)
+        {
+            s.ownLagMean.push_back(ex->paperPrior->randomWalk.contains(d.names.value(c)) ? 1.0 : 0.0);
+        }
+        s.wishartDfExtra = ex->wishartDf - 7;
+        s.nIid = ex->nIid;
+        s.iterations = 400;
+        s.burnin = 400;
+        s.seed = ex->seed;
+        const VarBuilderSummary summary = summarise(s);
+        check(summary.refusal.isEmpty() && summary.periods == 383 &&
+                  summary.notes.join(QLatin1Char(' ')).contains(QStringLiteral("121 value")),
+              "... 383 periods, 121 surprises to draw: a model the builder accepts");
+        QTemporaryDir t;
+        const QString file = t.filePath(QStringLiteral("jk.h5"));
+        writeVarModel(s, file);
+        const Matrix value = readMatrix(file, QStringLiteral("/data/train/constraints/value"));
+        // bvartools' reproduction: round(sigma_i, 4).
+        const double reference[] = {0.0517, 0.4839, 0.1970, 3.4035, 0.5266, 0.0996, 0.2351};
+        const Matrix scale = readMatrix(file, QStringLiteral("/priors/u_sigma/scale"));
+        double worstScale = 0.0;
+        for (std::size_t i = 0; i < 7; ++i)
+        {
+            worstScale = std::max(worstScale, std::abs(std::sqrt(scale.at(i, i)) - reference[i]));
+        }
+        check(value.rows * value.cols == 2560 && worstScale < 6e-5,
+              "... 2560 observed entries as constraints, and the AR(12) scales as bvartools prints them");
+
+        ModelRunner runner;
+        QEventLoop loop;
+        bool ran = false;
+        QObject::connect(&runner, &ModelRunner::runFinished, &loop, [&](bool ok, bool, const QString &error) {
+            ran = ok;
+            if (!ok)
+            {
+                std::printf("      %s\n", error.toStdString().c_str());
+            }
+            loop.quit();
+        });
+        runner.start(file, QString(), {Stage::Coefficients});
+        loop.exec();
+        check(ran, "... estimated");
+        if (ran)
+        {
+            // The completion: observed entries as observed, the missing fed
+            // funds surprises of 1985-02 to 1990-01 spread like the observed.
+            const Matrix completed = readMatrix(file, QStringLiteral("/posterior/y/coeffs"));
+            double worstObserved = 0.0;
+            arma::vec spread(60);
+            for (std::size_t t = 0; t < 383; ++t)
+            {
+                const arma::uword row = 12 + t;
+                for (std::size_t i = 0; i < 7; ++i)
+                {
+                    const double v = d.values(row, i);
+                    if (std::isfinite(v))
+                    {
+                        worstObserved = std::max(worstObserved, std::abs(completed.at(t * 7 + i, 0) - v));
+                    }
+                }
+                if (t < 60)
+                {
+                    arma::vec draws(completed.cols);
+                    for (std::size_t dr = 0; dr < completed.cols; ++dr)
+                    {
+                        draws(dr) = completed.at(t * 7, dr);
+                    }
+                    spread(t) = arma::stddev(draws);
+                }
+            }
+            std::printf("      a missing ff4_hf: posterior sd %.4f on average (bvartools 0.0504)\n", arma::mean(spread));
+            check(completed.rows == 383 * 7 && worstObserved < 1e-10 && std::abs(arma::mean(spread) - 0.0504) < 0.01,
+                  "... the panel completed every draw: the observed kept, the missing drawn with the spread bvartools has");
+
+            SignIdentification spec;
+            spec.rotated = ex->signRotated;
+            for (const ExampleRestriction &r : ex->restrictions)
+            {
+                spec.restrictions.push_back({static_cast<int>(d.names.indexOf(r.impulse)),
+                                             static_cast<int>(d.names.indexOf(r.response)), r.sign, r.horizon,
+                                             r.threshold});
+            }
+            const SignIdentification id = identifySigns(file, spec, 12345);
+            // Table 2: impact responses of the surprises, posterior means in basis points.
+            ResponseRequest r;
+            r.type = ResponseType::Sign;
+            r.horizon = 0;
+            const auto mean = [](const std::vector<arma::mat> &draws, arma::uword v) {
+                double sum = 0.0;
+                for (const arma::mat &m : draws)
+                {
+                    sum += m(0, v);
+                }
+                return 100.0 * sum / static_cast<double>(draws.size());
+            };
+            const auto mp = impulseResponses(file, r, 0);
+            const auto cbi = impulseResponses(file, r, 1);
+            r.type = ResponseType::Oir;
+            const auto hfi = impulseResponses(file, r, 0);
+            std::printf("      Table 2: %.1f %.1f | %.1f %.1f | %.1f %.1f (the paper 5 -42 | 3 28 | 6 -21)\n",
+                        mean(mp, 0), mean(mp, 1), mean(cbi, 0), mean(cbi, 1), mean(hfi, 0), mean(hfi, 1));
+            check(id.accepted == id.draws && std::abs(mean(mp, 0) - 5.0) < 2.0 && std::abs(mean(mp, 1) + 42.0) < 8.0 &&
+                      std::abs(mean(cbi, 0) - 3.0) < 2.0 && std::abs(mean(cbi, 1) - 28.0) < 10.0 &&
+                      std::abs(mean(hfi, 0) - 6.0) < 1.5 && std::abs(mean(hfi, 1) + 21.0) < 4.0,
+                  "... every draw identified, and Table 2 as the paper has it");
+
+            // Figure 4: the surprise is white noise, so its two shocks'
+            // contributions are the surprise itself wherever it was observed.
+            HdRequest hr;
+            hr.type = HdType::Sign;
+            hr.response = 0;
+            const HistoricalDecomposition hd = historicalDecomposition(file, hr);
+            double worstSum = 0.0;
+            for (arma::uword t = 0; t < 383; ++t)
+            {
+                if (std::isfinite(d.values(12 + t, 0)))
+                {
+                    worstSum = std::max(worstSum, std::abs(hd.centre(t, 0) + hd.centre(t, 1) - d.values(12 + t, 0)));
+                }
+            }
+            check(worstSum < 1e-9, "... Figure 4: the two shocks' contributions add up to every observed surprise");
+        }
+    }
+    else
+    {
+        std::printf("skip  JarociÅ„ski and Karadi (2020): no reproductions in %s\n",
+                    defaultReproductionsFolder().toStdString().c_str());
     }
 
     // -- Multipliers of every exogenous variable, as the multipliers view's

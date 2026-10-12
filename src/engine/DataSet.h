@@ -15,7 +15,7 @@ struct DataSet
     QString source;          ///< the file it came from
     QStringList names;       ///< one per column
     QStringList periods;     ///< one per row; empty when the file had no labels
-    arma::mat values;        ///< periods x series
+    arma::mat values;        ///< periods x series; NaN where a value was not observed
 
     bool empty() const { return values.n_elem == 0; }
     int series() const { return static_cast<int>(values.n_cols); }

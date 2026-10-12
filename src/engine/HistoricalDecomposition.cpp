@@ -57,11 +57,11 @@ void checkModel(const QString &file, const Posterior &post)
     }
     const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
     const HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
-    if (h5.exist("/posterior/y/coeffs"))
+    if (h5.exist("/posterior/y/coeffs") && post.vec())
     {
-        // A panel completed draw by draw: each draw's lags would have to be
-        // rebuilt from its own completion.
-        throw std::runtime_error(QObject::tr("A panel not observed whole is not decomposed here yet.").toStdString());
+        // A VEC's levels would have to be rebuilt from each draw's completion too.
+        throw std::runtime_error(QObject::tr("A VEC on a panel not observed whole is not decomposed here yet.")
+                                     .toStdString());
     }
 }
 
@@ -278,6 +278,24 @@ HistoricalDecomposition historicalDecomposition(const QString &file, const HdReq
     const arma::uword tt = data.y.n_rows;
     const auto r = static_cast<arma::uword>(request.response);
     const int p = post.levelLags();
+    // A panel not observed whole: every draw comes with its completion,
+    // /posterior/y/coeffs (k tt, draws), stacked by period. Its response and,
+    // inside the sample, its lags are that draw's; the presample is what the
+    // file conditions on.
+    Matrix completed;
+    {
+        const HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+        if (h5.exist("/posterior/y/coeffs"))
+        {
+            completed = readMatrix(file, QStringLiteral("/posterior/y/coeffs"));
+            if (completed.rows != tt * ku || completed.cols != static_cast<std::size_t>(post.draws()))
+            {
+                throw std::runtime_error(QObject::tr("The completed panel of this file does not have the layout "
+                                                     "its model attributes describe.").toStdString());
+            }
+        }
+    }
+    arma::vec dataMean(tt, arma::fill::zeros);
 
     std::vector<arma::mat> draws;
     for (const int d : drawSubset(post.draws(), request.maxDraws))
@@ -299,7 +317,27 @@ HistoricalDecomposition historicalDecomposition(const QString &file, const HdReq
             throw std::runtime_error(QObject::tr("The coefficients and the regressors of this file do not "
                                                  "match.").toStdString());
         }
-        const arma::mat u = data.y - data.x * full.t();
+        arma::mat y = data.y;
+        arma::mat x = data.x;
+        if (completed.rows > 0)
+        {
+            for (arma::uword t = 0; t < tt; ++t)
+            {
+                for (arma::uword i = 0; i < ku; ++i)
+                {
+                    y(t, i) = completed.at(t * ku + i, static_cast<std::size_t>(d));
+                }
+            }
+            for (arma::uword t = 0; t < tt; ++t)
+            {
+                for (arma::uword l = 1; l <= static_cast<arma::uword>(p) && l <= t; ++l)
+                {
+                    x.row(t).cols((l - 1) * ku, l * ku - 1) = y.row(t - l);
+                }
+            }
+        }
+        dataMean += y.col(r);
+        const arma::mat u = y - x * full.t();
         const arma::mat e = u * arma::trans(arma::inv(P));
         const arma::mat aLag = full.cols(0, ku * static_cast<arma::uword>(p) - 1);
         arma::mat history(ku * static_cast<arma::uword>(p), ku, arma::fill::zeros);   // M_{t-1} over M_{t-p}
@@ -314,7 +352,7 @@ HistoricalDecomposition historicalDecomposition(const QString &file, const HdReq
             }
             history.rows(0, ku - 1) = mt;
         }
-        one.col(ku) = data.y.col(r) - arma::sum(one.cols(0, ku - 1), 1);
+        one.col(ku) = y.col(r) - arma::sum(one.cols(0, ku - 1), 1);
         draws.push_back(std::move(one));
     }
     if (draws.empty())
@@ -324,7 +362,8 @@ HistoricalDecomposition historicalDecomposition(const QString &file, const HdReq
 
     HistoricalDecomposition out;
     out.draws = static_cast<int>(draws.size());
-    out.data = data.y.col(r);
+    // The data, or, where some were not observed, their completion's mean.
+    out.data = completed.rows > 0 ? arma::vec(dataMean / static_cast<double>(draws.size())) : arma::vec(data.y.col(r));
     out.centre.set_size(tt, ku + 1);
     out.lower.set_size(tt, ku + 1);
     out.upper.set_size(tt, ku + 1);

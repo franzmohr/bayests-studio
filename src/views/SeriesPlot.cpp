@@ -52,17 +52,34 @@ void SeriesPlot::clear()
 
 void SeriesPlot::addLine(const QString &name, const std::vector<double> &y, int colorIndex, double xOffset)
 {
+    // A value not observed (NaN) breaks the line: one curve per observed run,
+    // the first named in the legend. Qwt would otherwise join across the gap.
+    bool first = true;
     QVector<QPointF> points;
-    points.reserve(static_cast<qsizetype>(y.size()));
+    const auto flush = [&]() {
+        if (points.isEmpty())
+        {
+            return;
+        }
+        auto *curve = new QwtPlotCurve(name);
+        curve->setPen(seriesColor(colorIndex), 1.6);
+        curve->setRenderHint(QwtPlotItem::RenderAntialiased);
+        curve->setItemAttribute(QwtPlotItem::Legend, first);
+        curve->setSamples(points);
+        curve->attach(plot_);
+        first = false;
+        points.clear();
+    };
     for (std::size_t t = 0; t < y.size(); ++t)
     {
+        if (!std::isfinite(y[t]))
+        {
+            flush();
+            continue;
+        }
         points.append({xOffset + static_cast<double>(t + 1), y[t]});
     }
-    auto *curve = new QwtPlotCurve(name);
-    curve->setPen(seriesColor(colorIndex), 1.6);
-    curve->setRenderHint(QwtPlotItem::RenderAntialiased);
-    curve->setSamples(points);
-    curve->attach(plot_);
+    flush();
 }
 
 void SeriesPlot::addFan(const QString &name, const std::vector<std::vector<double>> &draws, int colorIndex,
