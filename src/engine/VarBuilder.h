@@ -81,6 +81,16 @@ struct VarBuilderSpec
     double svMu = 0.0, svPrecision = 1.0, svShape = 3.0, svRate = 0.03, svStateVariance = 0.05,
            svOffset = 1e-4, svOmegaV = 0.1;
 
+    // Volatility break (Lenza and Primiceri 2022), VarNormalWishart and
+    // VecNormalWishart only: from this data-set row every shock's covariance
+    // is s_t^2 Sigma, `volatilityScales` free scales and then a decay at rate
+    // rho. -1: none. A break after the estimation sample is no break, and the
+    // file is written without one.
+    int volatilityBreak = -1;
+    int volatilityScales = 3;
+    double volatilityShape = 1.0;                         ///< Pareto shape of each free scale, the paper's
+    double rhoShape1 = 3.0357, rhoShape2 = 1.5089;        ///< beta on rho: the paper's mode 0.8, sd 0.2
+
     // Sampler
     int iterations = 20000, burnin = 2000, thin = 1;
     std::optional<std::uint64_t> seed;
@@ -90,6 +100,9 @@ struct VarBuilderSpec
     int holdout = 0;                  ///< last periods kept out of estimation, written as /data/test/y
 
     bool vec() const { return family == Family::Vec; }
+    /// Whether the volatility break lies inside the estimation sample, and is
+    /// written: false for none and for one after the sample.
+    bool breakInSample() const;
     QString algorithm() const;
 };
 

@@ -434,6 +434,40 @@ QWidget *BuilderDialog::buildPriorBox()
     wishart->addRow(tr("Scale (× identity)"), wishartScale_);
     layout->addWidget(wishartBox_);
 
+    // Lenza and Primiceri (2022): from a known period every shock's
+    // covariance is s_t^2 Sigma, a few free scales and then a decay.
+    breakBox_ = new QGroupBox(tr("Volatility break"));
+    breakBox_->setObjectName(QStringLiteral("volatilityBreak"));
+    auto *vb = new QFormLayout(breakBox_);
+    break_ = new QComboBox;
+    break_->setObjectName(QStringLiteral("breakPeriod"));
+    break_->addItem(tr("None"));
+    for (int r = 0; r < data_.length(); ++r)
+    {
+        break_->addItem(data_.periodLabel(r));
+    }
+    vb->addRow(tr("From"), break_);
+    breakScales_ = new QSpinBox;
+    breakScales_->setRange(1, 24);
+    breakScales_->setValue(3);
+    breakScales_->setToolTip(tr("Periods from the break with a scale of their own before the excess decays: "
+                                "March, April and May 2020 in the paper."));
+    vb->addRow(tr("Free scales"), breakScales_);
+    breakShape_ = number(1.0, 1e-3, 1e3, 3);
+    breakShape_->setToolTip(tr("Each free scale has a Pareto prior with scale one and this shape; the "
+                               "paper's is 1."));
+    vb->addRow(tr("Pareto shape of the scales"), breakShape_);
+    rhoShape1_ = number(3.0357, 1e-3, 1e3, 4);
+    rhoShape2_ = number(1.5089, 1e-3, 1e3, 4);
+    vb->addRow(tr("Beta on the decay ρ, shape 1"), rhoShape1_);
+    vb->addRow(tr("shape 2"), rhoShape2_);
+    vb->addRow(QString(), hint(tr("Lenza and Primiceri (2022): the outliers of a crisis -- March 2020 on -- "
+                                  "scale the shocks' variance rather than move the coefficients. The "
+                                  "defaults are the paper's: a beta with mode 0.8 and sd 0.2 on ρ. A "
+                                  "constant-coefficient Wishart model only.")));
+    connect(break_, &QComboBox::currentIndexChanged, this, &BuilderDialog::updateEnabled);
+    layout->addWidget(breakBox_);
+
     gammaBox_ = new QGroupBox(tr("Gamma on the error precisions"));
     auto *gamma = new QFormLayout(gammaBox_);
     gammaShape_ = number(3.0, 0.0, 1e6, 3);
@@ -600,6 +634,16 @@ void BuilderDialog::updateEnabled()
     stateRateDet_->setEnabled(!nc);
     omegaV_->setEnabled(nc);
     wishartBox_->setVisible(wishart);
+    // BayesTS offers the break on VarNormalWishart and VecNormalWishart only.
+    breakBox_->setVisible(wishart);
+    breakBox_->setEnabled(wishart && !tvp);
+    {
+        const bool on = break_->currentIndex() > 0;
+        for (QWidget *w : std::initializer_list<QWidget *>{breakScales_, breakShape_, rhoShape1_, rhoShape2_})
+        {
+            w->setEnabled(on);
+        }
+    }
     gammaBox_->setVisible(errGamma_->isChecked());
     svBox_->setVisible(sv);
 
@@ -686,6 +730,14 @@ VarBuilderSpec BuilderDialog::readForm() const
     s.omegaV = valueOf(omegaV_);
     s.wishartDfExtra = dfExtra_->value();
     s.wishartScale = wishartScale_->value();
+    if (errWishart_->isChecked() && !coefTvp_->isChecked() && break_->currentIndex() > 0)
+    {
+        s.volatilityBreak = break_->currentIndex() - 1;
+        s.volatilityScales = breakScales_->value();
+        s.volatilityShape = breakShape_->value();
+        s.rhoShape1 = rhoShape1_->value();
+        s.rhoShape2 = rhoShape2_->value();
+    }
     s.gammaShape = gammaShape_->value();
     s.gammaRate = valueOf(gammaRate_);
     s.svShape = svShape_->value();

@@ -74,6 +74,7 @@ private:
     QSpinBox *horizon_;
     QSpinBox *lags_;
     QCheckBox *levels_;
+    QComboBox *break_;
     QListWidget *candidates_;
     QComboBox *benchmark_;
     QSpinBox *iterations_;

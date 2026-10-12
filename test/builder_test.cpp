@@ -374,6 +374,75 @@ int main()
         std::printf("ok    the Minnesota prior centred on random walks\n");
     }
 
+    // -- The volatility break of Lenza and Primiceri (2022): written as the
+    // column of /data/train/y it starts in, run by both Wishart models,
+    // refused elsewhere and before the sample, and left out after it.
+    {
+        VarBuilderSpec s;
+        s.data = levels;
+        s.columns = {0, 1, 2};
+        s.p = 2;
+        s.minnesota = true;
+        s.randomWalkMean = true;
+        s.iterations = 60;
+        s.burnin = 20;
+        s.seed = 6;
+        s.horizon = 4;
+        s.volatilityBreak = levels.length() - 10;
+        const auto breakColumn = [](const QString &file) {
+            HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+            const HighFive::Group g = h5.getGroup("/model");
+            return g.hasAttribute("volatility_break") ? g.getAttribute("volatility_break").read<int>() : 0;
+        };
+        for (const Family family : {Family::Var, Family::Vec})
+        {
+            s.family = family;
+            s.minnesota = family == Family::Var;
+            const QString file =
+                dir.filePath(family == Family::Var ? QStringLiteral("break-var.h5") : QStringLiteral("break-vec.h5"));
+            writeVarModel(s, file);
+            // y starts after the p initial lags.
+            if (breakColumn(file) != s.volatilityBreak - s.p + 1)
+            {
+                fail("the volatility break is not written as its column of /data/train/y");
+            }
+            const CheckReport report = ModelRunner::check(file, QString());
+            if (!report.ok || !report.warnings.isEmpty())
+            {
+                fail("check does not accept the volatility break cleanly");
+            }
+            runAll(file, 6);
+            if (!exists(file, "/posterior/forecast/forecasts") ||
+                readDraws(file, "/posterior/volatility/coeffs").n_rows != 4)
+            {
+                fail("the volatility break model does not run, or draws no scales and rho");
+            }
+        }
+        s.family = Family::Var;
+        s.minnesota = true;
+        // After the sample: no break at all.
+        s.lastRow = s.volatilityBreak - 1;
+        const QString after = dir.filePath(QStringLiteral("break-after.h5"));
+        writeVarModel(s, after);
+        if (breakColumn(after) != 0 || s.breakInSample())
+        {
+            fail("a volatility break after the sample is written");
+        }
+        s.lastRow = -1;
+        s.errors = Errors::Stochvol;
+        if (summarise(s).refusal.isEmpty())
+        {
+            fail("a volatility break beside stochastic volatility is not refused");
+        }
+        s.errors = Errors::Wishart;
+        s.volatilityBreak = 1;
+        if (summarise(s).refusal.isEmpty())
+        {
+            fail("a volatility break before the sample is not refused");
+        }
+        std::printf("ok    the volatility break, in the VAR and the VEC\n");
+    }
+
     // -- Refusals that are the builder's own: a variable on both sides, a
     // VEC's exogenous level order of zero, a forecast past the exogenous data.
     {

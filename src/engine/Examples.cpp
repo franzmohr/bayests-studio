@@ -182,8 +182,8 @@ std::vector<WorkflowExample> make()
                                      "Autoregression after March 2020. Journal of Applied Econometrics 37(4), "
                                      "688-699.");
         e.question = QObject::tr("How do standard BVARs forecast US unemployment, employment and PCE inflation "
-                                 "from 2015 through the pandemic, and does stochastic volatility rescue the density "
-                                 "forecasts once the March 2020 outliers arrive?");
+                                 "from 2015 through the pandemic, and do stochastic volatility or the paper's "
+                                 "volatility break rescue the forecasts once the March 2020 outliers arrive?");
         e.folder = QStringLiteral("2022-Lenza Primiceri-How to estimate vector autoregression after March 2020");
         e.recipe.file = e.folder + QStringLiteral("/data/lp_data.csv");
         e.recipe.dateColumn = QStringLiteral("DATE");
@@ -203,10 +203,12 @@ std::vector<WorkflowExample> make()
         e.iterations = 2000;
         e.burnin = 500;
         // The series are in levels: random walk priors, and a VEC. Minnesota,
-        // SV, one lag and the VEC -- the TVP-VAR is slow at a monthly
-        // frequency, and selection on levels would shrink towards zero.
+        // SV, one lag, the VEC and the volatility break from March 2020 -- the
+        // TVP-VAR is slow at a monthly frequency, and selection on levels
+        // would shrink towards zero.
         e.levels = true;
-        e.candidates = {0, 1, 4, 5};
+        e.volatilityBreak = QStringLiteral("2020-03");
+        e.candidates = {0, 1, 4, 5, 6};
         e.benchmark = 0;
         e.notes = {
             {QStringLiteral("data"),
@@ -214,29 +216,34 @@ std::vector<WorkflowExample> make()
                          "and 100 × log of payroll employment, the PCE price index and core PCE prices, monthly. "
                          "The windows start in 1988-12, as the paper's estimation does.")},
             {QStringLiteral("design"),
-             QObject::tr("Origins every quarter from 2015-01 to 2021-03, twelve months ahead, four models -- the "
+             QObject::tr("Origins every quarter from 2015-01 to 2021-03, twelve months ahead, five models -- the "
                          "Minnesota BVAR as benchmark, centred on random walks as the series are levels, the same "
-                         "with stochastic volatility, one lag, and a VEC of rank one -- with twelve lags, as the "
-                         "paper. 2,000 draws after 500 keep the 100 runs to minutes.")},
+                         "with stochastic volatility, one lag, a VEC of rank one, and the benchmark with the "
+                         "paper's volatility break from 2020-03 -- with twelve lags, as the paper. 2,000 draws "
+                         "after 500 keep the 125 runs to minutes.")},
             {QStringLiteral("results"),
              QObject::tr("Read the totals with the origins in mind. The four origins from 2019-04 to 2020-01 have "
                          "April 2020 in their test window, and every model misses it by about eleven points of "
-                         "unemployment; those origins alone decide the ranking on both measures.")},
+                         "unemployment; those origins alone decide the ranking on both measures. Up to 2020-01 "
+                         "the break model is the benchmark, draw for draw, so every difference between the two "
+                         "comes from the origins after the break.")},
             {QStringLiteral("stability"),
-             QObject::tr("The cumulative log scores run together until 2019 and then fall off a cliff at once. Look "
-                         "at the size of each fall rather than the order before it: the one-lag model, whose "
-                         "predictive bands are widest, loses least.")},
+             QObject::tr("The cumulative log scores run together until 2019 and then fall off a cliff at once; the "
+                         "one-lag model, whose predictive bands are widest, falls least. The break model's line "
+                         "lies on the benchmark's until 2020-04 and climbs above it from there.")},
         };
         e.findings = QObject::tr(
-            "Up to the 2019-01 origin the four models are close: the stochastic volatility BVAR leads on density "
-            "(a total log score of about 679 against the benchmark's 635) and nobody beats the benchmark's "
-            "unemployment RMSE by much. The pandemic then decides the race twice. Origins whose test window "
-            "contains April 2020 cost every model tens of thousands of log points, the one-lag model least. At the "
-            "2020-04 origin, with the April observation in the sample, the constant volatility models extrapolate "
-            "it: the benchmark's twelve-month unemployment forecast is off by about 300 points and the VEC's "
-            "explodes, while stochastic volatility keeps the miss to about 28 and one lag to about 9. That is the "
-            "paper's case for modelling the volatility of March 2020 rather than treating it as an ordinary "
-            "observation -- its own volatility break is not yet in the race.");
+            "Up to the 2019-01 origin the models are close: the stochastic volatility BVAR leads on density (a total "
+            "log score of about 679 against the benchmark's 635) and nobody beats the benchmark's unemployment RMSE "
+            "by much. The origins whose test window contains April 2020 then cost every model tens of thousands of "
+            "log points -- no model forecasts a pandemic -- and decide the totals, the one-lag model losing least. "
+            "Once the April observation is in the sample the paper's point shows: the benchmark extrapolates it, "
+            "its twelve-month unemployment forecast from 2020-04 off by hundreds of points, and the VEC explodes, "
+            "while the volatility break keeps that miss to about 27 points, stochastic volatility to about 29 and "
+            "one lag to about 9. Over the four origins from 2020-04 the break model has the best log score of the "
+            "field (about -104, against -142 for one lag, -159 for stochastic volatility and -200 for the "
+            "benchmark), and from the 2020-10 origin its unemployment forecasts miss by at most about two thirds of "
+            "a point, where the benchmark's miss by up to 2.4.");
         out.push_back(e);
     }
 
@@ -268,10 +275,11 @@ std::vector<WorkflowExample> make()
                       "once they are written as a CSV, the political risk BVAR and its sign and zero "
                       "restrictions are the thesis workflow's."));
     later(QStringLiteral("lp2022"), QStringLiteral("horserace"),
-          QObject::tr("The volatility break: Lenza and Primiceri (2022)"),
+          QObject::tr("The paper's own model: Lenza and Primiceri (2022)"),
           QStringLiteral("2022-Lenza Primiceri-How to estimate vector autoregression after March 2020"),
-          QObject::tr("The volatility break (/model/volatility_break) with its estimated scales, the hierarchical "
-                      "prior and scenario forecasts -- BayesTS has the break on a branch, the builder not yet."));
+          QObject::tr("The volatility break races in the horse race example; what is missing is the paper's "
+                      "hierarchical prior, whose tightness is estimated with the scales, and its scenario "
+                      "forecasts."));
     return out;
 }
 

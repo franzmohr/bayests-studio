@@ -2,6 +2,8 @@
 #include "app/Theme.h"
 #include "views/BuilderDialog.h"
 #include "views/FigureExport.h"
+#include "views/FontDialog.h"
+#include "views/Fonts.h"
 #include "views/PaletteDialog.h"
 #include "views/Palettes.h"
 #include "views/TableExport.h"
@@ -69,6 +71,18 @@ int main(int argc, char *argv[])
     QApplication::setApplicationVersion(QStringLiteral(STUDIO_VERSION));
 
     studio::applyTheme(app);
+    studio::applySavedFonts();
+    // Development aid: STUDIO_SMOKE_FONT=<family>[,<figure family>] sets the
+    // interface's font, and the figures' where a second is given, for this run.
+    if (const QByteArray font = qgetenv("STUDIO_SMOKE_FONT"); !font.isEmpty())
+    {
+        const QStringList families = QString::fromLocal8Bit(font).split(QLatin1Char(','));
+        studio::FontChoice c = studio::currentFonts();
+        c.systemInterface = false;
+        c.interface = QFont(families.value(0), static_cast<int>(studio::systemFont().pointSizeF()));
+        c.figureFamily = families.value(1);
+        studio::setFonts(c, false);
+    }
 
     QCommandLineParser parser;
     parser.addHelpOption();
@@ -89,6 +103,16 @@ int main(int argc, char *argv[])
         studio::setCurrentPalette(QString::fromLatin1(palette), false);
     }
 
+    // Development aid: STUDIO_SMOKE_FONT_DIALOG=<png> draws the font dialog and exits.
+    if (const QByteArray png = qgetenv("STUDIO_SMOKE_FONT_DIALOG"); !png.isEmpty())
+    {
+        studio::FontDialog dialog;
+        dialog.show();
+        QApplication::processEvents();
+        const bool ok = dialog.grab().save(QString::fromLocal8Bit(png));
+        std::printf("smoke: font dialog %s\n", ok ? "saved" : "NOT saved");
+        return ok ? 0 : 1;
+    }
     // Development aid: STUDIO_SMOKE_PALETTE_DIALOG=<png> draws the palette
     // dialog, in the palette chosen above, and exits.
     if (const QByteArray png = qgetenv("STUDIO_SMOKE_PALETTE_DIALOG"); !png.isEmpty())
@@ -374,6 +398,14 @@ int main(int argc, char *argv[])
                     if (auto *combo = dialog->findChild<QComboBox *>(QStringLiteral("selection")))
                     {
                         combo->setCurrentIndex(sel.toInt());
+                    }
+                }
+                // STUDIO_SMOKE_BREAK names the period a volatility break starts.
+                if (const QByteArray at = qgetenv("STUDIO_SMOKE_BREAK"); !at.isEmpty())
+                {
+                    if (auto *combo = dialog->findChild<QComboBox *>(QStringLiteral("breakPeriod")))
+                    {
+                        combo->setCurrentText(QString::fromLocal8Bit(at));
                     }
                 }
                 // STUDIO_SMOKE_EXOGENOUS names a series to tick as weakly exogenous.

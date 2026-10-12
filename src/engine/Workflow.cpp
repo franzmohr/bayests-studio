@@ -467,6 +467,15 @@ QJsonObject specToJson(const VarBuilderSpec &s)
     o[QStringLiteral("covar")] = s.covar;
     o[QStringLiteral("minnesota")] = s.minnesota;
     o[QStringLiteral("randomWalkMean")] = s.randomWalkMean;
+    if (s.volatilityBreak >= 0)
+    {
+        // By its period, as the sample is, so it survives a data set re-imported.
+        o[QStringLiteral("volatilityBreak")] = s.data.periodLabel(s.volatilityBreak);
+        o[QStringLiteral("volatilityScales")] = s.volatilityScales;
+        o[QStringLiteral("volatilityShape")] = s.volatilityShape;
+        o[QStringLiteral("rhoShape1")] = s.rhoShape1;
+        o[QStringLiteral("rhoShape2")] = s.rhoShape2;
+    }
     o[QStringLiteral("kappa1")] = s.kappa1;
     o[QStringLiteral("kappa2")] = s.kappa2;
     o[QStringLiteral("kappa4")] = s.kappa4;
@@ -531,6 +540,14 @@ std::optional<VarBuilderSpec> specFromJson(const QJsonObject &o, const DataSet &
     s.covar = o[QStringLiteral("covar")].toBool(false);
     s.minnesota = o[QStringLiteral("minnesota")].toBool(false);
     s.randomWalkMean = o[QStringLiteral("randomWalkMean")].toBool(false);
+    if (const QString at = o[QStringLiteral("volatilityBreak")].toString(); !at.isEmpty())
+    {
+        s.volatilityBreak = static_cast<int>(s.data.periods.indexOf(at));
+        s.volatilityScales = o[QStringLiteral("volatilityScales")].toInt(3);
+        s.volatilityShape = o[QStringLiteral("volatilityShape")].toDouble(1.0);
+        s.rhoShape1 = o[QStringLiteral("rhoShape1")].toDouble(3.0357);
+        s.rhoShape2 = o[QStringLiteral("rhoShape2")].toDouble(1.5089);
+    }
     s.kappa1 = o[QStringLiteral("kappa1")].toDouble(0.2);
     s.kappa2 = o[QStringLiteral("kappa2")].toDouble(0.5);
     s.kappa4 = o[QStringLiteral("kappa4")].toDouble(100.0);
@@ -730,6 +747,17 @@ QString methodsParagraph(const QString &file, const std::optional<VarBuilderSpec
         sentences << QObject::tr("The error covariance has an inverse Wishart prior with %1 degrees of freedom.")
                          .arg(spec ? QString::number(static_cast<int>(variables.size()) + spec->wishartDfExtra)
                                    : QObject::tr("k"));
+    }
+    if (spec && spec->breakInSample())
+    {
+        sentences << QObject::tr("From %1 the covariance of every shock is scaled by s_t^2, as in Lenza and "
+                                 "Primiceri (2022): the first %2 scales are free, with Pareto priors of shape %3, and "
+                                 "the excess then decays at a rate with a beta(%4, %5) prior.")
+                         .arg(spec->data.periodLabel(spec->volatilityBreak))
+                         .arg(spec->volatilityScales)
+                         .arg(spec->volatilityShape)
+                         .arg(spec->rhoShape1)
+                         .arg(spec->rhoShape2);
     }
     sentences << QObject::tr("We draw from the posterior with the Gibbs sampler of the BayesTS library, keeping "
                              "%1 draws after a burn-in of %2%3%4.")

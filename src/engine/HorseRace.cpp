@@ -111,7 +111,8 @@ int suggestedLags(const DataSet &data)
     return index.frequency <= 1 ? 2 : 4;
 }
 
-std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels)
+std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int volatilityBreak,
+                                                   const QString &breakLabel)
 {
     using Errors = VarBuilderSpec::Errors;
     std::vector<HorseRaceCandidate> out;
@@ -182,6 +183,18 @@ std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels)
         c.spec.family = VarBuilderSpec::Family::Vec;
         c.spec.rank = 1;
         c.spec.minnesota = false;
+        out.push_back(c);
+    }
+    if (volatilityBreak >= 0)
+    {
+        HorseRaceCandidate c{QObject::tr("BVAR, volatility break"),
+                             QObject::tr("The benchmark with the volatility break of Lenza and Primiceri (2022): "
+                                         "from %1 every shock's variance is scaled, three months freely and then "
+                                         "decaying, so the outliers neither move the coefficients nor widen the "
+                                         "bands for good. Before the break it is the benchmark.")
+                                 .arg(breakLabel),
+                             base()};
+        c.spec.volatilityBreak = volatilityBreak;
         out.push_back(c);
     }
     return out;
@@ -290,7 +303,11 @@ HorseRaceManifest writeHorseRace(const HorseRaceDesign &d, const QString &folder
             s.holdout = s.lastRow - o;   // the estimation sample ends at the origin
             s.iterations = d.iterations;
             s.burnin = d.burnin;
-            s.seed = (d.seed + 1000ULL * ci + oi) % 2147483647ULL;
+            // Common random numbers: every candidate at an origin draws from
+            // the same seed, so two models that coincide there -- the break
+            // before its period and the benchmark -- draw identically, and a
+            // difference between candidates is not simulation noise.
+            s.seed = (d.seed + oi) % 2147483647ULL;
             const QString file = root.filePath(QStringLiteral("%1/%2.h5").arg(dir, slug(d.data.periodLabel(o))));
             writeVarModel(s, file);
             files.push_back(file);

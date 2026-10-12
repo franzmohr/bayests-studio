@@ -125,6 +125,44 @@ int main(int argc, char **argv)
     const HorseRaceScores again = scoreHorseRace(m);
     check(arma::approx_equal(again.rmse[1], s.rmse[1], "absdiff", 0.0), "a rerun resumes rather than redraws");
 
+    // The volatility break beside the benchmark. The first window ends before
+    // the break and is the benchmark there; common random numbers make the two
+    // score identically. The second ends at the break, the third after it.
+    {
+        HorseRaceDesign b = d;
+        const int at = last - 6;
+        const std::vector<HorseRaceCandidate> withBreak =
+            standardCandidates(2, false, at, d.data.periodLabel(at));
+        check(withBreak.size() == 6 && withBreak.back().spec.volatilityBreak == at,
+              "a break date adds the volatility break to the field");
+        b.candidates = {withBreak[0], withBreak.back()};
+        check(horseRaceRefusal(b).isEmpty(), "the race with a volatility break is accepted");
+        const QString breakFolder = dir + "/horserace-break";
+        QDir(breakFolder).removeRecursively();
+        const HorseRaceManifest bm = writeHorseRace(b, breakFolder);
+        const auto column = [](const QString &file) {
+            return readGroupInt(file, QStringLiteral("/model"), QStringLiteral("volatility_break"), 0);
+        };
+        check(column(bm.files[1][0]) == 0 && column(bm.files[1][1]) > 0 && column(bm.files[1][2]) > 0,
+              "the break is written only into the windows that reach it");
+        QStringList breakFiles;
+        for (const auto &c : bm.files)
+        {
+            for (const QString &f : c)
+            {
+                breakFiles << f;
+            }
+        }
+        runner.start(breakFiles, 3);
+        loop.exec();
+        check(succeeded == 6 && failedRuns == 0, "the race with a volatility break runs");
+        const HorseRaceScores bs = scoreHorseRace(bm);
+        check(bs.logScore[0](0) == bs.logScore[1](0) && std::isfinite(bs.logScore[0](0)),
+              "before the break, the break model and the benchmark score identically");
+        check(bs.logScore[1].is_finite() && bs.logScore[0](2) != bs.logScore[1](2),
+              "after it, the break model scores, and differently");
+    }
+
     // The scores for test/horserace_reference.R.
     QFile out(folder + "/scores.csv");
     out.open(QIODevice::WriteOnly | QIODevice::Text);

@@ -36,8 +36,11 @@ components it uses.
   (optionally non-centred, for the test for time variation), Wishart, gamma
   or stochastic-volatility errors, the covariance block, a structural form,
   BVS or SSVS, the coefficient prior (or the Minnesota prior of the article's
-  Appendix A), the random-walk and error priors, the chain, the seed, the
-  forecast horizon and a holdout for scoring are all form controls. The
+  Appendix A), the random-walk and error priors, a volatility break for the
+  constant-coefficient Wishart models (Lenza and Primiceri 2022: from a
+  chosen period every shock's variance is scaled, a few free scales and then
+  a decay, with the paper's priors), the chain, the seed, the forecast
+  horizon and a holdout for scoring are all form controls. The
   defaults are those of the bvartools article's replication script.
   Combinations BayesTS refuses are disabled, and every change is written to
   a scratch file and run through `bayests check`, whose verdict the dialog
@@ -268,6 +271,11 @@ components it uses.
   themselves by `tools/make_palettes.py`; their licences, none restrictive,
   are in LICENSING.md and the Third-party Licences box.
 
+- **Fonts** (View › Font…): the interface's font, the system's by default,
+  and the one plots and exported figures set their text in -- the
+  interface's family, or another, such as the typeface of the document the
+  figures go into -- with the size of an exported figure's text.
+
 - **Assistant** (the dock on the right; Assistant menu): a workflow as
   steps, each with what to do, why and the usual choices with their
   references, buttons that do it, and the stage it concerns opened beside
@@ -288,10 +296,14 @@ components it uses.
   - **Forecast horse race** -- data, the design (variables, the windows,
     forecast origins, horizon, and the field: a Minnesota BVAR benchmark,
     the same with stochastic volatility, a TVP-VAR, variable selection, a
-    VAR(1), a VEC for levels), the run, the league table and when a model
-    wins, and the report. Every model is estimated at every origin on an
-    expanding window, the runs as `bayests` processes several at a time
-    (a stopped race resumes), and scored by the RMSE of the posterior mean
+    VAR(1), a VEC for levels, and -- given its date -- the benchmark with the
+    volatility break of Lenza and Primiceri (2022), which windows ending
+    before the break estimate without it), the run, the league table and
+    when a model wins, and the report. Every model is estimated at every
+    origin on an expanding window, the runs as `bayests` processes several
+    at a time (a stopped race resumes), all candidates at an origin from the
+    same seed, so models that coincide there draw identically, and scored by
+    the RMSE of the posterior mean
     forecast relative to the benchmark and the log predictive score, whose
     cumulative difference over the origins the Evaluation stage's Horse race
     tab plots. `test/horserace_test.cpp` runs a race end to end and
@@ -305,9 +317,9 @@ components it uses.
     Waggoner (2018) and Nam and Wang (2018) for the thesis workflow,
     forecasting through the pandemic on Lenza and Primiceri's (2022) data
     for the horse race. The papers the studio cannot yet implement step by
-    step -- Jarociński and Karadi (2020), Pinchetti (2026), ESRB (2026), the
-    volatility break of Lenza and Primiceri -- are listed with what they
-    need.
+    step -- Jarociński and Karadi (2020), Pinchetti (2026), ESRB (2026), Lenza
+    and Primiceri's hierarchical prior and scenarios -- are listed with what
+    they need.
 
 ## Roadmap
 

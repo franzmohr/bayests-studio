@@ -110,6 +110,12 @@ private:
     QGroupBox *wishartBox_;
     QSpinBox *dfExtra_;
     QDoubleSpinBox *wishartScale_;
+    QGroupBox *breakBox_;
+    QComboBox *break_;
+    QSpinBox *breakScales_;
+    QDoubleSpinBox *breakShape_;
+    QDoubleSpinBox *rhoShape1_;
+    QDoubleSpinBox *rhoShape2_;
     QGroupBox *gammaBox_;
     QDoubleSpinBox *gammaShape_;
     QLineEdit *gammaRate_;

@@ -311,6 +311,16 @@ HorseRaceDialog::HorseRaceDialog(const DataSet &data, const WorkflowExample *exa
     levels_ = new QCheckBox(tr("The series are in levels: random walk priors, and a VEC"));
     levels_->setChecked(example && example->levels);
     form->addRow(QString(), levels_);
+    break_ = new QComboBox;
+    break_->addItem(tr("None"));
+    for (int r = 0; r < data.length(); ++r)
+    {
+        break_->addItem(data.periodLabel(r));
+    }
+    break_->setCurrentIndex(example && !example->volatilityBreak.isEmpty() ? at(example->volatilityBreak, -1) + 1 : 0);
+    break_->setToolTip(tr("Adds the benchmark with the volatility break of Lenza and Primiceri (2022) from this "
+                          "period -- March 2020 for monthly data through the pandemic, 2020Q2 for quarterly."));
+    form->addRow(tr("Volatility break from"), break_);
     layout->addLayout(form);
 
     layout->addWidget(new QLabel(tr("The field")));
@@ -363,6 +373,7 @@ HorseRaceDialog::HorseRaceDialog(const DataSet &data, const WorkflowExample *exa
     }
     connect(lags_, &QSpinBox::valueChanged, this, &HorseRaceDialog::rebuildCandidates);
     connect(levels_, &QCheckBox::toggled, this, &HorseRaceDialog::rebuildCandidates);
+    connect(break_, &QComboBox::currentIndexChanged, this, &HorseRaceDialog::rebuildCandidates);
     update();
 }
 
@@ -373,7 +384,8 @@ void HorseRaceDialog::rebuildCandidates()
     {
         keep.push_back(candidates_->item(i)->checkState() == Qt::Checked);
     }
-    field_ = standardCandidates(lags_->value(), levels_->isChecked());
+    field_ = standardCandidates(lags_->value(), levels_->isChecked(), break_->currentIndex() - 1,
+                                break_->currentText());
     {
         const QSignalBlocker block(candidates_);
         candidates_->clear();

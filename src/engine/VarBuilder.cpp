@@ -278,6 +278,16 @@ arma::mat johansenBeta(const arma::mat &dy, const arma::mat &w, const arma::mat 
 
 } // namespace
 
+bool VarBuilderSpec::breakInSample() const
+{
+    if (volatilityBreak < 0)
+    {
+        return false;
+    }
+    const Layout l = layoutOf(*this);
+    return volatilityBreak >= l.estFirst && volatilityBreak <= l.estLast;
+}
+
 QString VarBuilderSpec::algorithm() const
 {
     QString name = vec() ? QStringLiteral("Vec") : QStringLiteral("Var");
@@ -398,6 +408,26 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
         out.refusal = QObject::tr("SSVS is not available with time-varying coefficients or "
                                   "stochastic volatility; use BVS.");
     }
+    else if (s.volatilityBreak >= 0 && (s.timeVarying || s.errors != Errors::Wishart))
+    {
+        // The break rescales the rows a conjugate Wishart block reads; BayesTS
+        // offers it on VarNormalWishart and VecNormalWishart only.
+        out.refusal = QObject::tr("A volatility break needs constant coefficients and a Wishart error "
+                                  "precision.");
+    }
+    else if (s.volatilityBreak >= 0 && s.volatilityBreak < l.estFirst)
+    {
+        out.refusal = QObject::tr("The volatility break lies before the estimation sample starts (%1).")
+                          .arg(s.data.periodLabel(l.estFirst));
+    }
+    else if (s.volatilityBreak >= 0 && s.volatilityScales < 1)
+    {
+        out.refusal = QObject::tr("A volatility break needs at least one free scale.");
+    }
+    else if (s.volatilityBreak >= 0 && (s.volatilityShape <= 0.0 || s.rhoShape1 <= 0.0 || s.rhoShape2 <= 0.0))
+    {
+        out.refusal = QObject::tr("The prior of the volatility break needs positive shapes.");
+    }
     else if (l.tt < 2)
     {
         out.refusal = QObject::tr("The sample is too short for %1 lags.").arg(s.p);
@@ -427,6 +457,17 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
         {
             out.notes << QObject::tr("The last %1 periods are held out and scored against the forecast.")
                              .arg(l.testRows);
+        }
+        if (s.volatilityBreak >= 0)
+        {
+            out.notes << (s.breakInSample()
+                              ? QObject::tr("From %1 every shock's variance is scaled: %2 free scales, then a "
+                                            "decay (Lenza and Primiceri 2022).")
+                                    .arg(s.data.periodLabel(s.volatilityBreak))
+                                    .arg(s.volatilityScales)
+                              : QObject::tr("The volatility break at %1 lies after the sample, which is "
+                                            "estimated without it.")
+                                    .arg(s.data.periodLabel(s.volatilityBreak)));
         }
         if (l.vec)
         {
@@ -739,6 +780,17 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
     writeAttribute<bool>(file, "/model", "structural", s.structural);
     const std::string prefix = s.errors == Errors::Wishart ? "wishart" : gamma ? "gamma" : "sv";
     writeAttribute<std::string>(file, "/model", "error", s.covar ? prefix + "+covar" : prefix);
+    if (s.breakInSample())
+    {
+        // The first scaled column of /data/train/y, counted from one, and the
+        // prior of the scales and their decay (model-file.md, /priors/volatility);
+        // without /initial/volatility the scales start at 2 and rho at 0.5.
+        writeAttribute<int>(file, "/model", "volatility_break", s.volatilityBreak - l.estFirst + 1);
+        writeAttribute<int>(file, "/model", "volatility_scales", s.volatilityScales);
+        writeScalar<double>(file, "/priors/volatility/shape", s.volatilityShape);
+        writeScalar<double>(file, "/priors/volatility/rho_shape1", s.rhoShape1);
+        writeScalar<double>(file, "/priors/volatility/rho_shape2", s.rhoShape2);
+    }
     if (s.seed)
     {
         // An integer, as bayests-r stores one, so R reads it back as one.

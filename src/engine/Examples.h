@@ -73,7 +73,8 @@ struct WorkflowExample
     int step = 1;
     int horizon = 8;
     bool levels = false;                        ///< the series are in levels: random walk priors, and a VEC
-    std::vector<int> candidates;                ///< indices into standardCandidates(lags, levels)
+    QString volatilityBreak;                    ///< the period a volatility break starts, or empty
+    std::vector<int> candidates;                ///< indices into standardCandidates(lags, levels, break)
     int benchmark = 0;
 
     std::map<QString, QString> notes;           ///< per step id: what this example does there

@@ -52,8 +52,12 @@ QString horseRaceRefusal(const HorseRaceDesign &design);
 /// volatility, a TVP-VAR with stochastic volatility, a BVAR with Bayesian
 /// variable selection, a parsimonious BVAR of one lag, and -- for series in
 /// levels -- a VEC of rank one. `lags` is the lag order of the larger VARs,
-/// four for quarterly data by default.
-std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels);
+/// four for quarterly data by default. With a `volatilityBreak` (a data-set
+/// row; -1 for none) the field ends with the benchmark plus the volatility
+/// break of Lenza and Primiceri (2022), which windows ending before the break
+/// estimate without it -- there it is the benchmark.
+std::vector<HorseRaceCandidate> standardCandidates(int lags, bool levels, int volatilityBreak = -1,
+                                                   const QString &breakLabel = {});
 
 /// The lag order a frequency suggests: 4 for quarterly, 12 for monthly, 2 for
 /// annual data, 4 otherwise.
