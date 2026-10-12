@@ -58,6 +58,7 @@ add_subdirectory(src)
 
 include(StudioInstall)
 add_subdirectory(packaging/msix)
+add_subdirectory(packaging/nsis)
 
 enable_testing()
 add_subdirectory(test)

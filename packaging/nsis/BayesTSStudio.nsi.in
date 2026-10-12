@@ -1,0 +1,110 @@
+; BayesTS Studio setup, for students and anyone else installing on their own
+; machine: per user, no administrator rights, into
+; %LOCALAPPDATA%\Programs\BayesTS Studio, with a Start menu entry and an
+; entry in Settings > Apps that uninstalls it. Configured by CMake into
+; <build>/nsis/ and built by build-setup.ps1 from the `cmake --install`
+; layout the MSIX is built from too.
+;
+;   makensis /DLAYOUT=<layout> /DOUTFILE=<setup.exe> BayesTSStudio.nsi
+
+Unicode true
+ManifestDPIAware true
+RequestExecutionLevel user
+SetCompressor /SOLID lzma
+
+!include "MUI2.nsh"
+!include "FileFunc.nsh"
+
+!ifndef LAYOUT
+  !error "Pass /DLAYOUT=<the cmake --install layout>"
+!endif
+!ifndef LAYOUT_DIRS
+  !error "Pass /DLAYOUT_DIRS=<layout-dirs.nsh>, which build-setup.ps1 writes"
+!endif
+; RemoveLayout: RMDir /r of every top-level folder of the layout -- bin,
+; licenses, share, ... -- written by build-setup.ps1 from the layout itself.
+!include "${LAYOUT_DIRS}"
+
+!ifndef OUTFILE
+  !define OUTFILE "BayesTSStudio-@PROJECT_VERSION@-setup.exe"
+!endif
+
+!define APP_NAME "BayesTS Studio"
+!define APP_VERSION "@PROJECT_VERSION@"
+!define APP_PUBLISHER "@STUDIO_SETUP_PUBLISHER@"
+!define APP_EXE "bin\bayests-studio.exe"
+; Per user: HKCU, which needs no administrator rights.
+!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\BayesTSStudio"
+
+Name "${APP_NAME}"
+OutFile "${OUTFILE}"
+InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
+InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
+BrandingText "${APP_NAME} ${APP_VERSION}"
+
+VIProductVersion "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@.0"
+VIAddVersionKey "ProductName" "${APP_NAME}"
+VIAddVersionKey "ProductVersion" "${APP_VERSION}"
+VIAddVersionKey "CompanyName" "${APP_PUBLISHER}"
+VIAddVersionKey "FileDescription" "${APP_NAME} setup"
+VIAddVersionKey "FileVersion" "${APP_VERSION}"
+VIAddVersionKey "LegalCopyright" "${APP_PUBLISHER}"
+
+!define MUI_ABORTWARNING
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
+!define MUI_FINISHPAGE_RUN_TEXT "Start ${APP_NAME}"
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_COMPONENTS
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_LANGUAGE "English"
+
+Section "${APP_NAME}" SecApp
+  SectionIn RO
+  ; An update replaces the application whole: what an earlier version shipped
+  ; and this one does not must not linger beside it. Only the folders the
+  ; setup writes are removed -- nothing a user put in $INSTDIR.
+  !insertmacro RemoveLayout
+  SetOutPath "$INSTDIR"
+  File /r "${LAYOUT}\*.*"
+
+  WriteUninstaller "$INSTDIR\uninstall.exe"
+  CreateShortcut "$SMPROGRAMS\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${APP_VERSION}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "${APP_PUBLISHER}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${APP_EXE}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
+  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+  IntFmt $0 "0x%08X" $0
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "EstimatedSize" "$0"
+SectionEnd
+
+Section /o "Desktop shortcut" SecDesktop
+  CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+SectionEnd
+
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecApp} "The studio, the bayests command line and the licences of the components it ships."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} "A shortcut on the desktop, beside the one in the Start menu."
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
+
+Section "Uninstall"
+  Delete "$SMPROGRAMS\${APP_NAME}.lnk"
+  Delete "$DESKTOP\${APP_NAME}.lnk"
+  !insertmacro RemoveLayout
+  Delete "$INSTDIR\uninstall.exe"
+  ; The folder only if nothing of the user's is left in it. Projects, model
+  ; files and settings live elsewhere and are not touched.
+  RMDir "$INSTDIR"
+  DeleteRegKey HKCU "${UNINSTALL_KEY}"
+SectionEnd

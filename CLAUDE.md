@@ -29,8 +29,11 @@ stage of the first model and saves a capture per stage as
 
 **Packaging.** `cmake --install <build> --prefix <dir>` lays out a
 self-contained copy (`cmake/StudioInstall.cmake`): both executables, every
-DLL, Qt's plugins, `licenses/`. The Windows package is that layout plus a
-manifest, packed by `packaging/msix/build-msix.ps1`; see the README there.
+DLL, Qt's plugins, `licenses/`. Two Windows packages are built from that one
+layout: the MSIX for managed machines (`packaging/msix/build-msix.ps1`) and a
+per-user NSIS setup.exe for students (`packaging/nsis/build-setup.ps1`); see
+the README in each. No .msi: the WiX Toolset asks commercial users a fee from
+version 6 on, which was decided against.
 Qt Network and its plugins are kept out on purpose -- the application makes
 no network connection, and a new dependency that needs them is a decision,
 not a fix. Test a layout by running it with only `C:\Windows\System32` on
