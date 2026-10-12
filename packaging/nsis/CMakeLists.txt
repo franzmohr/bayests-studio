@@ -19,8 +19,10 @@ set(STUDIO_SETUP_PUBLISHER "Franz X. Mohr" CACHE STRING
 
 set(_setup_out "${CMAKE_BINARY_DIR}/nsis")
 set(STUDIO_ICON_FILE "${PROJECT_SOURCE_DIR}/src/app/icons/bayests-studio.ico")
+set(STUDIO_EULA_FILE "${PROJECT_SOURCE_DIR}/EULA.txt")
 configure_file(BayesTSStudio.nsi.in "${_setup_out}/BayesTSStudio.nsi" @ONLY)
 file(WRITE "${_setup_out}/package.env"
     "SETUP_FILE=BayesTSStudio-${PROJECT_VERSION}-setup.exe\n"
     "VERSION=${PROJECT_VERSION}\n"
+    "EULA=${STUDIO_EULA_FILE}\n"
 )

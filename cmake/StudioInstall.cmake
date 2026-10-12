@@ -116,6 +116,10 @@ endfunction()
 get_filename_component(_studio_msys_prefix "${_studio_compiler_dir}" DIRECTORY)
 set(_studio_lic "${_studio_msys_prefix}/share/licenses")
 
+# The studio's own: the end-user licence agreement the setup asks the user
+# to accept, and Help > Licence Agreement shows.
+install(FILES "${PROJECT_SOURCE_DIR}/EULA.txt" DESTINATION "licenses/BayesTS Studio")
+
 studio_install_licence(BayesTS   NAMES LICENSE         HINTS "${bayests_SOURCE_DIR}")
 studio_install_licence(Qt        NAMES LGPL-3.0-only.txt HINTS "${_studio_lic}/qt6-base")
 studio_install_licence(Qwt       NAMES COPYING         HINTS "${_studio_lic}/qwt-qt6")

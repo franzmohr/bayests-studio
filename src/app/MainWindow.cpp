@@ -23,6 +23,9 @@
 #include <QListWidget>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QVBoxLayout>
+#include <QFile>
+#include <QDialogButtonBox>
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
@@ -232,6 +235,7 @@ void MainWindow::buildActions()
     QMenu *help = menuBar()->addMenu(tr("&Help"));
     help->addAction(tr("&About %1").arg(QApplication::applicationDisplayName()), this,
                     &MainWindow::showAbout);
+    help->addAction(tr("Licence &Agreement…"), this, &MainWindow::showLicenceAgreement);
     help->addAction(tr("Third-party &Licences"), this, &MainWindow::showLicences);
     help->addAction(tr("&Extensions…"), this, [this]() {
         ExtensionsDialog dialog(this);
@@ -703,6 +707,27 @@ void MainWindow::showAbout()
            "<p>Specify, estimate and analyse Bayesian time series models.</p>"
            "<p>Estimation by the BayesTS library.</p>")
             .arg(QApplication::applicationDisplayName(), QApplication::applicationVersion()));
+}
+
+void MainWindow::showLicenceAgreement()
+{
+    // The agreement the setup asked the user to accept, as it shipped.
+    QFile file(QStringLiteral(":/licence/EULA.txt"));
+    file.open(QIODevice::ReadOnly | QIODevice::Text);
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Licence Agreement"));
+    dialog.resize(680, 620);
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *text = new QPlainTextEdit(QString::fromUtf8(file.readAll()));
+    text->setObjectName(QStringLiteral("licenceText"));
+    text->setReadOnly(true);
+    text->setToolTip(tr("The end-user licence agreement of %1; the licences of the components it ships are "
+                        "under Help > Third-party Licences.").arg(QApplication::applicationDisplayName()));
+    layout->addWidget(text);
+    auto *box = new QDialogButtonBox(QDialogButtonBox::Close);
+    connect(box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(box);
+    dialog.exec();
 }
 
 void MainWindow::showLicences()

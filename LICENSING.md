@@ -64,6 +64,25 @@ A commercial Qt licence (or Qt for Small Business) removes the LGPL obligations
 and allows static linking and the GPL-only modules. It can be bought later
 without changing any code.
 
+## The studio's own licence
+
+`EULA.txt` is the end-user licence agreement: the setup shows it for
+acceptance, both packages install it into `licenses/BayesTS Studio/`, and
+Help > Licence Agreement opens it. It is a **draft**: the licensor, the
+terms of a free edition and the governing law are `[PLACEHOLDERS]`, and
+`packaging/nsis/build-setup.ps1` refuses to build a setup while any is left
+(`-DraftLicence` builds one for testing only). Have it reviewed with this
+file before the first sale.
+
+Two clauses follow from the components rather than from choice:
+
+- **Reverse engineering.** The ban covers only the studio's own code, and
+  the agreement says expressly that the user may replace the Qt libraries
+  and modify and reverse engineer the application as far as debugging such
+  a replacement needs, as the LGPL requires (section "Qt" above).
+- **Third-party licences prevail** for their components, which the
+  agreement names and points to `licenses/`.
+
 ## The repository
 
 This repository is private and carries no open-source licence. BayesTS stays

@@ -28,7 +28,10 @@ param(
     [string] $SdkBinDir,
     [Parameter(ParameterSetName = 'Thumbprint', Mandatory)] [string] $CertificateThumbprint,
     [Parameter(ParameterSetName = 'Pfx', Mandatory)] [string] $PfxFile,
-    [string] $TimestampUrl = 'http://timestamp.digicert.com'
+    [string] $TimestampUrl = 'http://timestamp.digicert.com',
+    # Build although EULA.txt is still the draft, for a setup that is tested
+    # and not handed out.
+    [switch] $DraftLicence
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,6 +67,21 @@ if (-not $Makensis) {
                    (Join-Path $env:ProgramFiles 'NSIS\makensis.exe')
     $Makensis = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
     if (-not $Makensis) { throw 'makensis not found: install NSIS (https://nsis.sourceforge.io) or pass -Makensis.' }
+}
+
+# 0. The licence agreement the setup shows must be the final one: no
+# [PLACEHOLDER] left to fill in -- matched by its opening, as one may run
+# over a line break -- and no draft notice.
+$eula = $pkg['EULA']
+if (-not (Test-Path $eula)) { throw "The licence agreement $eula is missing." }
+$open = @(Select-String -Path $eula -Pattern '\[[A-Z]{2,}|^DRAFT' -CaseSensitive)
+if ($open.Count -gt 0) {
+    $where = ($open | Select-Object -First 5 | ForEach-Object { "  line $($_.LineNumber): $($_.Line.Trim())" }) -join "`n"
+    if ($DraftLicence) {
+        Write-Warning "EULA.txt is still a draft ($($open.Count) open item(s)); this setup must not be handed out."
+    } else {
+        throw "EULA.txt is still a draft -- complete it, or pass -DraftLicence for a test build:`n$where"
+    }
 }
 
 # 1. The layout: exactly what `cmake --install` produces.

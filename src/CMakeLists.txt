@@ -134,6 +134,13 @@ qt_add_resources(bayests-studio "icons"
         app/icons/bayests-studio-256.png
 )
 
+# The end-user licence agreement, for Help > Licence Agreement.
+qt_add_resources(bayests-studio "licence"
+    PREFIX "/licence"
+    BASE "${PROJECT_SOURCE_DIR}"
+    FILES "${PROJECT_SOURCE_DIR}/EULA.txt"
+)
+
 target_link_libraries(bayests-studio PRIVATE
     studio_engine
     Qt6::Svg

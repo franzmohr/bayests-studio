@@ -58,6 +58,11 @@ VIAddVersionKey "LegalCopyright" "${APP_PUBLISHER}"
 !define MUI_FINISHPAGE_RUN_TEXT "Start ${APP_NAME}"
 
 !insertmacro MUI_PAGE_WELCOME
+; The end-user licence agreement: Next becomes I Agree. A silent install
+; (/S) shows no pages, so whoever deploys it that way accepts it for the
+; users.
+!define MUI_LICENSEPAGE_TEXT_TOP "Please read the licence agreement before installing ${APP_NAME}."
+!insertmacro MUI_PAGE_LICENSE "@STUDIO_EULA_FILE@"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES

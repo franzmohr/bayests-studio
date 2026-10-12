@@ -1,0 +1,84 @@
+BAYESTS STUDIO -- END-USER LICENCE AGREEMENT
+
+DRAFT: the terms in [square brackets] are to be completed, and the whole
+reviewed, before BayesTS Studio is distributed under it.
+
+Please read this agreement before installing BayesTS Studio. By installing or
+using it you accept it. If you do not accept it, do not install or use it.
+
+1. Parties and scope
+
+This agreement is between [LICENSOR NAME AND ADDRESS] ("we") and the person or
+organisation installing BayesTS Studio ("you"). It covers BayesTS Studio, its
+"bayests" command line, and their documentation (together "the Software"), in
+every version we supply under it. The components listed in section 5 are not
+covered by it.
+
+2. Licence
+
+We grant you a non-exclusive, non-transferable licence to install and use the
+Software on computers you own or control, for the period and the number of
+users stated in your order or licence key, or, where you obtained the Software
+free of charge, for [THE TERMS OF THE FREE EDITION, E.G. NON-COMMERCIAL
+TEACHING AND STUDY]. The Software is licensed, not sold.
+
+3. What you may not do
+
+Except as this agreement or applicable law expressly allows, you may not:
+(a) copy the Software other than to install it as allowed and for backup;
+(b) sell, rent, lend, sublicense or otherwise distribute it;
+(c) decompile, disassemble or reverse engineer the parts of it that are ours;
+(d) remove or alter any copyright or licence notice in it.
+
+Nothing in this section limits what you may do with the components of
+section 5 under their own licences. In particular, you may replace the Qt
+libraries the Software uses with versions of your own, and modify and reverse
+engineer the Software to the extent needed to debug such replacements, as the
+GNU Lesser General Public License requires.
+
+4. Your data
+
+Your data, model files, projects, figures and tables remain yours. The
+Software runs on your computer and makes no network connection: it does not
+send your data, or information about your use of it, to us or anyone else.
+
+5. Third-party components
+
+The Software includes components of others -- among them BayesTS, Qt, Qwt,
+Armadillo, OpenBLAS, HDF5 and HighFive -- each under its own licence. Their
+licence texts are installed in the "licenses" folder beside the Software and
+listed under Help > Third-party Licences. Those licences govern those
+components, and where they grant you rights this agreement does not reduce
+them.
+
+6. No warranty
+
+The Software is a tool for statistical analysis. You are responsible for the
+models you specify and for checking and interpreting the results. To the
+extent permitted by applicable law, the Software is provided "as is", without
+warranty of any kind, express or implied, including fitness for a particular
+purpose.
+
+7. Limitation of liability
+
+To the extent permitted by applicable law, we are not liable for indirect or
+consequential loss, or for loss of data, profit or opportunity, arising from
+the use of or inability to use the Software, and our total liability is
+limited to the amount you paid for the licence. Nothing in this agreement
+limits liability that cannot be limited by law, including for intent, gross
+negligence, or personal injury, and nothing in it affects your statutory
+rights as a consumer.
+
+8. Term and termination
+
+This agreement lasts until it ends. It ends automatically if you breach it and
+do not remedy the breach within 30 days of being told of it. When it ends you
+must stop using the Software and remove it. Sections 4 to 7 and 9 survive.
+
+9. Law
+
+This agreement is governed by the law of [JURISDICTION], and the courts of
+[PLACE] have jurisdiction, without prejudice to mandatory consumer protection
+law of the country where you live.
+
+Copyright (c) [YEAR] [LICENSOR NAME]. All rights reserved.

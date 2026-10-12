@@ -56,6 +56,7 @@ private:
     void setRunning(bool running);
     void log(const QString &text);
     void showAbout();
+    void showLicenceAgreement();
     void showLicences();
     void importData();
 

@@ -232,6 +232,13 @@ int main(int argc, char *argv[])
             studio::MainWindow w;
             audit(&w, "views", true);
         }
+        // The licence agreement Help > Licence Agreement shows.
+        if (QFile licence(QStringLiteral(":/licence/EULA.txt")); !licence.open(QIODevice::ReadOnly) ||
+                                                                 licence.size() < 1000)
+        {
+            std::printf("the licence agreement is not in the resources\n");
+            ++missing;
+        }
         // And the window icon, every size of it from the resources.
         const int iconSizes = static_cast<int>(QApplication::windowIcon().availableSizes().size());
         if (iconSizes != 7)
