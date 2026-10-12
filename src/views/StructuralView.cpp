@@ -181,9 +181,16 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
         }
         if (tabs_->currentIndex() == 1)
         {
-            spec = singleFigure(fevd_, tr("Forecast error variance decomposition of %1").arg(response_->currentText()),
-                                QStringLiteral("fevd-%1").arg(response_->currentText()));
+            // A panel per shock with its bands, then the stacked means.
+            spec.title = tr("Forecast error variance decomposition of %1").arg(response_->currentText());
             spec.subtitle = fevdNote_->text();
+            spec.columns = fevdColumns_;
+            for (QwtPlot *p : fevdPlots_)
+            {
+                spec.cells.push_back({p, {}});
+            }
+            spec.cells.push_back({fevd_, {}});
+            spec.name = QStringLiteral("fevd-%1").arg(response_->currentText());
             return spec;
         }
         spec.subtitle = tr("Median, 68% and 90% bands%1").arg(req.cumulative ? tr(", cumulative") : QString());
@@ -243,6 +250,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     auto *fevdLayout = new QVBoxLayout(fevdPage);
     fevdLayout->setContentsMargins(0, 8, 0, 0);
     response_ = new QComboBox;
+    response_->setObjectName(QStringLiteral("fevdResponse"));
     response_->setToolTip(tr("The variable whose forecast error variance is decomposed into the shares of the shocks."));
     auto *pick = new QHBoxLayout;
     pick->addWidget(new QLabel(tr("Forecast error variance of")));
@@ -254,9 +262,17 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     fevd_ = new QwtPlot;
     styleAxes(fevd_, tr("Horizon"), tr("Share"));
     fevd_->setAxisScale(QwtPlot::yLeft, 0.0, 1.0);
-    fevd_->insertLegend(new QwtLegend, QwtPlot::RightLegend);
+    fevd_->insertLegend(new QwtLegend, QwtPlot::BottomLegend);
     fevd_->setToolTip(tr("The share of the forecast error variance at each horizon due to each shock: posterior means, adding to one. Right-click to copy or save the figure."));
-    fevdLayout->addWidget(fevd_, 1);
+    fevd_->setMinimumHeight(220);
+    {
+        QwtText title(tr("Posterior means, stacked"));
+        QFont f = fevd_->font();
+        f.setBold(true);
+        title.setFont(f);
+        fevd_->setTitle(title);
+    }
+    // The stacked means sit in the grid below, after a panel per shock.
     fevdGridHost_ = new QWidget;
     fevdGrid_ = new QGridLayout(fevdGridHost_);
     fevdGrid_->setSpacing(12);
@@ -340,6 +356,12 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
             {
                 l->setText(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
             }
+        }
+        for (int j = 0; !fevdMatrix_ && j < support_.k && j < static_cast<int>(fevdPlots_.size()); ++j)
+        {
+            QwtText title = fevdPlots_[static_cast<std::size_t>(j)]->title();
+            title.setText(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
+            fevdPlots_[static_cast<std::size_t>(j)]->setTitle(title);
         }
     });
     connect(response_, &QComboBox::currentIndexChanged, this, [this]() {
@@ -518,13 +540,19 @@ bool StructuralView::allShocks() const
 
 void StructuralView::rebuildGrid(int k)
 {
-    for (QwtPlot *p : plots_)
+    // Out of the grid at once: a deferred delete can wait for an outer event
+    // loop, and the old panels would stand beside the new ones until then.
+    for (QWidget *w : std::vector<QWidget *>(plots_.begin(), plots_.end()))
     {
-        p->deleteLater();
+        grid_->removeWidget(w);
+        w->hide();
+        w->deleteLater();
     }
     plots_.clear();
     for (QWidget *h : headers_)
     {
+        grid_->removeWidget(h);
+        h->hide();
         h->deleteLater();
     }
     headers_.clear();
@@ -592,27 +620,56 @@ bool StructuralView::allResponses() const
 
 void StructuralView::rebuildFevdGrid(int k)
 {
-    for (QwtPlot *p : fevdPlots_)
+    for (QWidget *w : std::vector<QWidget *>(fevdPlots_.begin(), fevdPlots_.end()))
     {
-        p->deleteLater();
+        fevdGrid_->removeWidget(w);
+        w->hide();
+        w->deleteLater();
     }
     fevdPlots_.clear();
     for (QWidget *h : fevdHeaders_)
     {
+        fevdGrid_->removeWidget(h);
+        h->hide();
         h->deleteLater();
     }
     fevdHeaders_.clear();
     fevdMatrix_ = k > 0 && allResponses();
-    fevd_->setVisible(!fevdMatrix_);
-    fevdScroll_->setVisible(fevdMatrix_);
-    if (!fevdMatrix_)
-    {
-        return;
-    }
-    // The responses' matrix: shock j's column, the variable decomposed in
-    // row i, so that each row adds up to one.
+    fevdGrid_->removeWidget(fevd_);
     QFont bold = font();
     bold.setBold(true);
+    if (!fevdMatrix_)
+    {
+        // One variable: the share of each shock with its bands, a panel each
+        // as the responses to one shock, and the stacked posterior means --
+        // bvartools' plot -- last. Bands do not stack: quantiles do not add.
+        fevdColumns_ = k + 1 <= 4 ? 2 : 3;
+        for (int j = 0; j < k; ++j)
+        {
+            auto *plot = new QwtPlot;
+            attachFigureExport(plot, figure_);
+            plot->setToolTip(tr("The share of the shock to %1 in this forecast error variance at each horizon: the posterior median with 68% and 90% bands. Right-click to copy or save the figure.")
+                                 .arg(support_.variables.value(j)));
+            plot->setMinimumHeight(220);
+            styleAxes(plot, tr("Horizon"), tr("Share"));
+            plot->setAxisScale(QwtPlot::yLeft, 0.0, 1.0);
+            QwtText title(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
+            title.setFont(bold);
+            plot->setTitle(title);
+            fevdGrid_->addWidget(plot, j / fevdColumns_, j % fevdColumns_);
+            fevdPlots_.push_back(plot);
+        }
+        fevd_->setVisible(k > 0);
+        if (k > 0)
+        {
+            fevdGrid_->addWidget(fevd_, k / fevdColumns_, k % fevdColumns_);
+        }
+        return;
+    }
+    fevd_->hide();
+    fevdColumns_ = k;
+    // The responses' matrix: shock j's column, the variable decomposed in
+    // row i, so that each row adds up to one.
     for (int j = 0; j < k; ++j)
     {
         auto *head = new QLabel(tr("Shock to %1").arg(impulse_->itemText(j + 1)));
@@ -733,9 +790,16 @@ void StructuralView::show(const Result &result)
         }
         return;
     }
-    fevdNote_->setText(tr("Posterior mean share of each %1 shock in the forecast error variance of %2%3.")
+    fevdNote_->setText(tr("The share of each %1 shock in the forecast error variance of %2: median, 68% and 90% "
+                          "bands, and the posterior means stacked, adding to one%3.")
                            .arg(kind, response_->currentText(), over));
     const std::vector<arma::mat> &shares = result.shares.front();
+    for (std::size_t j = 0; j < fevdPlots_.size(); ++j)
+    {
+        drawBands(
+            fevdPlots_[j], horizons, static_cast<int>(shares.size()),
+            [&](std::size_t d, arma::uword h) { return shares[d](h, j); }, false);
+    }
     arma::mat mean(static_cast<arma::uword>(horizons), static_cast<arma::uword>(support_.k), arma::fill::zeros);
     for (const auto &d : shares)
     {

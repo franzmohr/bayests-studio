@@ -92,7 +92,8 @@ private:
     QWidget *fevdScroll_;
     QWidget *fevdGridHost_;
     QGridLayout *fevdGrid_;
-    std::vector<QwtPlot *> fevdPlots_;   // variable i, shock j at i * k + j
+    std::vector<QwtPlot *> fevdPlots_;   // variable i, shock j at i * k + j; one variable: shock j at j
+    int fevdColumns_ = 1;
     std::vector<QWidget *> fevdHeaders_; // the k shock headers first
     bool fevdMatrix_ = false;
     int columns_ = 1;

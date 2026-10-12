@@ -434,6 +434,15 @@ int main(int argc, char *argv[])
                     st->setCurrentIndex(1);
                     settle(500);
                     window.grab().save(QStringLiteral("%1-fevd.png").arg(QString::fromLocal8Bit(prefix)));
+                    // And one variable's: a panel per shock, the stacked means last.
+                    if (auto *response = st->findChild<QComboBox *>(QStringLiteral("fevdResponse"));
+                        response && response->count() > 1)
+                    {
+                        response->setCurrentIndex(response->count() - 1);
+                        settle(1500);
+                        window.grab().save(QStringLiteral("%1-fevd-one.png").arg(QString::fromLocal8Bit(prefix)));
+                        response->setCurrentIndex(0);
+                    }
                     st->setCurrentIndex(0);
                 }
                 // STUDIO_SMOKE_MULTIPLIERS=1: the multipliers, permanent then
