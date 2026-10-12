@@ -2,7 +2,8 @@
 # Setup program (Windows, NSIS)
 #
 # A setup.exe for students and anyone installing on a machine of their own:
-# per user, no administrator rights, into %LOCALAPPDATA%\Programs. The MSIX
+# per user by default, no administrator rights, into %LOCALAPPDATA%\Programs,
+# or for all users into Program Files. The MSIX
 # (packaging/msix/) remains the package for machines an IT department manages.
 # NSIS is under the zlib licence, free for commercial use; the WiX Toolset an
 # .msi would need asks a fee of commercial users from version 6 on.

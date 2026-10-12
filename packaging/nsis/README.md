@@ -1,10 +1,13 @@
 # The setup program (Windows)
 
 `BayesTSStudio-<version>-setup.exe` is the installer for students and anyone
-else installing on a machine of their own. It needs no administrator rights:
-it installs per user into `%LOCALAPPDATA%\Programs\BayesTS Studio`, adds a
-Start menu entry (and, if ticked, a desktop shortcut), and registers itself
-under Settings › Apps, from where it uninstalls. The MSIX
+else installing on a machine of their own. By default it installs just for
+the current user, needing no administrator rights, into
+`%LOCALAPPDATA%\Programs\BayesTS Studio`; a page after the licence offers to
+install for all users into Program Files instead, and asks for administrator
+rights only then. It adds a Start menu entry, if ticked the bayests command
+line to the PATH and a desktop shortcut, and registers itself under
+Settings › Apps, from where it uninstalls. The MSIX
 (`packaging/msix/README.md`) remains the package for machines an IT
 department manages.
 
@@ -46,15 +49,37 @@ for the users.
 
 ## Behaviour
 
-- **Silent install:** `setup.exe /S`, and `/D=<folder>` (last on the command
-  line) for another folder -- for a lab image.
-- **Updates:** running a newer setup over an installation replaces every
-  folder the setup writes (`bin\`, `licenses\`, `share\`, as the layout has
-  them -- `build-setup.ps1` lists them from the layout), so no file an older
-  version shipped lingers.
-- **Uninstall** removes the application, the shortcuts and the Apps entry. It
-  leaves the folder if anything else is in it, and never touches projects,
-  model files or settings.
+- **Scope.** *Just for me* (the default for a first installation) writes
+  under `HKCU` and the user's profile; *For all users* under `HKLM`, Program
+  Files and the common Start menu. Choosing the latter without administrator
+  rights starts the setup again through UAC (`runas`), which carries on from
+  the folder page; the finish page then starts the studio through Explorer, so
+  that it does not run elevated. An update keeps the scope of the installation
+  it replaces.
+- **PATH** (ticked by default) gets one folder, `<install>\cmd`, holding only
+  `bayests.cmd`, which starts `bin\bayests.exe` and passes its exit code on.
+  `bin\` itself is not put on PATH: its Qt and HDF5 DLLs would be found by any
+  other program looking for a DLL of that name. Just for me edits the user
+  PATH, for all users the system PATH; every other entry is kept as it was,
+  unexpanded, and a PATH over 8000 characters is left alone (the log says so).
+  Terminals opened afterwards see it.
+- **A previous installation is uninstalled first**, by running its own
+  uninstaller silently: the current user's wherever its folder is, and the
+  all-users one when installing for all users. One for all users stays when
+  installing just for the current user, which needs no administrator rights
+  to remove it; the users page says so. Then every folder the setup writes
+  (`bin\`, `licenses\`, `share\`, as the layout has them -- `build-setup.ps1`
+  lists them from the layout) is replaced whole, so no file an older version
+  shipped lingers.
+- **Silent install:** `setup.exe /S`, with `/ALLUSERS` or `/CURRENTUSER` for
+  the scope (default as above), `/NOPATH` to leave PATH alone, and
+  `/D=<folder>` (last on the command line) for another folder -- for a lab
+  image. `/S /ALLUSERS` must itself run elevated and ends with exit code 740
+  (`ERROR_ELEVATION_REQUIRED`) otherwise.
+- **Uninstall** removes the application, the shortcuts, the PATH entry and the
+  Apps entry. One for all users asks for administrator rights. It leaves the
+  folder if anything else is in it, and never touches projects, model files
+  or settings.
 
 ## Still to do
 

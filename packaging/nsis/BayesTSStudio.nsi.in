@@ -1,19 +1,32 @@
 ; BayesTS Studio setup, for students and anyone else installing on their own
-; machine: per user, no administrator rights, into
-; %LOCALAPPDATA%\Programs\BayesTS Studio, with a Start menu entry and an
-; entry in Settings > Apps that uninstalls it. Configured by CMake into
-; <build>/nsis/ and built by build-setup.ps1 from the `cmake --install`
-; layout the MSIX is built from too.
+; machine. It installs just for the current user by default -- no
+; administrator rights, into %LOCALAPPDATA%\Programs\BayesTS Studio -- or, on
+; request, for all users into Program Files, asking for administrator rights
+; only then. It adds a Start menu entry, an entry in Settings > Apps that
+; uninstalls it and, if ticked, the bayests command line to the PATH of the
+; same scope. A previous installation, in either scope and any folder, is
+; uninstalled first. Configured by CMake into <build>/nsis/ and built by
+; build-setup.ps1 from the `cmake --install` layout the MSIX is built from too.
 ;
-;   makensis /DLAYOUT=<layout> /DOUTFILE=<setup.exe> BayesTSStudio.nsi
+;   makensis /DLAYOUT=<layout> /DLAYOUT_DIRS=<layout-dirs.nsh> /DOUTFILE=<setup.exe> BayesTSStudio.nsi
+;
+; Command line: /S silent, /ALLUSERS or /CURRENTUSER the scope (default: that
+; of a previous installation, else the current user), /NOPATH leaves PATH
+; alone, /D=<folder> (last) the folder.
 
 Unicode true
 ManifestDPIAware true
+; Elevation is asked for only when the user picks "For all users", by
+; starting the setup again with the runas verb (see ModeLeave).
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "LogicLib.nsh"
+!include "nsDialogs.nsh"
+!include "Sections.nsh"
+!include "WinMessages.nsh"
 
 !ifndef LAYOUT
   !error "Pass /DLAYOUT=<the cmake --install layout>"
@@ -33,13 +46,22 @@ SetCompressor /SOLID lzma
 !define APP_VERSION "@PROJECT_VERSION@"
 !define APP_PUBLISHER "@STUDIO_SETUP_PUBLISHER@"
 !define APP_EXE "bin\bayests-studio.exe"
-; Per user: HKCU, which needs no administrator rights.
+; HKCU for the current user, HKLM for all users; the same key in both.
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\BayesTSStudio"
+!define USER_ENV_KEY "Environment"
+!define SYSTEM_ENV_KEY "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+; The folder put on PATH. It holds only bayests.cmd, which starts
+; bin\bayests.exe: bin itself holds the Qt and HDF5 DLLs, and on PATH those
+; would be found by every other program looking for a DLL of that name.
+!define PATH_DIR "cmd"
+; PATH is edited as a string of at most NSIS_MAX_STRLEN (8192) characters; a
+; longer one is left alone rather than truncated.
+!define PATH_MAX_EDIT 8000
 
 Name "${APP_NAME}"
 OutFile "${OUTFILE}"
-InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
-InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
+; No InstallDir: .onInit chooses it from the scope, and finds a /D= given on
+; the command line because $INSTDIR is then not empty.
 BrandingText "${APP_NAME} ${APP_VERSION}"
 
 VIProductVersion "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@.0"
@@ -50,19 +72,36 @@ VIAddVersionKey "FileDescription" "${APP_NAME} setup"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "${APP_PUBLISHER}"
 
+Var AllUsers        ; 1: for all users (HKLM, Program Files), 0: the current user
+Var Elevated        ; 1: this is the copy started with runas from ModeLeave
+Var CommandLineDir  ; 1: /D= named the folder
+Var NoPath          ; 1: /NOPATH
+Var PrevUserDir     ; a previous installation for the current user, or ""
+Var PrevUserVersion
+Var PrevAllDir      ; a previous installation for all users, or ""
+Var PrevAllVersion
+Var ModeDialog
+Var ModeUser
+Var ModeAll
+Var ModeNote
+
 !define MUI_ABORTWARNING
 ; The application's icon (tools/make_icon.py), on the setup and the uninstaller.
 !define MUI_ICON "@STUDIO_ICON_FILE@"
 !define MUI_UNICON "@STUDIO_ICON_FILE@"
-!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
+!define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "Start ${APP_NAME}"
+!define MUI_FINISHPAGE_RUN_FUNCTION StartApplication
 
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipWhenElevated
 !insertmacro MUI_PAGE_WELCOME
 ; The end-user licence agreement: Next becomes I Agree. A silent install
 ; (/S) shows no pages, so whoever deploys it that way accepts it for the
-; users.
+; users. The elevated copy does not ask again.
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipWhenElevated
 !define MUI_LICENSEPAGE_TEXT_TOP "Please read the licence agreement before installing ${APP_NAME}."
 !insertmacro MUI_PAGE_LICENSE "@STUDIO_EULA_FILE@"
+Page custom ModeShow ModeLeave
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES
@@ -71,30 +110,165 @@ VIAddVersionKey "LegalCopyright" "${APP_PUBLISHER}"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
+; ---------------------------------------------------------------------------
+; PATH: one entry added or removed, everything else in the value kept as it
+; was, unexpanded (ReadRegStr does not expand a REG_EXPAND_SZ).
+
+!macro PATH_FUNCTIONS un
+; In: $0 the PATH value, $1 the entry. Out: $0 without the entry (compared
+; without regard to case or a trailing backslash), the other items untouched.
+Function ${un}PathWithout
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  Push $6
+  StrCpy $2 ""  ; the result
+  StrCpy $3 ""  ; the item being read
+  StrCpy $5 0   ; the position in $0
+  StrCpy $6 0   ; 1 once the result has an item
+  loop:
+    StrCpy $4 $0 1 $5
+    StrCmp $4 "" item
+    StrCmp $4 ";" item
+    StrCpy $3 "$3$4"
+    IntOp $5 $5 + 1
+    Goto loop
+  item:
+    StrCmp $3 $1 next
+    StrCmp $3 "$1\" next
+    ; An empty last item -- a trailing ";" -- is dropped.
+    ${If} $4 == ""
+    ${AndIf} $3 == ""
+      Goto next
+    ${EndIf}
+    ${If} $6 == 1
+      StrCpy $2 "$2;$3"
+    ${Else}
+      StrCpy $2 $3
+      StrCpy $6 1
+    ${EndIf}
+  next:
+    StrCmp $4 "" done
+    StrCpy $3 ""
+    IntOp $5 $5 + 1
+    Goto loop
+  done:
+  StrCpy $0 $2
+  Pop $6
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+FunctionEnd
+
+; In: $AllUsers the scope, $1 the entry, $R0 "add" or "remove".
+Function ${un}EditPath
+  Push $0
+  ClearErrors
+  ${If} $AllUsers == 1
+    ReadRegStr $0 HKLM "${SYSTEM_ENV_KEY}" "Path"
+  ${Else}
+    ReadRegStr $0 HKCU "${USER_ENV_KEY}" "Path"
+  ${EndIf}
+  ${If} ${Errors}
+    StrCpy $0 ""
+  ${EndIf}
+  StrLen $2 $0
+  ${If} $2 > ${PATH_MAX_EDIT}
+    DetailPrint "PATH is $2 characters long and was left unchanged: $R0 $1 by hand."
+    Pop $0
+    Return
+  ${EndIf}
+  Call ${un}PathWithout
+  ${If} $R0 == "add"
+    ${If} $0 == ""
+      StrCpy $0 $1
+    ${Else}
+      ; A trailing ";" in the value would leave an empty item before ours.
+      StrCpy $2 $0 1 -1
+      ${If} $2 == ";"
+        StrCpy $0 "$0$1"
+      ${Else}
+        StrCpy $0 "$0;$1"
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  ${If} $AllUsers == 1
+    WriteRegExpandStr HKLM "${SYSTEM_ENV_KEY}" "Path" $0
+  ${Else}
+    WriteRegExpandStr HKCU "${USER_ENV_KEY}" "Path" $0
+  ${EndIf}
+  ; Terminals started from now on see it; ones already open do not.
+  SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
+  Pop $0
+FunctionEnd
+!macroend
+!insertmacro PATH_FUNCTIONS ""
+!insertmacro PATH_FUNCTIONS "un."
+
+; Runs the uninstaller in DIR in place, silently, and waits for it.
+!macro UNINSTALL_PREVIOUS DIR VERSION
+  DetailPrint "Uninstalling ${APP_NAME} ${VERSION} from ${DIR}"
+  ExecWait '"${DIR}\uninstall.exe" /S _?=${DIR}' $0
+  ${If} $0 != 0
+    DetailPrint "The previous uninstaller ended with $0; its files are replaced."
+  ${EndIf}
+  ; Run in place, the uninstaller cannot delete itself.
+  Delete "${DIR}\uninstall.exe"
+  RMDir "${DIR}"
+!macroend
+
+; ---------------------------------------------------------------------------
+
 Section "${APP_NAME}" SecApp
   SectionIn RO
-  ; An update replaces the application whole: what an earlier version shipped
-  ; and this one does not must not linger beside it. Only the folders the
-  ; setup writes are removed -- nothing a user put in $INSTDIR.
+  ; A previous installation goes first, wherever it is: one of the same
+  ; scope always, and for all users the current user's one too, whose Start
+  ; menu entry and PATH entry would otherwise stand beside the new ones. One
+  ; for all users cannot be removed without administrator rights and stays
+  ; when installing just for the current user (the users page says so).
+  ${If} $PrevUserDir != ""
+    !insertmacro UNINSTALL_PREVIOUS $PrevUserDir $PrevUserVersion
+  ${EndIf}
+  ${If} $AllUsers == 1
+  ${AndIf} $PrevAllDir != ""
+    !insertmacro UNINSTALL_PREVIOUS $PrevAllDir $PrevAllVersion
+  ${EndIf}
+  ; Whatever an uninstaller left of the folders the setup writes goes too,
+  ; so no file an earlier version shipped lingers. Nothing a user put in
+  ; $INSTDIR is removed.
   !insertmacro RemoveLayout
+  RMDir /r "$INSTDIR\${PATH_DIR}"
   SetOutPath "$INSTDIR"
   File /r "${LAYOUT}\*.*"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
   CreateShortcut "$SMPROGRAMS\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
 
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${APP_VERSION}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "${APP_PUBLISHER}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${APP_EXE}"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
-  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
-  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
+  ; SHCTX is HKLM for all users and HKCU for the current user (SetScope).
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayVersion" "${APP_VERSION}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "Publisher" "${APP_PUBLISHER}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${APP_EXE}"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+  WriteRegStr SHCTX "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
+  WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoModify" 1
+  WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "NoRepair" 1
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   IntFmt $0 "0x%08X" $0
-  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "EstimatedSize" "$0"
+  WriteRegDWORD SHCTX "${UNINSTALL_KEY}" "EstimatedSize" "$0"
+SectionEnd
+
+Section "Add bayests to your PATH" SecPath
+  CreateDirectory "$INSTDIR\${PATH_DIR}"
+  FileOpen $0 "$INSTDIR\${PATH_DIR}\bayests.cmd" w
+  FileWrite $0 '@"%~dp0..\bin\bayests.exe" %*$\r$\n'
+  FileClose $0
+  StrCpy $1 "$INSTDIR\${PATH_DIR}"
+  StrCpy $R0 "add"
+  Call EditPath
 SectionEnd
 
 Section /o "Desktop shortcut" SecDesktop
@@ -103,16 +277,237 @@ SectionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${SecApp} "The studio, the bayests command line and the licences of the components it ships."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecPath} "Lets you type bayests in any terminal opened from now on. Adds one folder, holding only bayests.cmd, to your PATH -- or, installed for all users, to the system PATH."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} "A shortcut on the desktop, beside the one in the Start menu."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
+
+; ---------------------------------------------------------------------------
+; The scope.
+
+Function SetScope
+  SetRegView 64
+  ${If} $AllUsers == 1
+    SetShellVarContext all
+  ${Else}
+    SetShellVarContext current
+  ${EndIf}
+  ${IfNot} $CommandLineDir == 1
+    ${If} $AllUsers == 1
+      ${If} $PrevAllDir != ""
+        StrCpy $INSTDIR $PrevAllDir
+      ${Else}
+        StrCpy $INSTDIR "$PROGRAMFILES64\${APP_NAME}"
+      ${EndIf}
+    ${Else}
+      ${If} $PrevUserDir != ""
+        StrCpy $INSTDIR $PrevUserDir
+      ${Else}
+        StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${APP_NAME}"
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  ${If} $AllUsers == 1
+    SectionSetText ${SecPath} "Add bayests to the system PATH"
+  ${Else}
+    SectionSetText ${SecPath} "Add bayests to your PATH"
+  ${EndIf}
+FunctionEnd
+
+Function IsAdmin  ; Pushes 1 if this process holds administrator rights.
+  UserInfo::GetAccountType
+  Pop $0
+  ${If} $0 == "Admin"
+    Push 1
+  ${Else}
+    Push 0
+  ${EndIf}
+FunctionEnd
+
+; A previous installation counts only where its uninstaller still is.
+!macro FIND_PREVIOUS ROOT DIRVAR VERVAR
+  ReadRegStr ${DIRVAR} ${ROOT} "${UNINSTALL_KEY}" "InstallLocation"
+  ReadRegStr ${VERVAR} ${ROOT} "${UNINSTALL_KEY}" "DisplayVersion"
+  ${IfNot} ${FileExists} "${DIRVAR}\uninstall.exe"
+    StrCpy ${DIRVAR} ""
+  ${EndIf}
+!macroend
+
+Function .onInit
+  SetRegView 64
+  ${If} $INSTDIR != ""
+    StrCpy $CommandLineDir 1
+  ${EndIf}
+  !insertmacro FIND_PREVIOUS HKCU $PrevUserDir $PrevUserVersion
+  !insertmacro FIND_PREVIOUS HKLM $PrevAllDir $PrevAllVersion
+
+  ${GetParameters} $R9
+  ; An update stays in the scope it was installed in; a first installation
+  ; is for the current user.
+  StrCpy $AllUsers 0
+  ${If} $PrevAllDir != ""
+  ${AndIf} $PrevUserDir == ""
+    StrCpy $AllUsers 1
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $R9 "/ALLUSERS" $0
+  ${IfNot} ${Errors}
+    StrCpy $AllUsers 1
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $R9 "/CURRENTUSER" $0
+  ${IfNot} ${Errors}
+    StrCpy $AllUsers 0
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $R9 "/ELEVATED" $0
+  ${IfNot} ${Errors}
+    StrCpy $Elevated 1
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $R9 "/NOPATH" $0
+  ${IfNot} ${Errors}
+    StrCpy $NoPath 1
+    !insertmacro UnselectSection ${SecPath}
+  ${EndIf}
+
+  ; Silently there is no page to ask for elevation from: a deployment for
+  ; all users runs the setup elevated itself.
+  ${If} ${Silent}
+  ${AndIf} $AllUsers == 1
+    Call IsAdmin
+    Pop $0
+    ${If} $0 != 1
+      SetErrorLevel 740 ; ERROR_ELEVATION_REQUIRED
+      Quit
+    ${EndIf}
+  ${EndIf}
+  Call SetScope
+FunctionEnd
+
+Function SkipWhenElevated
+  ${If} $Elevated == 1
+    Abort
+  ${EndIf}
+FunctionEnd
+
+Function ModeShow
+  ${If} $Elevated == 1
+    Abort
+  ${EndIf}
+  !insertmacro MUI_HEADER_TEXT "Choose Users" "Choose for whom to install ${APP_NAME}."
+  nsDialogs::Create 1018
+  Pop $ModeDialog
+  ${NSD_CreateLabel} 0 0 100% 20u "Install ${APP_NAME} for:"
+  Pop $0
+  ${NSD_CreateRadioButton} 10u 22u -10u 12u "&Just for me (recommended)"
+  Pop $ModeUser
+  ${NSD_CreateLabel} 22u 35u -22u 18u "No administrator rights needed. Installs into your own profile; the PATH entry, if ticked, goes into your user PATH."
+  Pop $0
+  ${NSD_CreateRadioButton} 10u 58u -10u 12u "For &all users of this computer"
+  Pop $ModeAll
+  ${NSD_CreateLabel} 22u 71u -22u 18u "Needs administrator rights. Installs into Program Files; the PATH entry, if ticked, goes into the system PATH."
+  Pop $0
+  ${If} $AllUsers == 1
+    ${NSD_Check} $ModeAll
+  ${Else}
+    ${NSD_Check} $ModeUser
+  ${EndIf}
+  ; What will happen to an installation already there.
+  StrCpy $1 ""
+  ${If} $PrevUserDir != ""
+    StrCpy $1 "${APP_NAME} $PrevUserVersion is installed for you in $PrevUserDir. It is uninstalled before this version is installed."
+  ${EndIf}
+  ${If} $PrevAllDir != ""
+    StrCpy $1 "$1$\r$\n${APP_NAME} $PrevAllVersion is installed for all users in $PrevAllDir. Installing for all users replaces it; installing just for you leaves it in place."
+  ${EndIf}
+  ${NSD_CreateLabel} 0 96u 100% 40u $1
+  Pop $ModeNote
+  nsDialogs::Show
+FunctionEnd
+
+Function ModeLeave
+  ${NSD_GetState} $ModeAll $0
+  ${If} $0 == ${BST_CHECKED}
+    StrCpy $AllUsers 1
+  ${Else}
+    StrCpy $AllUsers 0
+  ${EndIf}
+  ${If} $AllUsers == 1
+    Call IsAdmin
+    Pop $0
+    ${If} $0 != 1
+      ; Start this setup again with administrator rights; it carries on from
+      ; the folder page and this copy ends.
+      StrCpy $1 "/ALLUSERS /ELEVATED"
+      ${If} $NoPath == 1
+        StrCpy $1 "$1 /NOPATH"
+      ${EndIf}
+      ClearErrors
+      ExecShell "runas" "$EXEPATH" $1
+      ${If} ${Errors}
+        MessageBox MB_ICONEXCLAMATION|MB_OK "Installing for all users needs administrator rights, which were not granted. Choose Just for me to install without them."
+        Abort
+      ${EndIf}
+      Quit
+    ${EndIf}
+  ${EndIf}
+  Call SetScope
+FunctionEnd
+
+; From the finish page. The elevated copy starts the studio through Explorer,
+; so that it runs with the user's own rights and not the administrator's.
+Function StartApplication
+  ${If} $Elevated == 1
+    Exec '"$WINDIR\explorer.exe" "$INSTDIR\${APP_EXE}"'
+  ${Else}
+    Exec '"$INSTDIR\${APP_EXE}"'
+  ${EndIf}
+FunctionEnd
+
+; ---------------------------------------------------------------------------
+; The uninstaller. Its scope is that of the key whose InstallLocation is its
+; folder; for all users it needs administrator rights and asks for them.
+
+Function un.onInit
+  SetRegView 64
+  StrCpy $AllUsers 0
+  ReadRegStr $0 HKLM "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 == $INSTDIR
+    StrCpy $AllUsers 1
+  ${EndIf}
+  ${If} $AllUsers == 1
+    SetShellVarContext all
+    UserInfo::GetAccountType
+    Pop $0
+    ${If} $0 != "Admin"
+      ${If} ${Silent}
+        SetErrorLevel 740 ; ERROR_ELEVATION_REQUIRED
+        Quit
+      ${EndIf}
+      ClearErrors
+      ExecShell "runas" "$EXEPATH" "_?=$INSTDIR"
+      ${If} ${Errors}
+        MessageBox MB_ICONEXCLAMATION|MB_OK "${APP_NAME} is installed for all users; uninstalling it needs administrator rights, which were not granted."
+        SetErrorLevel 740
+      ${EndIf}
+      Quit
+    ${EndIf}
+  ${Else}
+    SetShellVarContext current
+  ${EndIf}
+FunctionEnd
 
 Section "Uninstall"
   Delete "$SMPROGRAMS\${APP_NAME}.lnk"
   Delete "$DESKTOP\${APP_NAME}.lnk"
+  StrCpy $1 "$INSTDIR\${PATH_DIR}"
+  StrCpy $R0 "remove"
+  Call un.EditPath
+  RMDir /r "$INSTDIR\${PATH_DIR}"
   !insertmacro RemoveLayout
   Delete "$INSTDIR\uninstall.exe"
   ; The folder only if nothing of the user's is left in it. Projects, model
   ; files and settings live elsewhere and are not touched.
   RMDir "$INSTDIR"
-  DeleteRegKey HKCU "${UNINSTALL_KEY}"
+  DeleteRegKey SHCTX "${UNINSTALL_KEY}"
 SectionEnd
