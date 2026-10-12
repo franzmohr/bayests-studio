@@ -271,6 +271,12 @@ components it uses.
   themselves by `tools/make_palettes.py`; their licences, none restrictive,
   are in LICENSING.md and the Third-party Licences box.
 
+- **Volatility break** (Posterior simulation › Volatility break): for a
+  model estimated with one, the path of the scale s_t from before the break
+  to the end of the forecast horizon, median with 68% and 90% bands; the
+  posterior of the decay rate ρ against its beta prior; and a table of the
+  free scales and ρ with their priors -- all exportable.
+
 - **Fonts** (View › Font…): the interface's font, the system's by default,
   and the one plots and exported figures set their text in -- the
   interface's family, or another, such as the typeface of the document the

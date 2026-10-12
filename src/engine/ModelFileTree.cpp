@@ -163,9 +163,17 @@ int readGroupInt(const QString &file, const QString &path, const QString &name, 
         {
             return fallback;
         }
+        // Read in the attribute's own class -- HighFive warns on a conversion --
+        // an integer as BayesTS and bayests-r write one, a double as R may.
+        const bool integer = a.getDataType().getClass() == HighFive::DataTypeClass::Integer;
         if (a.getSpace().getNumberDimensions() == 0)
         {
-            return static_cast<int>(a.read<double>());
+            return integer ? static_cast<int>(a.read<long long>()) : static_cast<int>(a.read<double>());
+        }
+        if (integer)
+        {
+            const auto v = a.read<std::vector<long long>>();
+            return v.empty() ? fallback : static_cast<int>(v.front());
         }
         const auto v = a.read<std::vector<double>>();
         return v.empty() ? fallback : static_cast<int>(v.front());

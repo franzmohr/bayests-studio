@@ -13,6 +13,8 @@
 #include "views/SummaryPlotView.h"
 #include "views/TableExport.h"
 #include "views/InclusionView.h"
+#include "views/VolatilityBreakView.h"
+#include "engine/VolatilityBreak.h"
 #include "views/HorseRaceView.h"
 #include "views/StructuralView.h"
 
@@ -321,6 +323,8 @@ PosteriorPage::PosteriorPage(QtReporter *reporter, QWidget *parent) : StagePage(
     tabs_->addTab(summary_, tr("Summary plot"));
     inclusion_ = new InclusionView;
     tabs_->addTab(inclusion_, tr("Inclusion probabilities"));
+    volatility_ = new VolatilityBreakView;
+    volatilityTab_ = tabs_->addTab(volatility_, tr("Volatility break"));
     tabs_->setObjectName(QStringLiteral("posteriorTabs"));
     layout->addWidget(tabs_, 1);
 }
@@ -366,6 +370,13 @@ void PosteriorPage::showModel(const ModelContext &context)
     tabs_->setTabEnabled(0, have && r.timeVarying);
     summary_->setModel(have && r.hasPosterior ? context.file : QString());
     inclusion_->setModel(have && r.hasPosterior ? context.file : QString());
+    const bool vbreak = have && r.hasPosterior && hasVolatilityBreak(context.file);
+    volatility_->setModel(vbreak ? context.file : QString());
+    tabs_->setTabEnabled(volatilityTab_, vbreak);
+    if (!vbreak && tabs_->currentIndex() == volatilityTab_)
+    {
+        tabs_->setCurrentIndex(1);
+    }
     if (!(have && r.timeVarying))
     {
         tabs_->setCurrentIndex(1);

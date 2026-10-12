@@ -29,6 +29,8 @@ add_library(studio_engine STATIC
     engine/SignZero.h
     engine/Spillover.cpp
     engine/Spillover.h
+    engine/VolatilityBreak.cpp
+    engine/VolatilityBreak.h
     engine/Structural.cpp
     engine/Structural.h
     engine/TableFormat.cpp
@@ -89,6 +91,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/Fonts.cpp
     views/Fonts.h
     views/PaletteDialog.cpp
+    views/VolatilityBreakView.cpp
+    views/VolatilityBreakView.h
     views/PaletteDialog.h
     views/PlotStyle.cpp
     views/PlotStyle.h

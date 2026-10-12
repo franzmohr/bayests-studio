@@ -139,6 +139,8 @@ private:
     DiagnosticsView *draws_;
     SummaryPlotView *summary_;
     InclusionView *inclusion_;
+    class VolatilityBreakView *volatility_;
+    int volatilityTab_ = -1;
 };
 
 /// 4. Evaluation: information criteria and forecast performance, across all

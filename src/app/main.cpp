@@ -210,6 +210,18 @@ int main(int argc, char *argv[])
                 }
                 window.showStage(studio::StageId::Application);
             }
+            // STUDIO_SMOKE_VOLATILITY=1: the volatility break.
+            if (!qgetenv("STUDIO_SMOKE_VOLATILITY").isEmpty())
+            {
+                window.showStage(studio::StageId::Posterior);
+                if (auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("posteriorTabs")))
+                {
+                    tabs->setCurrentIndex(4);
+                    settle(3000);
+                    window.grab().save(QStringLiteral("%1-volatility.png").arg(QString::fromLocal8Bit(prefix)));
+                }
+                window.showStage(studio::StageId::Application);
+            }
             if (auto *app = window.findChild<QTabWidget *>(QStringLiteral("applicationTabs")))
             {
                 app->setCurrentIndex(1);

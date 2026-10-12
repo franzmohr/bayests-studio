@@ -10,6 +10,7 @@
 #include "engine/ModelFileTree.h"
 #include "engine/ModelRunner.h"
 #include "engine/VarBuilder.h"
+#include "engine/VolatilityBreak.h"
 
 #include <QDir>
 #include <QTemporaryDir>
@@ -416,6 +417,36 @@ int main()
                 readDraws(file, "/posterior/volatility/coeffs").n_rows != 4)
             {
                 fail("the volatility break model does not run, or draws no scales and rho");
+            }
+            // The view's summary: the path is one before the break, the free
+            // scales' quantiles at it, and the decay after them, draw by draw.
+            const VolatilityBreakSummary v = volatilityBreakSummary(file);
+            const int at = v.breakColumn - v.firstColumn;   // path row of the break
+            bool path = v.scales == 3 && v.parameters.n_rows == 4 && at > 0 &&
+                        v.path.n_rows == static_cast<arma::uword>(v.periods + v.horizon - v.firstColumn + 1);
+            path = path && arma::all(arma::abs(v.path.row(0) - 1.0) < 1e-15);
+            for (int j = 0; path && j < v.scales; ++j)
+            {
+                const arma::vec q = arma::quantile(arma::vec(v.parameters.row(static_cast<arma::uword>(j)).t()),
+                                                   arma::vec{0.05, 0.16, 0.5, 0.84, 0.95});
+                path = arma::approx_equal(arma::vec(v.path.row(static_cast<arma::uword>(at + j)).t()), q,
+                                          "absdiff", 1e-12);
+            }
+            {
+                // Two periods past the free scales: 1 + (s_3 - 1) rho^3.
+                const int j = v.scales + 2;
+                arma::vec byHand(v.parameters.n_cols);
+                for (arma::uword d = 0; d < byHand.n_elem; ++d)
+                {
+                    byHand(d) = 1.0 + (v.parameters(2, d) - 1.0) * std::pow(v.parameters(3, d), 3);
+                }
+                const arma::vec q = arma::quantile(byHand, arma::vec{0.05, 0.16, 0.5, 0.84, 0.95});
+                path = path && arma::approx_equal(arma::vec(v.path.row(static_cast<arma::uword>(at + j)).t()), q,
+                                                  "absdiff", 1e-12);
+            }
+            if (!path || v.labels.size() != 4 || std::abs(v.rhoShape1 - 3.0357) > 1e-12)
+            {
+                fail("the volatility break's path is not the free scales, then their decay");
             }
         }
         s.family = Family::Var;
