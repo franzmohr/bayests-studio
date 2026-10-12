@@ -462,6 +462,19 @@ QJsonObject specToJson(const VarBuilderSpec &s)
     o[QStringLiteral("constant")] = s.constant;
     o[QStringLiteral("trend")] = s.trend;
     o[QStringLiteral("rank")] = s.rank;
+    if (s.seasonal)
+    {
+        o[QStringLiteral("seasonal")] = true;
+    }
+    if (s.vec())
+    {
+        o[QStringLiteral("cointShrinkage")] = s.cointShrinkage;
+        o[QStringLiteral("cointPTauInv")] = s.cointPTauInv;
+        if (s.cointScaleFromDifferences)
+        {
+            o[QStringLiteral("cointScaleFromDifferences")] = true;
+        }
+    }
     o[QStringLiteral("timeVarying")] = s.timeVarying;
     o[QStringLiteral("errors")] = static_cast<int>(s.errors);
     o[QStringLiteral("covar")] = s.covar;
@@ -568,6 +581,10 @@ std::optional<VarBuilderSpec> specFromJson(const QJsonObject &o, const DataSet &
     s.constant = o[QStringLiteral("constant")].toBool(true);
     s.trend = o[QStringLiteral("trend")].toBool(false);
     s.rank = o[QStringLiteral("rank")].toInt(1);
+    s.seasonal = o[QStringLiteral("seasonal")].toBool(false);
+    s.cointShrinkage = o[QStringLiteral("cointShrinkage")].toDouble(0.1);
+    s.cointPTauInv = o[QStringLiteral("cointPTauInv")].toDouble(1.0);
+    s.cointScaleFromDifferences = o[QStringLiteral("cointScaleFromDifferences")].toBool(false);
     s.timeVarying = o[QStringLiteral("timeVarying")].toBool(false);
     s.errors = static_cast<VarBuilderSpec::Errors>(o[QStringLiteral("errors")].toInt(0));
     s.covar = o[QStringLiteral("covar")].toBool(false);
@@ -760,15 +777,27 @@ QString methodsParagraph(const QString &file, const std::optional<VarBuilderSpec
     QString deterministic;
     if (spec)
     {
-        deterministic = spec->constant && spec->trend ? QObject::tr(", a constant and a linear trend")
-                        : spec->constant              ? QObject::tr(" and a constant")
-                        : spec->trend                 ? QObject::tr(" and a linear trend")
-                                                      : QString();
+        QStringList terms;
+        if (spec->constant)
+        {
+            terms << QObject::tr("a constant");
+        }
+        if (spec->trend)
+        {
+            terms << QObject::tr("a linear trend");
+        }
+        if (spec->seasonal)
+        {
+            terms << QObject::tr("seasonal dummies");
+        }
+        deterministic = terms.isEmpty() ? QString() : (terms.size() == 1 ? QObject::tr(" and %1") : QObject::tr(", %1"))
+                                                          .arg(listing(terms));
     }
-    sentences << QObject::tr("We estimate %1 with %2 lags of the %3 variables %4%5, on %6data from %7 to %8 "
+    sentences << QObject::tr("We estimate %1 with %2 of the %3 variables %4%5, on %6data from %7 to %8 "
                              "(%9 observations after the initial lags).")
                      .arg(model)
-                     .arg(r.p)
+                     .arg(vec ? QObject::tr("%1 lags in levels (%2 lagged differences)").arg(r.p).arg(std::max(r.p - 1, 0))
+                              : QObject::tr("%1 lags").arg(r.p))
                      .arg(variables.size())
                      .arg(listing(variables), deterministic,
                           frequencyWord.isEmpty() ? QString() : frequencyWord + QLatin1Char(' '),
@@ -776,7 +805,16 @@ QString methodsParagraph(const QString &file, const std::optional<VarBuilderSpec
                      .arg(r.periods);
     if (vec)
     {
-        sentences << QObject::tr("The cointegration space has the prior of Koop, León-González and Strachan (2010).");
+        sentences << (spec && !spec->timeVarying
+                          ? QObject::tr("The cointegration space has the prior of Koop, León-González and Strachan "
+                                        "(2010), with shrinkage %1 and a central location of %2 times the identity%3.")
+                                .arg(spec->cointShrinkage)
+                                .arg(spec->cointPTauInv)
+                                .arg(spec->cointScaleFromDifferences
+                                         ? QObject::tr(" on the error correction term scaled by the standard deviation "
+                                                       "of each series' first differences")
+                                         : QString())
+                          : QObject::tr("The cointegration space has the prior of Koop, León-González and Strachan (2010)."));
     }
     if (spec && spec->nIid > 0)
     {

@@ -313,6 +313,23 @@ QJsonObject exampleToJson(const WorkflowExample &e)
     {
         m[QStringLiteral("surprises")] = e.nIid;
     }
+    if (e.seasonal)
+    {
+        m[QStringLiteral("seasonal")] = true;
+    }
+    if (e.vec)
+    {
+        m[QStringLiteral("family")] = QStringLiteral("vec");
+        m[QStringLiteral("rank")] = e.rank;
+        QJsonObject coint;
+        coint[QStringLiteral("shrinkage")] = e.cointShrinkage;
+        coint[QStringLiteral("pTauInv")] = e.cointPTauInv;
+        if (e.cointScaleFromDifferences)
+        {
+            coint[QStringLiteral("scale")] = QStringLiteral("differences");
+        }
+        m[QStringLiteral("coint")] = coint;
+    }
     if (e.thin > 1)
     {
         m[QStringLiteral("thin")] = e.thin;
@@ -525,6 +542,8 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
                     {QStringLiteral("lags"), QStringLiteral("minnesota"), QStringLiteral("coefPrecision"),
                      QStringLiteral("detPrecision"), QStringLiteral("wishartScale"), QStringLiteral("wishartDf"),
                      QStringLiteral("forecastHorizon"), QStringLiteral("surprises"), QStringLiteral("thin"),
+                     QStringLiteral("seasonal"), QStringLiteral("family"), QStringLiteral("rank"),
+                     QStringLiteral("coint"),
                      QStringLiteral("paperPrior"),
                      QStringLiteral("iterations"),
                      QStringLiteral("burnin"), QStringLiteral("seed")},
@@ -537,6 +556,27 @@ WorkflowExample exampleFromJson(const QJsonObject &o, const QString &base, QStri
         e.wishartDf = static_cast<int>(number(m, QStringLiteral("wishartDf"), e.wishartDf, at));
         e.forecastHorizon = integer(m, QStringLiteral("forecastHorizon"), e.forecastHorizon, at);
         e.nIid = integer(m, QStringLiteral("surprises"), 0, at);
+        e.seasonal = flag(m, QStringLiteral("seasonal"), false, at);
+        if (const QString family = text(m, QStringLiteral("family"), at); !family.isEmpty() &&
+            family != QLatin1String("var") && family != QLatin1String("vec"))
+        {
+            refuse(QObject::tr("%1: \"family\" must be \"var\" or \"vec\", not \"%2\"").arg(at, family));
+        }
+        e.vec = text(m, QStringLiteral("family"), at) == QLatin1String("vec");
+        e.rank = integer(m, QStringLiteral("rank"), 1, at);
+        if (const QJsonObject coint = object(m, QStringLiteral("coint"), at); !coint.isEmpty())
+        {
+            const QString cat = at + QObject::tr(", coint");
+            unknownKeys(coint, {QStringLiteral("shrinkage"), QStringLiteral("pTauInv"), QStringLiteral("scale")}, cat,
+                        warnings);
+            e.cointShrinkage = number(coint, QStringLiteral("shrinkage"), 0.1, cat);
+            e.cointPTauInv = number(coint, QStringLiteral("pTauInv"), 1.0, cat);
+            e.cointScaleFromDifferences = text(coint, QStringLiteral("scale"), cat) == QLatin1String("differences");
+        }
+        if (e.vec && e.rank < 1)
+        {
+            refuse(QObject::tr("%1: a VEC's \"rank\" is at least 1").arg(at));
+        }
         e.thin = integer(m, QStringLiteral("thin"), 1, at);
         if (const QJsonObject prior = object(m, QStringLiteral("paperPrior"), at); !prior.isEmpty())
         {
@@ -842,7 +882,7 @@ built-in example replaces it.
 | `supported`, `missing` | `false` and what is missing, to list a paper as not yet guided |
 | `data` | `file` (CSV), `dateColumn`, `dates` (`"iso"`: 1947-01-01; `"year.quarter"`: 1955.1; `"year-month"`: the year in `dateColumn`, the month in `monthColumn`), `delimiter` (`","` unless given), `columns` (each `{"source", "name"}`), and optionally `transform` (`"log-difference"`, before the scale; the first period is lost), `scale`, `first`, `last`, `dropIncomplete`, `keepMissing` (a value not observed kept for the model to estimate) |
 | `series` | the model's variables in their order; the data's columns by default |
-| `model` | `lags`, `minnesota`, `coefPrecision`, `detPrecision`, `wishartScale`, `wishartDf` (the builder's k when absent), `forecastHorizon` (thesis: the baseline's forecast, 8 when absent), `surprises` (the first n series carry no coefficients), `paperPrior` (`kappa1`, `kappa2`, `lagDecay`, `scales`: `"autoregressions"` or `"residuals"`, `deterministicVariance`, `randomWalk`: the series centred on a random walk, `wishartScale`: `"residuals"`, `description`), `iterations`, `burnin`, `thin`, `seed` |
+| `model` | `lags`, `minnesota`, `coefPrecision`, `detPrecision`, `wishartScale`, `wishartDf` (the builder's k when absent), `forecastHorizon` (thesis: the baseline's forecast, 8 when absent), `surprises` (the first n series carry no coefficients), `seasonal` (unrestricted dummies), `family` (`"var"` or `"vec"`), `rank`, `coint` (`shrinkage`, `pTauInv`, `scale`: `"differences"` for the prior of a term scaled by the differences' standard deviations), `paperPrior` (`kappa1`, `kappa2`, `lagDecay`, `scales`: `"autoregressions"` or `"residuals"`, `deterministicVariance`, `randomWalk`: the series centred on a random walk, `wishartScale`: `"residuals"`, `description`), `iterations`, `burnin`, `thin`, `seed` |
 | `restrictions` | thesis: each `{"shock", "response", "sign": "+", "-" or "0", "horizon", "threshold"}` |
 | `rotate` | thesis: rotate the first n shocks only, the others recursive |
 | `race` | horse race: `variables`, `firstOrigin`, `lastOrigin`, `step`, `horizon`, `levels`, `volatilityBreak`, `candidates`, `benchmark` |

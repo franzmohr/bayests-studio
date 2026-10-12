@@ -99,6 +99,85 @@ std::vector<WorkflowExample> make()
         out.push_back(e);
     }
 
+    // -- Lütkepohl (2006), E6: the VEC of the bvartools article, its data
+    // shipped like E1's.
+    {
+        WorkflowExample e;
+        e.id = QStringLiteral("luetkepohl2006vec");
+        e.workflow = QStringLiteral("thesis");
+        e.reproduction = false;   // a textbook's, with the introductory examples
+        e.title = QObject::tr("Interest rate and inflation: Lütkepohl (2006)");
+        e.reference = QStringLiteral("Lütkepohl, H. (2006). New Introduction to Multiple Time Series Analysis, "
+                                     "2nd ed. Berlin: Springer, data set E6; and the VEC of the bvartools article "
+                                     "(Mohr), whose model this example runs.");
+        e.question = QObject::tr("Do the German long-term interest rate and inflation share a long-run relation, "
+                                 "and how does inflation respond to an interest rate shock once that relation is "
+                                 "accounted for? A vector error correction model for series in levels.");
+        e.recipe.file = QStringLiteral(":/examples/luetkepohl-e6.csv");
+        e.recipe.dateColumn = QStringLiteral("date");
+        e.recipe.dates = DataRecipe::Dates::YearDotQuarter;
+        e.recipe.columns = {{QStringLiteral("R"), QStringLiteral("R")}, {QStringLiteral("Dp"), QStringLiteral("Dp")}};
+        e.recipe.scale = 100.0;
+        e.vec = true;
+        e.rank = 1;
+        e.seasonal = true;
+        e.p = 4;   // a level order: three lagged differences
+        e.minnesota = false;
+        e.coefPrecision = 1.0;   // bvartools' v_i = 1, v_i_det = 1/10
+        e.detPrecision = 0.1;
+        e.cointShrinkage = 0.1;  // coint v_i = 0.1, p_tau_i = 1, on the scaled term
+        e.cointPTauInv = 1.0;
+        e.cointScaleFromDifferences = true;
+        e.wishartScale = 1.0;
+        e.iterations = 10000;
+        e.burnin = 2000;
+        e.seed = 1234567;
+        e.forecastHorizon = 8;
+        e.notes = {
+            {QStringLiteral("question"),
+             QObject::tr("The data come with the studio: Lütkepohl's file E6, the German long-term interest rate "
+                         "(Umlaufsrendite, from the Deutsche Bundesbank) and inflation, the quarterly change of the "
+                         "log GDP deflator (from the DIW), 1972Q2 to 1998Q4, West Germany until 1990Q2 and all of "
+                         "Germany after; times 100, as the bvartools article takes them. Inflation is not "
+                         "seasonally adjusted.")},
+            {QStringLiteral("inspect"),
+             QObject::tr("Both wander without returning to a mean: the interest rate falls from the early 1980s, "
+                         "and quarterly inflation swings with the seasons around a falling level. Series in levels "
+                         "that may share a long-run relation are what a VEC is for.")},
+            {QStringLiteral("baseline"),
+             QObject::tr("The VEC is preselected: four lags of the levels, so three lagged differences, rank one, "
+                         "an unrestricted constant and seasonal dummies, as the bvartools article specifies it. The "
+                         "flat prior gives precision 1 to the coefficients and 0.1 to the deterministic terms, and "
+                         "the cointegration space has the prior of Koop, León-González and Strachan (2010), "
+                         "shrinkage 0.1, set as the article sets it on an error correction term scaled by the "
+                         "standard deviation of each series' differences -- the studio writes the equivalent prior "
+                         "on the unscaled term, so the forecast is in levels without rescaling. 10,000 draws after "
+                         "2,000, seed 1234567, and a forecast eight quarters ahead.")},
+            {QStringLiteral("convergence"),
+             QObject::tr("The loadings and the cointegration vector are identified only together: read their "
+                         "product, the long-run matrix, or the cointegration vector normalised on R.")},
+            {QStringLiteral("lags"),
+             QObject::tr("The article fixes four lags of the levels; compare three, five and six by WAIC.")},
+            {QStringLiteral("identify"),
+             QObject::tr("Recursive in the order R, Dp, or the forecast error responses the article plots. A VEC's "
+                         "responses are those of the VAR in levels it implies, so a shock can have a permanent "
+                         "effect.")},
+            {QStringLiteral("responses"),
+             QObject::tr("The forecast error response of Dp to R over 20 quarters, the article's figure: choose "
+                         "Forecast error (feir) in the responses view and read the R column.")},
+        };
+        e.findings = QObject::tr(
+            "As bvartools estimates the article's model: the cointegration vector normalised on R is about "
+            "R - 4.2 Dp (the posterior mean of the ratio) -- quarterly inflation times four being annual inflation, "
+            "a stationary real interest rate. A unit shock to the interest rate equation raises inflation by about "
+            "0.21 after a quarter, and the effect settles at about 0.25 for good (the 95% band from about 0.07 to "
+            "0.47 at 20 quarters) -- a permanent effect, which a VEC allows and a stationary VAR does not. "
+            "Orthogonalised, R ordered first, the response is about -0.04 on impact and 0.13 at 20 quarters. The "
+            "forecast keeps the interest rate near 3.9 and repeats inflation's seasonal swing, from about -2.2 to -2.5 in the "
+            "first quarters to about 2.4 in the fourth.");
+        out.push_back(e);
+    }
+
     // -- Arias, Rubio-Ramírez and Waggoner (2018): the optimism shock.
     {
         WorkflowExample e;

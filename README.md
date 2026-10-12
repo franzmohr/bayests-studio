@@ -332,7 +332,9 @@ components it uses.
     `test/horserace_reference.R` recomputes every score with bvartools from
     the same files: 1.8e-15.
   - **Worked examples**: Lütkepohl's (2006) VAR, as the bvartools
-    introduction runs it, on data the studio ships; and, from the
+    introduction runs it, and his VEC of the interest rate and inflation
+    (data set E6), as the bvartools article runs it -- both on data the
+    studio ships; and, from the
     reproductions in `D:\projects\reproduction-projects` (located once, then
     remembered), the papers under "Reproducing papers", for which the
     assistant prepares the data from the replication files, fills in the

@@ -131,19 +131,19 @@ int main(int argc, char **argv)
         }
     }
 
-    // -- LÃ¼tkepohl's E1, which the studio ships: the recipe's log differences
+    // -- Lütkepohl's E1, which the studio ships: the recipe's log differences
     // are bvartools' diff(log(e1)) * 100, and the example estimated as it is
     // specified gives the numbers of the bvartools introduction.
     {
         const WorkflowExample *e1 = findExample(QStringLiteral("luetkepohl2006"));
         check(e1 && isBuiltinData(e1->recipe) && examplesFor(QStringLiteral("thesis")).front() == e1,
-              "LÃ¼tkepohl (2006): the first thesis example, on data the studio ships");
+              "Lütkepohl (2006): the first thesis example, on data the studio ships");
         bool papers = !e1->reproduction;
         for (const WorkflowExample *e : examplesFor(QStringLiteral("thesis")))
         {
-            papers = papers && (e == e1 || e->reproduction);
+            papers = papers && (e == e1 || e->id == QLatin1String("luetkepohl2006vec") || e->reproduction);
         }
-        check(papers, "... the one introductory example, every other a paper reproduced");
+        check(papers, "... the two textbook examples introductory, every other a paper reproduced");
         const DataSet d = prepareExampleData(e1->recipe, QString());
         const DataSet ref = readDelimited(dir + "/e1.csv");   // bvartools' diff(log(e1)) * 100, to 1982Q4
         check(d.length() == 75 && d.series() == 3 && d.periods.front() == QStringLiteral("1960 Q2") &&
@@ -243,6 +243,100 @@ int main(int argc, char **argv)
             check(std::abs(arma::median(impact) - 0.494) < 0.03 && std::abs(arma::mean(share0) - 0.273) < 0.03 &&
                       std::abs(arma::mean(share8) - 0.344) < 0.03,
                   "... the response of cons to income and its variance share as bvartools has them");
+        }
+    }
+
+    // -- Lütkepohl's E6, the VEC of the bvartools article: seasonal dummies,
+    // and the space prior of the scaled error correction term written as its
+    // equivalent on the unscaled one, P_tau^-1 = D^2 -- in bvartools the two
+    // give the same draws (2.8e-12) -- against the article's model there.
+    {
+        const WorkflowExample *ex = findExample(QStringLiteral("luetkepohl2006vec"));
+        check(ex && ex->vec && ex->seasonal && ex->cointScaleFromDifferences && isBuiltinData(ex->recipe),
+              "Lütkepohl (2006), E6: a VEC example on data the studio ships");
+        const DataSet d = prepareExampleData(ex->recipe, QString());
+        check(d.length() == 107 && d.periods.front() == QStringLiteral("1972 Q2") &&
+                  d.periods.back() == QStringLiteral("1998 Q4") && std::abs(d.values(0, 0) - 8.3) < 1e-9,
+              "... 107 quarters of R and Dp, times 100");
+        VarBuilderSpec s;
+        s.data = d;
+        s.columns = {0, 1};
+        s.family = VarBuilderSpec::Family::Vec;
+        s.rank = ex->rank;
+        s.p = ex->p;
+        s.seasonal = true;
+        s.coefPrecision = ex->coefPrecision;
+        s.detPrecision = ex->detPrecision;
+        s.cointShrinkage = ex->cointShrinkage;
+        s.cointPTauInv = ex->cointPTauInv;
+        s.cointScaleFromDifferences = true;
+        s.iterations = 4000;
+        s.burnin = 1000;
+        s.seed = ex->seed;
+        s.horizon = 8;
+        QTemporaryDir t;
+        const QString file = t.filePath(QStringLiteral("e6.h5"));
+        check(summarise(s).refusal.isEmpty(), "... its baseline a model the builder accepts");
+        writeVarModel(s, file);
+        // bvartools' scale_error_correction(): the sd of the differences of w.
+        const Matrix pTau = readMatrix(file, QStringLiteral("/priors/beta/p_tau_inv"));
+        const Matrix n = readMatrix(file, QStringLiteral("/data/train/z"));
+        check(std::abs(std::sqrt(pTau.at(0, 0)) - 0.561227) < 1e-6 && std::abs(std::sqrt(pTau.at(1, 1)) - 3.034517) < 1e-6 &&
+                  pTau.at(0, 1) == 0.0 && n.rows == 2 * 1 + 2 * (2 * 3 + 4),
+              "... the space prior of the scaled term, P_tau^-1 = diag(0.561^2, 3.035^2), and four deterministic terms");
+
+        ModelRunner runner;
+        QEventLoop loop;
+        bool ran = false;
+        QObject::connect(&runner, &ModelRunner::runFinished, &loop, [&](bool ok, bool, const QString &error) {
+            ran = ok;
+            if (!ok)
+            {
+                std::printf("      %s\n", error.toStdString().c_str());
+            }
+            loop.quit();
+        });
+        runner.start(file, QString(), {Stage::Coefficients, Stage::Forecast});
+        loop.exec();
+        check(ran, "... estimated and forecast");
+        if (ran)
+        {
+            // The cointegration vector normalised on R; bvartools: -4.19.
+            const Matrix beta = readMatrix(file, QStringLiteral("/posterior/beta/coeffs"));
+            double ratio = 0.0;
+            for (std::size_t dr = 0; dr < beta.cols; ++dr)
+            {
+                ratio += beta.at(1, dr) / beta.at(0, dr);
+            }
+            ratio /= static_cast<double>(beta.cols);
+            ResponseRequest r;
+            r.type = ResponseType::Feir;
+            r.horizon = 20;
+            const auto feir = impulseResponses(file, r, 0);
+            const auto median = [&](arma::uword h) {
+                arma::vec x(feir.size());
+                for (std::size_t i = 0; i < feir.size(); ++i)
+                {
+                    x(i) = feir[i](h, 1);
+                }
+                return arma::median(x);
+            };
+            // Forecasts (K h, draws), stacked by period: Dp at horizons 1 and 4.
+            const Matrix f = readMatrix(file, QStringLiteral("/posterior/forecast/forecasts"));
+            const auto fmedian = [&](std::size_t row) {
+                arma::vec x(f.cols);
+                for (std::size_t dr = 0; dr < f.cols; ++dr)
+                {
+                    x(dr) = f.at(row, dr);
+                }
+                return arma::median(x);
+            };
+            std::printf("      beta_Dp/beta_R %.2f, feir Dp to R %.3f and %.3f, Dp forecast Q1 %.2f, Q4 %.2f "
+                        "(bvartools -4.19, 0.212, 0.254, -2.23, 2.40)\n",
+                        ratio, median(1), median(20), fmedian(1), fmedian(7));
+            check(std::abs(ratio + 4.19) < 0.4 && std::abs(median(1) - 0.212) < 0.06 && std::abs(median(20) - 0.254) < 0.07 &&
+                      std::abs(fmedian(1) + 2.23) < 0.3 && std::abs(fmedian(7) - 2.40) < 0.3,
+                  "... the cointegration vector, the forecast error response and the seasonal forecast as bvartools has them");
         }
     }
 
@@ -397,7 +491,7 @@ int main(int argc, char **argv)
         std::printf("skip  Pinchetti (2026): no reproductions in %s\n", defaultReproductionsFolder().toStdString().c_str());
     }
 
-    // -- JarociÅ„ski and Karadi (2020): the surprises missing before 1990 kept,
+    // -- Jarociński and Karadi (2020): the surprises missing before 1990 kept,
     // written as constraints and drawn every sweep, the scales from AR(12)s
     // with the gaps dropped as the replication code does, and Table 2 and
     // Figure 4 where the bvartools reproduction has them.
@@ -405,7 +499,7 @@ int main(int argc, char **argv)
     {
         const WorkflowExample *ex = findExample(QStringLiteral("jk2020"));
         check(ex && ex->supported && ex->recipe.keepMissing && ex->nIid == 2 && ex->signRotated == 2,
-              "JarociÅ„ski and Karadi (2020): a guided example, its missing surprises kept");
+              "Jarociński and Karadi (2020): a guided example, its missing surprises kept");
         const DataSet d = prepareExampleData(ex->recipe, root);
         const arma::uword missingFf4 = arma::accu(d.values.col(0) != d.values.col(0));
         const arma::uword missingSp = arma::accu(d.values.col(1) != d.values.col(1));
@@ -558,7 +652,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        std::printf("skip  JarociÅ„ski and Karadi (2020): no reproductions in %s\n",
+        std::printf("skip  Jarociński and Karadi (2020): no reproductions in %s\n",
                     defaultReproductionsFolder().toStdString().c_str());
     }
 

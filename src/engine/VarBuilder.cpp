@@ -123,6 +123,9 @@ struct Layout
 
     // Deterministic terms, in the order they are written.
     bool unrestrictedConstant = false, unrestrictedTrend = false;
+    int seasons = 0;      // unrestricted seasonal dummies, frequency - 1
+    int frequency = 1;
+    int firstSeason = 0;  // the sub-period of data row 0, counted from 0
     bool restrictedConstant = false, restrictedTrend = false;
 };
 
@@ -140,7 +143,18 @@ Layout layoutOf(const VarBuilderSpec &s)
     l.restrictedTrend = l.vec && s.trend && s.restrictTrend;
     l.unrestrictedConstant = s.constant && !l.restrictedConstant;
     l.unrestrictedTrend = s.trend && !l.restrictedTrend;
-    l.n = (l.unrestrictedConstant ? 1 : 0) + (l.unrestrictedTrend ? 1 : 0);
+    if (s.seasonal && !s.data.empty())
+    {
+        const TimeIndex index = timeIndex(s.data, 0, s.data.length() - 1);
+        if (index.known && index.frequency > 1.0)
+        {
+            l.frequency = static_cast<int>(std::lround(index.frequency));
+            l.seasons = l.frequency - 1;
+            l.firstSeason = static_cast<int>(std::lround((index.start - std::floor(index.start)) * index.frequency)) %
+                            l.frequency;
+        }
+    }
+    l.n = (l.unrestrictedConstant ? 1 : 0) + (l.unrestrictedTrend ? 1 : 0) + l.seasons;
     l.nRestricted = (l.restrictedConstant ? 1 : 0) + (l.restrictedTrend ? 1 : 0);
     l.rank = l.vec ? s.rank : 0;
     l.kBeta = l.vec ? l.k + l.m + l.nRestricted : 0;
@@ -225,6 +239,10 @@ arma::vec regressors(const arma::mat &y, const arma::mat &xo, const Layout &l, i
     if (l.unrestrictedTrend)
     {
         x(d++) = trendValue;
+    }
+    for (int i = 0; i < l.seasons; ++i)
+    {
+        x(d++) = (l.firstSeason + row) % l.frequency == i ? 1.0 : 0.0;
     }
     return x;
 }
@@ -482,6 +500,14 @@ VarBuilderSummary summarise(const VarBuilderSpec &s)
         out.refusal = QObject::tr("The held-out periods must be observed to score the forecast against; %n "
                                   "value(s) are missing there.", nullptr, missing.test);
     }
+    else if (s.seasonal && l.seasons == 0)
+    {
+        out.refusal = QObject::tr("Seasonal dummies need quarterly or monthly data with dated periods.");
+    }
+    else if (s.seasonal && !s.constant)
+    {
+        out.refusal = QObject::tr("Seasonal dummies need a constant beside them.");
+    }
     else if (s.nIid < 0 || (s.nIid > 0 && s.nIid >= l.k))
     {
         out.refusal = QObject::tr("Some variables must keep their coefficients: at most %1 of the %2 can be "
@@ -706,6 +732,10 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
         if (l.unrestrictedTrend)
         {
             regressor.push_back("trend");
+        }
+        for (int i = 1; i <= l.seasons; ++i)
+        {
+            regressor.push_back("season." + std::to_string(i));
         }
         for (const auto &r : regressor)
         {
@@ -1072,6 +1102,10 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
             {
                 fx(hi, d++) = trendValue;
             }
+            for (int j = 0; j < l.seasons; ++j)
+            {
+                fx(hi, d++) = (l.firstSeason + l.estLast + 1 + i) % l.frequency == j ? 1.0 : 0.0;
+            }
             if (l.restrictedConstant)
             {
                 fx(hi, d++) = 1.0;
@@ -1153,9 +1187,29 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
         {
             // Koop, León-González and Strachan (2010).
             writeScalar<double>(file, "/priors/beta/v_inv", s.cointShrinkage);
-            writeMat(file, "/priors/beta/p_tau_inv",
-                     s.cointPTauInv * arma::eye<arma::mat>(static_cast<arma::uword>(l.kBeta),
-                                                           static_cast<arma::uword>(l.kBeta)));
+            // As on a term scaled by the standard deviation of each series'
+            // differences (bvartools' scale_error_correction(): the
+            // deterministic rows by one, a trend by its own deviation): beta
+            // = D^-1 beta*, so P_tau^-1 = D P_tau*^-1 D, and B' P_tau^-1 B,
+            // which carries the loadings' prior too, is unchanged.
+            arma::vec d(static_cast<arma::uword>(l.kBeta), arma::fill::ones);
+            if (s.cointScaleFromDifferences && tt > 2)
+            {
+                const auto stochastic = static_cast<arma::uword>(l.k + l.m);
+                for (arma::uword j = 0; j < static_cast<arma::uword>(l.kBeta); ++j)
+                {
+                    const bool trendRow = l.restrictedTrend && j + 1 == static_cast<arma::uword>(l.kBeta);
+                    if (j < stochastic)
+                    {
+                        d(j) = arma::stddev(arma::diff(w.col(j)));
+                    }
+                    else if (trendRow)
+                    {
+                        d(j) = arma::stddev(w.col(j));
+                    }
+                }
+            }
+            writeMat(file, "/priors/beta/p_tau_inv", s.cointPTauInv * arma::mat(arma::diagmat(d % d)));
             writeRow(file, "/initial/beta", betaVec);
         }
     }

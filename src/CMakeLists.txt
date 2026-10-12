@@ -60,7 +60,7 @@ endif()
 qt_add_resources(studio_engine "exampledata"
     PREFIX "/examples"
     BASE "engine/data"
-    FILES engine/data/luetkepohl-e1.csv
+    FILES engine/data/luetkepohl-e1.csv engine/data/luetkepohl-e6.csv
 )
 
 qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE

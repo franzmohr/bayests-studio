@@ -149,7 +149,7 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     auto *form = new QFormLayout;
     var_ = new QRadioButton(tr("VAR"));
     vec_ = new QRadioButton(tr("VEC, for series in levels with a cointegration relation"));
-    var_->setChecked(true);
+    (example && example->vec ? vec_ : var_)->setChecked(true);
     vec_->setToolTip(tr("A vector error correction model for series in levels that share a long-run relation."));
     var_->setToolTip(tr("A VAR in the variables as they are: growth rates, or levels with the random walk prior."));
     auto *family = new QButtonGroup(this);
@@ -162,7 +162,13 @@ ThesisBaselineDialog::ThesisBaselineDialog(const DataSet &data, const WorkflowEx
     rank_ = new QSpinBox;
     rank_->setRange(1, 10);
     rank_->setToolTip(tr("The number of cointegration relations."));
+    rank_->setValue(example ? example->rank : 1);
     form->addRow(tr("Cointegration rank"), rank_);
+    seasonal_ = new QCheckBox(tr("Seasonal dummies"));
+    seasonal_->setObjectName(QStringLiteral("baselineSeasonal"));
+    seasonal_->setChecked(example && example->seasonal);
+    seasonal_->setToolTip(tr("For data not seasonally adjusted: a dummy for each quarter or month but the last, beside the constant."));
+    form->addRow(QString(), seasonal_);
     p_ = new QSpinBox;
     p_->setRange(1, 24);
     p_->setValue(example ? example->p : suggestedLags(data));
@@ -260,6 +266,13 @@ VarBuilderSpec ThesisBaselineDialog::spec() const
         {
             s.ownLagMean.push_back(pp.randomWalk.contains(data_.names.value(c)) ? 1.0 : 0.0);
         }
+    }
+    s.seasonal = seasonal_->isChecked();
+    if (example_ && example_->vec)
+    {
+        s.cointShrinkage = example_->cointShrinkage;
+        s.cointPTauInv = example_->cointPTauInv;
+        s.cointScaleFromDifferences = example_->cointScaleFromDifferences;
     }
     if (example_)
     {

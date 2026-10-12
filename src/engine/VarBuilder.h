@@ -40,6 +40,11 @@ struct VarBuilderSpec
     bool trend = false;
     bool restrictConstant = false;    ///< VEC: the constant inside the cointegration space
     bool restrictTrend = false;       ///< VEC: the trend inside the cointegration space
+    /// Seasonal dummies, unrestricted: frequency - 1 of them after the constant
+    /// and the trend, dummy i one in sub-period i (the first quarter, ...), the
+    /// last sub-period the base -- bvartools' seasonal = "unrestricted". Needs
+    /// quarterly or monthly period labels and a constant.
+    bool seasonal = false;
     int rank = 1;                     ///< VEC: cointegration rank
     bool timeVarying = false;
     /// The first `nIid` endogenous variables carry no coefficients at all --
@@ -88,6 +93,12 @@ struct VarBuilderSpec
     // beta_t = rho beta_{t-1} + eta_t and its stationary distribution.
     double cointShrinkage = 0.1;      ///< coint v_i
     double cointPTauInv = 1.0;        ///< coint p_tau_i
+    /// The constant space prior as on an error correction term scaled by the
+    /// standard deviation of each series' differences -- bvartools'
+    /// scale_error_correction() before add_priors(), whose posterior is that of
+    /// the unscaled term with P_tau^-1 = cointPTauInv diag(sd^2): the file
+    /// keeps the series' own units, so the level forecast needs no rescaling.
+    bool cointScaleFromDifferences = false;
     double cointRho = 0.999;          ///< coint rho
 
     // Random walks (time-varying coefficients)

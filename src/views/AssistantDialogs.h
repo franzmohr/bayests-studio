@@ -39,6 +39,7 @@ private:
     QRadioButton *var_;
     QRadioButton *vec_;
     QSpinBox *rank_;
+    QCheckBox *seasonal_;
     QSpinBox *p_;
     QSpinBox *forecastHorizon_;
     QComboBox *prior_;

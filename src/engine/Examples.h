@@ -97,6 +97,14 @@ struct WorkflowExample
     int wishartDf = 0;                          ///< the Wishart's degrees of freedom; 0: the builder's, k
     std::optional<ExamplePrior> paperPrior;     ///< the paper's Minnesota prior, preselected
     int nIid = 0;                               ///< the first n series are surprises without coefficients
+    // A VEC: its rank, seasonal dummies (unrestricted), and the prior on the
+    // cointegration space (Koop, León-González and Strachan 2010).
+    bool vec = false;
+    int rank = 1;
+    bool seasonal = false;
+    double cointShrinkage = 0.1;                ///< v_i
+    double cointPTauInv = 1.0;                  ///< p_tau_i
+    bool cointScaleFromDifferences = false;     ///< as on a term scaled by the differences' sd
     int thin = 1;
     int forecastHorizon = 8;                    ///< the baseline's forecast, periods after the sample
     int iterations = 5000;

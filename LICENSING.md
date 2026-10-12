@@ -55,16 +55,18 @@ Exported PDF figures embed Inter, which the licence allows.
 
 ## Example data
 
-`src/engine/data/luetkepohl-e1.csv`, the data of the Lütkepohl (2006)
-worked example, is data set E1 of Lütkepohl, *New Introduction to Multiple
-Time Series Analysis* (Springer), as distributed with JMulTi
-(`jmulti.de/download/datasets/e1.dat`): West German investment, income and
-consumption, 1960Q1 to 1982Q4, originally from the Deutsche Bundesbank. The
-file is the values of the series only, retyped as a CSV with a date column;
-no code of bvartools, which ships the same series, is taken. Official
-statistics of this kind are facts, not a work, and the textbook and JMulTi
-publish them for use; the example cites both. Have this confirmed in the same
-review as the licence agreement.
+`src/engine/data/luetkepohl-e1.csv` and `luetkepohl-e6.csv`, the data of the
+two Lütkepohl (2006) worked examples, are data sets E1 and E6 of Lütkepohl,
+*New Introduction to Multiple Time Series Analysis* (Springer), as distributed
+with JMulTi (`jmulti.de/download/datasets/e1.dat` and `e6.dat`): West German
+investment, income and consumption, 1960Q1 to 1982Q4, originally from the
+Deutsche Bundesbank (E1); and the German long-term interest rate, from the
+Deutsche Bundesbank, and the change of the log GDP deflator, from the DIW,
+1972Q2 to 1998Q4 (E6). The files are the values of the series only, retyped
+as CSVs with a date column; no code of bvartools, which ships the same
+series, is taken. Official statistics of this kind are facts, not a work, and
+the textbook and JMulTi publish them for use; the examples cite both. Have
+this confirmed in the same review as the licence agreement.
 
 ## Qt
 
