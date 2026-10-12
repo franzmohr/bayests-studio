@@ -10,6 +10,7 @@
 #include "engine/Structural.h"
 #include "engine/Extensions.h"
 #include "engine/ModelRunner.h"
+#include "engine/Multipliers.h"
 #include "engine/Workflow.h"
 
 #include <QCoreApplication>
@@ -240,6 +241,49 @@ int main(int argc, char **argv)
             check(std::abs(arma::median(impact) - 0.494) < 0.03 && std::abs(arma::mean(share0) - 0.273) < 0.03 &&
                       std::abs(arma::mean(share8) - 0.344) < 0.03,
                   "... the response of cons to income and its variance share as bvartools has them");
+        }
+    }
+
+    // -- Multipliers of every exogenous variable, as the multipliers view's
+    // matrix asks for them: invest, with income and cons weakly exogenous.
+    // STUDIO_TEST_KEEP=<folder> keeps the model, to look at.
+    {
+        QTemporaryDir t;
+        VarBuilderSpec x;
+        x.data = readDelimited(dir + "/e1.csv");
+        x.columns = {0};
+        x.exogenous = {1, 2};
+        x.p = 2;
+        x.s = 1;
+        x.iterations = 1000;
+        x.burnin = 200;
+        x.seed = 7;
+        const QString file = t.filePath(QStringLiteral("varx2.h5"));
+        writeVarModel(x, file);
+        ModelRunner runner;
+        QEventLoop loop;
+        bool ran = false;
+        QObject::connect(&runner, &ModelRunner::runFinished, &loop, [&](bool ok, bool, const QString &) {
+            ran = ok;
+            loop.quit();
+        });
+        runner.start(file, QString(), {Stage::Coefficients});
+        loop.exec();
+        const MultiplierSupport support = ran ? multiplierSupport(file) : MultiplierSupport{};
+        bool each = support.ok && support.m == 2 && support.k == 1;
+        for (int j = 0; each && j < support.m; ++j)
+        {
+            MultiplierRequest r;
+            r.impulse = j;
+            r.horizon = 8;
+            const auto draws = dynamicMultipliers(file, r);
+            each = !draws.empty() && draws.front().n_rows == 9 && draws.front().n_cols == 1 && draws.front().is_finite();
+        }
+        check(ran && each, "a VARX with two exogenous variables: the multipliers of each, as the matrix shows them");
+        if (const QString keep = qEnvironmentVariable("STUDIO_TEST_KEEP"); !keep.isEmpty() && ran)
+        {
+            QFile::remove(QDir(keep).filePath(QStringLiteral("varx2.h5")));
+            QFile::copy(file, QDir(keep).filePath(QStringLiteral("varx2.h5")));
         }
     }
 

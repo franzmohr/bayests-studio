@@ -101,14 +101,28 @@ MultipliersView::MultipliersView(QWidget *parent) : QWidget(parent)
     figure_ = [this]() {
         FigureSpec spec;
         const MultiplierRequest req = request();
-        spec.title = tr("Dynamic multipliers of a %1 change in %2")
-                         .arg(req.permanent ? tr("permanent") : tr("transitory"), impulse_->currentText());
         spec.subtitle = tr("Median, 68% and 90% bands%1").arg(req.cumulative ? tr(", cumulative") : QString());
         spec.columns = columns_;
         for (QwtPlot *p : plots_)
         {
             spec.cells.push_back({p, {}});
         }
+        if (matrix_)
+        {
+            // As on screen: a column per exogenous variable, a row per response.
+            spec.title = tr("Dynamic multipliers of a %1 change of %2")
+                             .arg(req.permanent ? tr("permanent") : tr("transitory"))
+                             .arg(req.shock);
+            for (const QString &x : support_.exogenous)
+            {
+                spec.columnLabels << tr("Change in %1").arg(x);
+            }
+            spec.rowLabels = support_.variables;
+            spec.name = QStringLiteral("multipliers-all");
+            return spec;
+        }
+        spec.title = tr("Dynamic multipliers of a %1 change in %2")
+                         .arg(req.permanent ? tr("permanent") : tr("transitory"), impulse_->currentText());
         spec.name = QStringLiteral("multipliers-%1").arg(impulse_->currentText());
         return spec;
     };
@@ -151,6 +165,13 @@ MultipliersView::MultipliersView(QWidget *parent) : QWidget(parent)
     }
     connect(shock_, &QDoubleSpinBox::valueChanged, this, &MultipliersView::schedule);
     connect(cumulative_, &QCheckBox::toggled, this, &MultipliersView::schedule);
+    // All exogenous variables and one need grids of their own.
+    connect(impulse_, &QComboBox::currentIndexChanged, this, [this]() {
+        if (support_.ok && allImpulses() != matrix_)
+        {
+            rebuildGrid();
+        }
+    });
     setModel(QString());
 }
 
@@ -174,7 +195,11 @@ void MultipliersView::setModel(const QString &file)
         const QSignalBlocker b1(impulse_);
         const QSignalBlocker b2(period_);
         impulse_->clear();
+        impulse_->addItem(tr("All exogenous variables"));
         impulse_->addItems(support_.exogenous);
+        // The matrix while it stays legible; with one exogenous variable it
+        // would be a single column, which the grid shows better.
+        impulse_->setCurrentIndex(support_.m > 1 && support_.k <= 6 && support_.m <= 6 ? 0 : 1);
         period_->setMaximum(std::max(1, support_.periods));
         period_->setValue(std::max(1, support_.periods));
     }
@@ -187,7 +212,7 @@ void MultipliersView::setModel(const QString &file)
 MultiplierRequest MultipliersView::request() const
 {
     MultiplierRequest r;
-    r.impulse = impulse_->currentIndex();
+    r.impulse = std::max(0, impulse_->currentIndex() - 1);
     r.horizon = horizon_->value();
     r.shock = shock_->value();
     r.permanent = type_->currentData().toBool();
@@ -218,12 +243,30 @@ void MultipliersView::compute()
     status_->setText(tr("Computing…"));
     const QString file = file_;
     const MultiplierRequest req = request();
-    watcher_->setFuture(QtConcurrent::run([file, req]() {
+    std::vector<int> impulses;
+    if (allImpulses())
+    {
+        for (int j = 0; j < support_.m; ++j)
+        {
+            impulses.push_back(j);
+        }
+    }
+    else
+    {
+        impulses.push_back(req.impulse);
+    }
+    watcher_->setFuture(QtConcurrent::run([file, req, impulses]() {
         const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
         Result r;
         try
         {
-            r.draws = dynamicMultipliers(file, req);
+            r.impulses = impulses;
+            for (const int j : impulses)
+            {
+                MultiplierRequest one = req;
+                one.impulse = j;
+                r.draws.push_back(dynamicMultipliers(file, one));
+            }
         }
         catch (const std::exception &e)
         {
@@ -233,27 +276,82 @@ void MultipliersView::compute()
     }));
 }
 
+bool MultipliersView::allImpulses() const
+{
+    return impulse_->currentIndex() == 0;
+}
+
 void MultipliersView::rebuildGrid()
 {
-    for (QwtPlot *p : plots_)
+    // Out of the grid at once, so no old panel stands beside the new ones.
+    for (QWidget *w : std::vector<QWidget *>(plots_.begin(), plots_.end()))
     {
-        p->deleteLater();
+        grid_->removeWidget(w);
+        w->hide();
+        w->deleteLater();
     }
     plots_.clear();
+    for (QWidget *h : headers_)
+    {
+        grid_->removeWidget(h);
+        h->hide();
+        h->deleteLater();
+    }
+    headers_.clear();
     const int k = support_.ok ? support_.k : 0;
+    const int m = support_.ok ? support_.m : 0;
+    matrix_ = k > 0 && m > 0 && allImpulses();
+    QFont bold = font();
+    bold.setBold(true);
+    if (matrix_)
+    {
+        // As the impulse responses: exogenous variable j's column, response
+        // i's row, the headers along the top and the left.
+        columns_ = m;
+        for (int j = 0; j < m; ++j)
+        {
+            auto *head = new QLabel(tr("Change in %1").arg(support_.exogenous.value(j)));
+            head->setAlignment(Qt::AlignCenter);
+            head->setFont(bold);
+            head->setWordWrap(true);
+            grid_->addWidget(head, 0, j + 1);
+            headers_.push_back(head);
+        }
+        for (int i = 0; i < k; ++i)
+        {
+            auto *row = new QLabel(support_.variables.value(i));
+            row->setAlignment(Qt::AlignCenter);
+            row->setFont(bold);
+            row->setMinimumWidth(70);
+            row->setToolTip(tr("The multipliers of %1, for a change in each exogenous variable along the row.")
+                                .arg(support_.variables.value(i)));
+            grid_->addWidget(row, i + 1, 0);
+            headers_.push_back(row);
+            for (int j = 0; j < m; ++j)
+            {
+                auto *plot = new QwtPlot;
+                attachFigureExport(plot, figure_);
+                plot->setToolTip(tr("The response of %1 to a change in %2, in its own units: the posterior median with 68% and 90% bands. Right-click to copy or save the figure.")
+                                     .arg(support_.variables.value(i), support_.exogenous.value(j)));
+                plot->setMinimumHeight(170);
+                styleAxes(plot, i + 1 == k ? tr("Horizon") : QString(), QString());
+                grid_->addWidget(plot, i + 1, j + 1);
+                plots_.push_back(plot);
+            }
+        }
+        return;
+    }
     const int columns = k <= 4 ? std::max(1, std::min(k, 2)) : 3;
     columns_ = columns;
     for (int i = 0; i < k; ++i)
     {
         auto *plot = new QwtPlot;
         attachFigureExport(plot, figure_);
-    plot->setToolTip(tr("The multiplier for this variable: the posterior median with 68% and 90% bands. Right-click to copy or save the figure."));
+        plot->setToolTip(tr("The multiplier for this variable: the posterior median with 68% and 90% bands. Right-click to copy or save the figure."));
         plot->setMinimumHeight(220);
         styleAxes(plot, tr("Horizon"), QString());
         QwtText title(support_.variables.value(i));
-        QFont f = plot->font();
-        f.setBold(true);
-        title.setFont(f);
+        title.setFont(bold);
         plot->setTitle(title);
         grid_->addWidget(plot, i / columns, i % columns);
         plots_.push_back(plot);
@@ -268,19 +366,40 @@ void MultipliersView::show(const Result &result)
         return;
     }
     const MultiplierRequest req = request();
-    const int draws = static_cast<int>(result.draws.size());
-    status_->setText(tr("%1 change of %2 in %3: the response of each variable, in its own units; median, 68% "
-                        "and 90% bands over %4 draws%5.")
-                         .arg(req.permanent ? tr("A permanent") : tr("A transitory"))
-                         .arg(req.shock)
-                         .arg(impulse_->currentText())
-                         .arg(draws)
-                         .arg(support_.moving ? tr(", at period %1").arg(period_->value()) : QString()));
+    // A result computed for the other layout is stale; the next one is coming.
+    if (result.draws.empty() || (result.impulses.size() > 1) != (matrix_ && support_.m > 1))
+    {
+        return;
+    }
+    const int draws = static_cast<int>(result.draws.front().size());
+    const QString period = support_.moving ? tr(", at period %1").arg(period_->value()) : QString();
+    status_->setText(matrix_ ? tr("%1 change of %2 in each exogenous variable (columns), in its own units: the "
+                                  "response of each variable (rows); median, 68% and 90% bands over %3 draws%4.")
+                                   .arg(req.permanent ? tr("A permanent") : tr("A transitory"))
+                                   .arg(req.shock)
+                                   .arg(draws)
+                                   .arg(period)
+                             : tr("%1 change of %2 in %3: the response of each variable, in its own units; median, "
+                                  "68% and 90% bands over %4 draws%5.")
+                                   .arg(req.permanent ? tr("A permanent") : tr("A transitory"))
+                                   .arg(req.shock)
+                                   .arg(impulse_->currentText())
+                                   .arg(draws)
+                                   .arg(period));
     const int horizons = req.horizon + 1;
     std::vector<double> column(static_cast<std::size_t>(draws));
-    for (std::size_t v = 0; v < plots_.size(); ++v)
+    const auto m = static_cast<std::size_t>(std::max(1, support_.m));
+    for (std::size_t p = 0; p < plots_.size(); ++p)
     {
-        QwtPlot *plot = plots_[v];
+        // Plot p is the response of v to a change in exogenous variable s.
+        const std::size_t v = matrix_ ? p / m : p;
+        const std::size_t s = matrix_ ? p % m : 0;
+        if (s >= result.draws.size())
+        {
+            continue;
+        }
+        const std::vector<arma::mat> &change = result.draws[s];
+        QwtPlot *plot = plots_[p];
         plot->detachItems(QwtPlotItem::Rtti_PlotCurve, true);
         plot->detachItems(QwtPlotItem::Rtti_PlotIntervalCurve, true);
         plot->detachItems(QwtPlotItem::Rtti_PlotMarker, true);
@@ -298,7 +417,7 @@ void MultipliersView::show(const Result &result)
             for (int d = 0; d < draws; ++d)
             {
                 column[static_cast<std::size_t>(d)] =
-                    result.draws[static_cast<std::size_t>(d)](static_cast<arma::uword>(h), static_cast<arma::uword>(v));
+                    change[static_cast<std::size_t>(d)](static_cast<arma::uword>(h), static_cast<arma::uword>(v));
             }
             std::sort(column.begin(), column.end());
             b90.append({double(h), QwtInterval(sortedQuantile(column, 0.05), sortedQuantile(column, 0.95))});
