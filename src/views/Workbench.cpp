@@ -138,10 +138,13 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     // strip, so a laptop shows one or two panes at a time.
     split_ = new QSplitter(Qt::Horizontal);
     split_->setChildrenCollapsible(false);
+    // The application in two columns: the structural analysis -- responses
+    // and the historical decomposition -- and then spillovers, multipliers
+    // and forecasts.
     columns_ = {new FoldColumn({modPane, dataPane}, 2, 440, {3, 2}), new FoldColumn({priorPane}, 2, 440, {1}),
-                new FoldColumn({posteriorPane}, 4, 0, {1}),
-                new FoldColumn({responsesPane, historicalPane, spilloverPane, multiplierPane, forecastsPane}, 4, 0,
-                               {1, 1, 1, 1, 1})};
+                new FoldColumn({posteriorPane}, 3, 0, {1}),
+                new FoldColumn({responsesPane, historicalPane}, 3, 0, {1, 1}),
+                new FoldColumn({spilloverPane, multiplierPane, forecastsPane}, 3, 0, {1, 1, 1})};
     for (FoldColumn *c : columns_)
     {
         split_->addWidget(c);
