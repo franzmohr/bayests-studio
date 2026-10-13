@@ -409,6 +409,29 @@ int main(int argc, char *argv[])
                 }
             }
             window.grab().save(base + QStringLiteral("-estimated.png"));
+            // STUDIO_SMOKE_BLOCK=1: the draws as whole blocks, a/coeffs and
+            // then the error precision.
+            if (!qgetenv("STUDIO_SMOKE_BLOCK").isEmpty())
+            {
+                for (QComboBox *c : window.findChildren<QComboBox *>())
+                {
+                    if (c->isVisible() && c->findText(QObject::tr("Whole block")) >= 0)
+                    {
+                        c->setCurrentIndex(c->findText(QObject::tr("Whole block")));
+                    }
+                }
+                settle(1500);
+                window.grab().save(base + QStringLiteral("-block-a.png"));
+                for (QComboBox *c : window.findChildren<QComboBox *>())
+                {
+                    if (c->isVisible() && c->findText(QStringLiteral("u_sigma_inv/coeffs")) >= 0)
+                    {
+                        c->setCurrentIndex(c->findText(QStringLiteral("u_sigma_inv/coeffs")));
+                    }
+                }
+                settle(1500);
+                window.grab().save(base + QStringLiteral("-block-sigma.png"));
+            }
             QCoreApplication::exit(ok ? 0 : 1);
         });
         QTimer::singleShot(800, &window, [&window, base, tvp]() {

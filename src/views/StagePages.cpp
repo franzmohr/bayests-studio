@@ -475,7 +475,7 @@ void PosteriorPage::showDataset(int index)
                 }
             }
         }
-        draws_->showDataset(context_.file, path, rows);
+        draws_->showDataset(context_.file, path, rows, variableNames(context_.file));
     }
 }
 
