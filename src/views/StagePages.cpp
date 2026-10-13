@@ -481,11 +481,6 @@ void PosteriorPage::showDataset(int index)
 
 void PosteriorPage::setCompact()
 {
-    // The workbench shows the state variance beside the priors instead.
-    tabs_->removeTab(stateVarianceTab_);
-    stateVariance_->deleteLater();
-    stateVariance_ = nullptr;
-    stateVarianceTab_ = -1;
     if (auto *title = findChild<QLabel *>(QStringLiteral("pageTitle")))
     {
         title->hide();

@@ -132,8 +132,7 @@ public:
 
     void runStarted();
     void runFinished();
-    /// Without the page title, and without the state variance tab, which the
-    /// workbench puts in its priors column: a panel of the workbench.
+    /// Without the page title, for a panel of the workbench.
     void setCompact();
 
 private:

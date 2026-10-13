@@ -86,7 +86,6 @@ private:
     QVBoxLayout *seriesLayout_;
     QLabel *seriesNote_;
 
-    class StateVarianceView *stateVariance_;
     PosteriorPage *posterior_;
     ApplicationPage *responses_;
     ApplicationPage *forecasts_;
