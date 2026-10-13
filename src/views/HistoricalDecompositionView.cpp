@@ -3,6 +3,8 @@
 
 #include "views/HistoricalDecompositionView.h"
 
+#include "views/PeriodBox.h"
+
 #include "engine/ModelFileTree.h"
 #include "views/FigureExport.h"
 #include "views/PlotStyle.h"
@@ -12,6 +14,8 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QTableWidget>
+#include <QHeaderView>
 #include <QPen>
 #include <QScrollArea>
 #include <QTimer>
@@ -99,6 +103,19 @@ HistoricalDecompositionView::HistoricalDecompositionView(QWidget *parent) : QWid
     baseline_->setToolTip(tr("What the shocks of the sample leave of the data: the deterministic terms, the "
                              "exogenous variables and the initial conditions."));
 
+    at_ = new PeriodBox;
+    at_->setToolTip(tr("A period of the sample: marked in every panel, and what each shock and the baseline "
+                       "contribute to it in the table below."));
+    atTable_ = new QTableWidget;
+    atTable_->setToolTip(tr("Each part's contribution at the chosen period: the posterior summary and its 90% "
+                            "interval. The data are the sum of the means."));
+    atTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    atTable_->setSelectionMode(QAbstractItemView::NoSelection);
+    atTable_->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    atTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    atTable_->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
+    atTable_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
     auto *controls = new QHBoxLayout;
     controls->addWidget(new QLabel(tr("Variable")));
     controls->addWidget(response_);
@@ -109,6 +126,9 @@ HistoricalDecompositionView::HistoricalDecompositionView(QWidget *parent) : QWid
     controls->addWidget(statistic_);
     controls->addSpacing(12);
     controls->addWidget(baseline_);
+    controls->addSpacing(12);
+    controls->addWidget(new QLabel(tr("Contributions at")));
+    controls->addWidget(at_);
     controls->addStretch(1);
 
     plot_ = new QwtPlot;
@@ -165,6 +185,7 @@ HistoricalDecompositionView::HistoricalDecompositionView(QWidget *parent) : QWid
     layout->addWidget(status_);
     layout->addWidget(plot_, 1);
     layout->addWidget(scroll_, 1);
+    layout->addWidget(atTable_);
 
     watcher_ = new QFutureWatcher<Result>(this);
     connect(watcher_, &QFutureWatcher<Result>::finished, this, [this]() {
@@ -186,6 +207,7 @@ HistoricalDecompositionView::HistoricalDecompositionView(QWidget *parent) : QWid
     }
     // The matrix gains or loses its baseline column, and the layout changes
     // with all variables or one.
+    connect(at_, &PeriodBox::valueChanged, this, [this]() { show(); });
     connect(baseline_, &QCheckBox::toggled, this, [this]() {
         rebuildGrid();
         show();
@@ -211,7 +233,7 @@ void HistoricalDecompositionView::setModel(const QString &file)
     file_ = file;
     support_ = file.isEmpty() ? HdSupport{} : hdSupport(file);
     const bool ok = support_.ok;
-    for (QWidget *w : std::initializer_list<QWidget *>{response_, type_, statistic_, baseline_})
+    for (QWidget *w : std::initializer_list<QWidget *>{response_, type_, statistic_, baseline_, at_})
     {
         w->setEnabled(ok);
     }
@@ -232,6 +254,7 @@ void HistoricalDecompositionView::setModel(const QString &file)
         response_->addItems(support_.variables);
         // The matrix while it stays legible, as the structural analysis.
         response_->setCurrentIndex(support_.k <= 6 ? 0 : 1);
+        at_->setPeriods(support_.periods, file);
         type_->clear();
         type_->addItem(tr("Orthogonalised (Choleski)"), static_cast<int>(HdType::Oir));
         if (support_.sign)
@@ -399,7 +422,10 @@ void HistoricalDecompositionView::show()
                              .arg(sign ? tr("sign-identified") : tr("orthogonalised"),
                                   withBaseline ? tr(", and the baseline") : QString(),
                                   statistic_->currentText().toLower())
-                             .arg(last_.hd.front().draws));
+                             .arg(last_.hd.front().draws) +
+                         (support_.moving ? tr(" Each period is decomposed through its own coefficients and "
+                                               "covariance.")
+                                          : QString()));
         const auto columns = static_cast<std::size_t>(std::max(1, columns_));
         for (std::size_t p = 0; p < plots_.size(); ++p)
         {
@@ -437,6 +463,7 @@ void HistoricalDecompositionView::show()
             plot->setAxisAutoScale(QwtPlot::yLeft);
             plot->replot();
         }
+        showAt();
         return;
     }
     const HistoricalDecomposition &hd = last_.hd.front();
@@ -452,7 +479,9 @@ void HistoricalDecompositionView::show()
                          .arg(withBaseline ? tr(" and the baseline") : QString())
                          .arg(statistic_->currentText().toLower())
                          .arg(hd.draws)
-                         .arg(withBaseline ? tr(", the data") : QString()));
+                         .arg(withBaseline ? tr(", the data") : QString()) +
+                     (support_.moving ? tr(" Each period is decomposed through its own coefficients and covariance.")
+                                      : QString()));
 
     QList<QwtText> titles;
     for (arma::uword j = 0; j < k; ++j)
@@ -493,6 +522,79 @@ void HistoricalDecompositionView::show()
     plot_->setAxisScale(QwtPlot::xBottom, hd.time.front() - width, hd.time.back() + width);
     plot_->setAxisAutoScale(QwtPlot::yLeft);
     plot_->replot();
+    showAt();
+}
+
+void HistoricalDecompositionView::showAt()
+{
+    atTable_->clear();
+    atTable_->setRowCount(0);
+    atTable_->setColumnCount(0);
+    if (!last_.error.isEmpty() || last_.hd.empty() || last_.hd.front().centre.n_rows == 0)
+    {
+        atTable_->hide();
+        return;
+    }
+    const auto t = static_cast<arma::uword>(
+        std::clamp(at_->value() - 1, 0, static_cast<int>(last_.hd.front().centre.n_rows) - 1));
+    const double when = last_.hd.front().time[t];
+
+    // The period marked in every panel.
+    std::vector<QwtPlot *> panels = matrix_ ? plots_ : std::vector<QwtPlot *>{plot_};
+    for (QwtPlot *plot : panels)
+    {
+        auto *mark = new QwtPlotMarker;
+        mark->setLineStyle(QwtPlotMarker::VLine);
+        mark->setXValue(when);
+        mark->setLinePen(seriesColor(1), 1.6, Qt::DashLine);
+        mark->setZ(1000.0);
+        mark->attach(plot);
+        plot->replot();
+    }
+
+    // A row per variable decomposed: each shock, the baseline, the data.
+    const auto k = static_cast<int>(support_.k);
+    const bool sign = static_cast<HdType>(type_->currentData().toInt()) == HdType::Sign;
+    QStringList columns;
+    for (int j = 0; j < k; ++j)
+    {
+        columns << (sign ? tr("%1 shock").arg(support_.variables.value(j))
+                         : tr("Shock to %1").arg(support_.variables.value(j)));
+    }
+    columns << tr("Baseline") << tr("Data");
+    atTable_->setColumnCount(static_cast<int>(columns.size()));
+    atTable_->setHorizontalHeaderLabels(columns);
+    const int rows = static_cast<int>(last_.hd.size());
+    atTable_->setRowCount(rows);
+    QStringList names;
+    for (int i = 0; i < rows; ++i)
+    {
+        const HistoricalDecomposition &hd = last_.hd[static_cast<std::size_t>(i)];
+        names << (matrix_ ? support_.variables.value(i) : response_->currentText());
+        for (int j = 0; j <= k && static_cast<arma::uword>(j) < hd.centre.n_cols; ++j)
+        {
+            const auto c = static_cast<arma::uword>(j);
+            auto *item = new QTableWidgetItem(QStringLiteral("%1  [%2, %3]")
+                                                  .arg(hd.centre(t, c), 0, 'g', 3)
+                                                  .arg(hd.lower(t, c), 0, 'g', 3)
+                                                  .arg(hd.upper(t, c), 0, 'g', 3));
+            item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            atTable_->setItem(i, j, item);
+        }
+        auto *data = new QTableWidgetItem(QString::number(hd.data(t), 'g', 4));
+        data->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        atTable_->setItem(i, k + 1, data);
+    }
+    atTable_->setVerticalHeaderLabels(names);
+    atTable_->resizeColumnsToContents();
+    atTable_->show();
+    // As tall as its rows, no taller.
+    int height = atTable_->horizontalHeader()->height() + 2 * atTable_->frameWidth();
+    for (int i = 0; i < rows; ++i)
+    {
+        height += atTable_->rowHeight(i);
+    }
+    atTable_->setFixedHeight(height);
 }
 
 } // namespace studio

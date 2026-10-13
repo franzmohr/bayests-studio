@@ -65,6 +65,29 @@ namespace studio
 void runAssistantSmoke(MainWindow &window, const QString &which, const QString &folder);
 }
 
+namespace
+{
+
+/// A stage page's tabs by name, not the workbench's copies of them.
+QTabWidget *stageTabs(QWidget &window, const QString &name)
+{
+    for (QTabWidget *tabs : window.findChildren<QTabWidget *>(name))
+    {
+        bool inWorkbench = false;
+        for (QWidget *w = tabs->parentWidget(); w != nullptr; w = w->parentWidget())
+        {
+            inWorkbench = inWorkbench || w->inherits("studio::Workbench");
+        }
+        if (!inWorkbench)
+        {
+            return tabs;
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
 int main(int argc, char *argv[])
 {
     // Single-threaded unless the user says otherwise, as for the command line:
@@ -617,7 +640,7 @@ int main(int argc, char *argv[])
             if (!qgetenv("STUDIO_SMOKE_SUMMARY").isEmpty())
             {
                 window.showStage(studio::StageId::Posterior);
-                if (auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("posteriorTabs")))
+                if (auto *tabs = stageTabs(window, QStringLiteral("posteriorTabs")))
                 {
                     tabs->setCurrentIndex(2);
                     settle(4000);
@@ -646,7 +669,7 @@ int main(int argc, char *argv[])
             if (!qgetenv("STUDIO_SMOKE_INCLUSION").isEmpty())
             {
                 window.showStage(studio::StageId::Posterior);
-                if (auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("posteriorTabs")))
+                if (auto *tabs = stageTabs(window, QStringLiteral("posteriorTabs")))
                 {
                     tabs->setCurrentIndex(3);
                     settle(4000);
@@ -658,7 +681,7 @@ int main(int argc, char *argv[])
             if (!qgetenv("STUDIO_SMOKE_VOLATILITY").isEmpty())
             {
                 window.showStage(studio::StageId::Posterior);
-                if (auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("posteriorTabs")))
+                if (auto *tabs = stageTabs(window, QStringLiteral("posteriorTabs")))
                 {
                     tabs->setCurrentIndex(4);
                     settle(3000);
@@ -666,7 +689,7 @@ int main(int argc, char *argv[])
                 }
                 window.showStage(studio::StageId::Application);
             }
-            if (auto *app = window.findChild<QTabWidget *>(QStringLiteral("applicationTabs")))
+            if (auto *app = stageTabs(window, QStringLiteral("applicationTabs")))
             {
                 app->setCurrentIndex(1);
                 settle(3000);

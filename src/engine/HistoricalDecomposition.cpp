@@ -34,24 +34,14 @@ std::vector<int> drawSubset(int draws, int maxDraws)
     return pick;
 }
 
-/// bvartools' refusals in historical_decomposition.bvarmodel().
+/// bvartools' refusals in historical_decomposition.bvarmodel(), less the two
+/// on moving systems: those are decomposed period by period.
 void checkModel(const QString &file, const Posterior &post)
 {
-    if (post.algorithm().contains(QLatin1String("Tvp")))
-    {
-        throw std::runtime_error(QObject::tr("Historical decompositions are available for models with constant "
-                                             "coefficients only.").toStdString());
-    }
     if (post.structural())
     {
         throw std::runtime_error(
             QObject::tr("Historical decompositions are not available for structural models.").toStdString());
-    }
-    if (post.moving())
-    {
-        throw std::runtime_error(QObject::tr("Historical decompositions need an error covariance that is the "
-                                             "same in every period; the impact matrix of a model with stochastic "
-                                             "volatility differs from period to period.").toStdString());
     }
     if (!post.vec() && post.lagOrder() < 1)
     {
@@ -241,6 +231,7 @@ HdSupport hdSupport(const QString &file)
             out.variables << QObject::tr("Variable %1").arg(i + 1);
         }
         out.sign = readSignIdentification(file).has_value();
+        out.moving = post.moving();
         const HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
         const HighFive::DataSet y = h5.getDataSet("/data/train/y");
         if (y.hasAttribute("tsp"))
@@ -261,6 +252,67 @@ HdSupport hdSupport(const QString &file)
     return out;
 }
 
+namespace
+{
+
+/// One draw's decomposition of response `r` through each period's own
+/// system: columns 0..k-1 the shocks' contributions, column k the response
+/// itself (the caller turns it into the baseline). The completion of a panel
+/// not observed whole is that draw's, as in the constant case.
+arma::mat movingDecomposition(const detail::Posterior &post, const LevelData &data, const Matrix &completed, int d,
+                              arma::uword r, int p)
+{
+    const auto ku = static_cast<arma::uword>(post.k());
+    const arma::uword tt = data.y.n_rows;
+    arma::mat y = data.y;
+    arma::mat x = data.x;
+    if (completed.rows > 0)
+    {
+        for (arma::uword t = 0; t < tt; ++t)
+        {
+            for (arma::uword i = 0; i < ku; ++i)
+            {
+                y(t, i) = completed.at(t * ku + i, static_cast<std::size_t>(d));
+            }
+        }
+        for (arma::uword t = 0; t < tt; ++t)
+        {
+            for (arma::uword l = 1; l <= static_cast<arma::uword>(p) && l <= t; ++l)
+            {
+                x.row(t).cols((l - 1) * ku, l * ku - 1) = y.row(t - l);
+            }
+        }
+    }
+    arma::mat history(ku * static_cast<arma::uword>(p), ku, arma::fill::zeros);   // M_{t-1} over M_{t-p}
+    arma::mat one(tt, ku + 1, arma::fill::zeros);
+    for (arma::uword t = 0; t < tt; ++t)
+    {
+        const int period = static_cast<int>(t) + 1;
+        const detail::System s = post.system(d, period);
+        const arma::mat P = arma::trans(arma::chol(s.Sigma));
+        const arma::mat full = post.fullCoefficients(d, period);
+        if (full.n_cols != data.x.n_cols)
+        {
+            throw std::runtime_error(QObject::tr("The coefficients and the regressors of this file do not "
+                                                 "match.").toStdString());
+        }
+        const arma::rowvec u = y.row(t) - x.row(t) * full.t();
+        const arma::rowvec e = u * arma::trans(arma::inv(P));
+        const arma::mat aLag = full.cols(0, ku * static_cast<arma::uword>(p) - 1);
+        const arma::mat mt = aLag * history + P * arma::diagmat(e);
+        one.row(t).cols(0, ku - 1) = mt.row(r);
+        if (p > 1)
+        {
+            history.rows(ku, history.n_rows - 1) = arma::mat(history.rows(0, history.n_rows - ku - 1));
+        }
+        history.rows(0, ku - 1) = mt;
+    }
+    one.col(ku) = y.col(r);
+    return one;
+}
+
+} // namespace
+
 HistoricalDecomposition historicalDecomposition(const QString &file, const HdRequest &request)
 {
     const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
@@ -270,6 +322,13 @@ HistoricalDecomposition historicalDecomposition(const QString &file, const HdReq
     {
         throw std::runtime_error(
             QObject::tr("The model carries no sign restricted identification yet.").toStdString());
+    }
+    if (request.type == HdType::Sign && post.moving())
+    {
+        throw std::runtime_error(QObject::tr("This model's system moves from period to period, and the sign "
+                                             "restrictions' rotations were found against one period's covariance: "
+                                             "they identify no other. Choose the Choleski shocks.")
+                                     .toStdString());
     }
     const int k = post.k();
     if (request.response < 0 || request.response >= k)
@@ -301,8 +360,16 @@ HistoricalDecomposition historicalDecomposition(const QString &file, const HdReq
     arma::vec dataMean(tt, arma::fill::zeros);
 
     std::vector<arma::mat> draws;
+    const bool moving = post.moving();
     for (const int d : drawSubset(post.draws(), request.maxDraws))
     {
+        if (moving)
+        {
+            draws.push_back(movingDecomposition(post, data, completed, d, r, p));
+            dataMean += draws.back().col(ku);   // the response, kept there for now
+            draws.back().col(ku) -= arma::sum(draws.back().cols(0, ku - 1), 1);
+            continue;
+        }
         const detail::System s = post.system(d, -1);
         arma::mat P = arma::trans(arma::chol(s.Sigma));
         if (request.type == HdType::Sign)

@@ -16,6 +16,7 @@ class QComboBox;
 class QGridLayout;
 class QLabel;
 class QScrollArea;
+class QTableWidget;
 class QTimer;
 class QwtPlot;
 
@@ -54,6 +55,9 @@ private:
     /// Every variable at once, in the matrix.
     bool allVariables() const;
     void rebuildGrid();
+    /// The chosen period: marked in every panel, and each part's
+    /// contribution to it in the table below them.
+    void showAt();
 
     QString file_;
     HdSupport support_;
@@ -67,6 +71,8 @@ private:
     QComboBox *type_;
     QComboBox *statistic_;
     QCheckBox *baseline_;
+    class PeriodBox *at_;
+    QTableWidget *atTable_;
     QwtPlot *plot_;
     FigureProvider figure_;
     QScrollArea *scroll_;

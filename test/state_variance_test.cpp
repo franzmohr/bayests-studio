@@ -10,8 +10,10 @@
 
 #include "engine/DataSet.h"
 #include "engine/Examples.h"
+#include "engine/HistoricalDecomposition.h"
 #include "engine/ModelFileTree.h"
 #include "engine/ModelRunner.h"
+#include "engine/PosteriorDraws.h"
 #include "engine/StateVariance.h"
 #include "engine/VarBuilder.h"
 
@@ -163,6 +165,43 @@ int main(int argc, char **argv)
         const Matrix ov = readMatrix(ncv, QStringLiteral("/priors/a/omega_v"));
         check(std::abs(ov.values.front() - n.omegaV * 10.0) < 1e-15 && ModelRunner::check(ncv, QString()).ok,
               "... and scaled there, the file still one bayests accepts");
+    }
+
+    // The historical decomposition of a time-varying model, through each
+    // period's own system. One draw, so the centre is that draw's numbers.
+    {
+        HdRequest request;
+        request.response = 1;   // income
+        request.maxDraws = 1;
+        const HistoricalDecomposition hd = historicalDecomposition(file, request);
+        const arma::uword k = 3;
+        const arma::vec total = arma::sum(hd.centre, 1);
+        check(hd.centre.n_rows == static_cast<arma::uword>(prior.periods) && hd.centre.n_cols == k + 1 &&
+                  arma::approx_equal(total, hd.data, "absdiff", 1e-9),
+              "a time-varying model's historical decomposition: the shocks and the baseline add up to the data");
+
+        // Period 1 by hand: P_1 diag(P_1^-1 u_1), u_1 the residual of period
+        // 1's coefficients -- the data's row 1 on its row 0 and a constant.
+        const detail::Posterior post(file);
+        const detail::System s1 = post.system(0, 1);
+        const arma::mat full1 = post.fullCoefficients(0, 1);
+        const arma::mat P1 = arma::trans(arma::chol(s1.Sigma));
+        const arma::rowvec y1 = s.data.values.row(1);
+        const arma::rowvec x1 = arma::join_rows(s.data.values.row(0), arma::rowvec{1.0});
+        const arma::rowvec u1 = y1 - x1 * full1.t();
+        const arma::mat m1 = P1 * arma::diagmat(u1 * arma::trans(arma::inv(P1)));
+        check(arma::approx_equal(arma::rowvec(hd.centre.row(0).cols(0, k - 1)), arma::rowvec(m1.row(1)), "absdiff",
+                                 1e-9),
+              "... its first period by hand from that period's coefficients and covariance");
+
+        // And each period's: the last period's system throughout would differ.
+        const detail::System sT = post.system(0, -1);
+        const arma::mat PT = arma::trans(arma::chol(sT.Sigma));
+        const arma::rowvec uT = y1 - x1 * post.fullCoefficients(0, -1).t();
+        const arma::mat mT = PT * arma::diagmat(uT * arma::trans(arma::inv(PT)));
+        check(!arma::approx_equal(arma::rowvec(hd.centre.row(0).cols(0, k - 1)), arma::rowvec(mT.row(1)), "absdiff",
+                                  1e-9),
+              "... and not the last period's");
     }
 
     std::printf("%s\n", failures == 0 ? "PASS" : "FAILED");

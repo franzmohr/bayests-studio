@@ -24,8 +24,18 @@ namespace studio
 /// column j of M_t being what shock j has done to y_t so far. The baseline is
 /// what the shocks leave of the data: the deterministic terms, the exogenous
 /// variables and the initial conditions. A VEC is decomposed in its level
-/// form, from the levels its data imply. Constant coefficients and a constant
-/// error covariance only, and no structural model -- as bvartools.
+/// form, from the levels its data imply. No structural model, as bvartools.
+///
+/// A model whose coefficients or error covariance move -- the Tvp models,
+/// stochastic volatility -- is decomposed with each period's own system,
+///
+///   e_t = P_t^-1 u_t,   M_t = sum_l A_{l,t} M_{t-l} + P_t diag(e_t),
+///
+/// u_t the residual of period t's coefficients and P_t = chol(Sigma_t)'. That
+/// is beyond bvartools, which refuses these models; for constant ones the
+/// recursion is the one above and its numbers bvartools'. A sign
+/// identification is refused there: its rotations were found against one
+/// period's covariance and identify no other.
 enum class HdType
 {
     Oir,    ///< Choleski shocks
@@ -49,6 +59,7 @@ struct HdSupport
     int periods = 0;
     QStringList variables;    ///< in levels
     bool sign = false;        ///< carries a sign identification
+    bool moving = false;      ///< coefficients or covariance per period: each period's system
     double start = 1.0;       ///< R's tsp of the estimation sample
     double frequency = 1.0;
 };
