@@ -36,8 +36,8 @@ class QtReporter;
 ///                   the model so specified, with the button that estimates it;
 ///   posterior       the draws of the selected model, the posterior stage's
 ///                   panels;
-///   application     impulse responses, the historical decomposition and
-///                   forecasts, one above the other.
+///   application     impulse responses, the historical decomposition, the
+///                   spillovers and forecasts, one above the other.
 ///
 /// Estimating writes the specification into the project as a model of its
 /// own, so every variant stays in the project to compare, and the right-hand
@@ -114,6 +114,7 @@ private:
     ApplicationPage *responses_;
     ApplicationPage *forecasts_;
     ApplicationPage *historical_;
+    ApplicationPage *spillovers_;
 };
 
 } // namespace studio

@@ -692,8 +692,9 @@ void ApplicationPage::showOnly(Panel panel)
     layout()->setContentsMargins(8, 6, 8, 6);
     only_ = true;
     panel_ = panel;
-    tabs_->setCurrentWidget(panel == Panel::Historical ? static_cast<QWidget *>(historical_)
+    tabs_->setCurrentWidget(panel == Panel::Historical  ? static_cast<QWidget *>(historical_)
                             : panel == Panel::Structural ? static_cast<QWidget *>(structural_)
+                            : panel == Panel::Spillover  ? static_cast<QWidget *>(spillover_)
                                                          : tabs_->widget(0));
 }
 
@@ -710,7 +711,7 @@ void ApplicationPage::showModel(const ModelContext &context)
     const QString drawn = r.hasPosterior ? context.file : QString();
     const auto wanted = [this](Panel panel) { return !only_ || panel_ == panel; };
     structural_->setModel(wanted(Panel::Structural) ? drawn : QString());
-    spillover_->setModel(only_ ? QString() : drawn);
+    spillover_->setModel(wanted(Panel::Spillover) ? drawn : QString());
     multipliers_->setModel(only_ ? QString() : drawn);
     historical_->setModel(wanted(Panel::Historical) ? drawn : QString());
 

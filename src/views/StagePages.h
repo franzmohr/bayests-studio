@@ -187,7 +187,7 @@ public:
     /// One of the page's tabs alone, without the title or the tab bar: a
     /// panel of the workbench. Only that panel is computed then -- the
     /// workbench holds a page per panel, and the others' work would be lost.
-    enum class Panel { Forecasting, Structural, Historical };
+    enum class Panel { Forecasting, Structural, Historical, Spillover };
     void showOnly(Panel panel);
 
 private:

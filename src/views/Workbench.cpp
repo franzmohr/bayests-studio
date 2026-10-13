@@ -121,6 +121,9 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     historical_->showOnly(ApplicationPage::Panel::Historical);
     auto *historicalPane =
         new FoldPane(QStringLiteral("historical"), tr("Historical decomposition"), historical_);
+    spillovers_ = new ApplicationPage;
+    spillovers_->showOnly(ApplicationPage::Panel::Spillover);
+    auto *spilloverPane = new FoldPane(QStringLiteral("spillovers"), tr("Spillovers"), spillovers_);
     // Settings only, never draws: the state variance view, whose runs are
     // posteriors, stays a tab of the posterior column.
     auto *priorPane = new FoldPane(QStringLiteral("priors"), tr("Priors"), priorScroll);
@@ -134,7 +137,7 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     split_->setChildrenCollapsible(false);
     columns_ = {new FoldColumn({modPane, dataPane}, 2, 440, {3, 2}), new FoldColumn({priorPane}, 2, 440, {1}),
                 new FoldColumn({posteriorPane}, 4, 0, {1}),
-                new FoldColumn({responsesPane, historicalPane, forecastsPane}, 4, 0, {1, 1, 1})};
+                new FoldColumn({responsesPane, historicalPane, spilloverPane, forecastsPane}, 4, 0, {1, 1, 1, 1})};
     for (FoldColumn *c : columns_)
     {
         split_->addWidget(c);
@@ -264,7 +267,7 @@ void Workbench::restoreFolds()
         // A first start on a laptop: the specification and the draws; the
         // priors and the application a click away.
         folded = {QStringLiteral("priors"), QStringLiteral("responses"), QStringLiteral("historical"),
-                  QStringLiteral("forecasts")};
+                  QStringLiteral("spillovers"), QStringLiteral("forecasts")};
     }
     for (FoldPane *p : panes_)
     {
@@ -383,6 +386,7 @@ void Workbench::showModel(const ModelContext &context)
     responses_->showModel(context);
     forecasts_->showModel(context);
     historical_->showModel(context);
+    spillovers_->showModel(context);
 
     // The form follows the selected model when the builder wrote it: its own
     // data, its own settings. Only on a change of model -- a run ending
