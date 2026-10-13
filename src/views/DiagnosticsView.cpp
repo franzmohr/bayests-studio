@@ -184,6 +184,18 @@ BlockLayout blockLayout(std::size_t rows, const QStringList &rowNames, const QSt
     // Unnamed: k x k of the variables, vec() column by column -- a
     // covariance or precision is symmetric, so the order is the same both ways.
     const auto k = variables.size();
+    if (k > 1 && n == k)
+    {
+        // k of them: a diagonal, a stochastic volatility model's precisions.
+        out.rowLabels = variables;
+        out.columnLabels = variables;
+        out.cell.assign(static_cast<std::size_t>(k * k), -1);
+        for (qsizetype i = 0; i < k; ++i)
+        {
+            out.cell[static_cast<std::size_t>(i * k + i)] = static_cast<int>(i);
+        }
+        return out;
+    }
     if (k > 0 && n == k * k)
     {
         out.rowLabels = variables;
@@ -305,9 +317,22 @@ DiagnosticsView::DiagnosticsView(QWidget *parent) : QWidget(parent)
         spec.columns = layout_.columns();
         spec.columnLabels = layout_.columnLabels;
         spec.rowLabels = layout_.rowLabels;
-        for (QwtPlot *p : cells_)
+        for (std::size_t i = 0; i < cells_.size(); ++i)
         {
-            spec.cells.push_back({p, {}});
+            QString text;
+            if (cells_[i] == nullptr && layout_.cell[i] >= 0)
+            {
+                // A fixed value: the label the grid shows in its place.
+                const int r = static_cast<int>(i) / layout_.columns();
+                const int c = static_cast<int>(i) % layout_.columns();
+                if (auto *label = qobject_cast<QLabel *>(
+                        gridLayout_->itemAtPosition(r + 1, c + 1) ? gridLayout_->itemAtPosition(r + 1, c + 1)->widget()
+                                                                  : nullptr))
+                {
+                    text = label->text();
+                }
+            }
+            spec.cells.push_back({cells_[i], text});
         }
         spec.name = QStringLiteral("block-%1").arg(QString(path_).replace(QLatin1Char('/'), QLatin1Char('-')));
         return spec;
@@ -389,7 +414,7 @@ void DiagnosticsView::clearBlock()
 }
 
 void DiagnosticsView::showDataset(const QString &file, const QString &path, const QStringList &rowNames,
-                                  const QStringList &variables, bool timePath)
+                                  const QStringList &variables, int periods)
 {
     clear();
     try
@@ -406,17 +431,29 @@ void DiagnosticsView::showDataset(const QString &file, const QString &path, cons
     title_->setText(tr("%1 — %2 parameters × %3 draws")
                         .arg(path).arg(matrix_.rows).arg(matrix_.cols));
     const auto n = static_cast<std::size_t>(rowNames.size());
-    const bool isPath = timePath && n > 0 && matrix_.rows % n == 0;
-    QStringList periods;
+    // A path is periods times a block: the named coefficients, or unnamed a
+    // k x k covariance or a diagonal of k. The constant block comes first.
+    std::size_t per = 0;
+    if (periods > 1 && !(n > 0 && matrix_.rows == n) && matrix_.rows % static_cast<std::size_t>(periods) == 0)
+    {
+        const std::size_t candidate = matrix_.rows / static_cast<std::size_t>(periods);
+        if (n > 0 ? candidate == n : blockLayout(candidate, {}, variables).valid())
+        {
+            per = candidate;
+        }
+    }
+    const bool isPath = per > 0;
+    const QStringList pathNames = n == per ? rowNames : QStringList();
+    QStringList periodNames;
     if (isPath)
     {
-        // Row t*n + i is coefficient i in period t.
-        pathCoefficients_ = static_cast<int>(n);
-        periods = samplePeriodLabels(file, static_cast<int>(matrix_.rows / n));
-        layout_ = blockLayout(n, rowNames, variables);
+        // Row t*per + i is element i in period t.
+        pathCoefficients_ = static_cast<int>(per);
+        periodNames = samplePeriodLabels(file, periods);
+        layout_ = blockLayout(per, pathNames, variables);
         const QSignalBlocker block(period_);
-        period_->addItems(periods);
-        period_->setCurrentIndex(static_cast<int>(periods.size()) - 1);   // the last: where a forecast starts
+        period_->addItems(periodNames);
+        period_->setCurrentIndex(static_cast<int>(periodNames.size()) - 1);   // the last: where a forecast starts
         period_->setVisible(true);
         periodLabel_->setVisible(true);
     }
@@ -430,8 +467,9 @@ void DiagnosticsView::showDataset(const QString &file, const QString &path, cons
     {
         if (isPath)
         {
-            row_->addItem(tr("%1 — %2").arg(rowNames[static_cast<qsizetype>(r % n)],
-                                            periods.value(static_cast<qsizetype>(r / n))));
+            const auto i = static_cast<qsizetype>(r % per);
+            row_->addItem(tr("%1 — %2").arg(i < pathNames.size() ? pathNames[i] : tr("Element %1").arg(i + 1),
+                                            periodNames.value(static_cast<qsizetype>(r / per))));
         }
         else
         {
@@ -511,6 +549,15 @@ void DiagnosticsView::buildBlock()
             std::vector<double> sorted = draws;
             std::sort(sorted.begin(), sorted.end());
 
+            if (!sorted.empty() && sorted.front() == sorted.back())
+            {
+                auto *fixed = new QLabel(QString::number(sorted.front(), 'g', 4));
+                fixed->setAlignment(Qt::AlignCenter);
+                fixed->setObjectName(QStringLiteral("subtle"));
+                fixed->setToolTip(tr("Fixed at %1 in every draw: not estimated.").arg(sorted.front()));
+                gridLayout_->addWidget(fixed, r + 1, c + 1);
+                continue;
+            }
             auto *plot = new QwtPlot;
             styleAxes(plot, QString(), QString());
             plot->enableAxis(QwtPlot::yLeft, false);
@@ -562,7 +609,12 @@ void DiagnosticsView::buildBlock()
                 ss += (d - mean) * (d - mean);
             }
             const QString name =
-                pathCoefficients_ > 0 ? tr("%1 — %2").arg(names_.value(cellIndex), period_->currentText())
+                pathCoefficients_ > 0
+                    ? tr("%1 — %2")
+                          .arg(cellIndex < names_.size() && names_.size() == pathCoefficients_
+                                   ? names_[cellIndex]
+                                   : QStringLiteral("%1, %2").arg(layout_.rowLabels[r], layout_.columnLabels[c]),
+                               period_->currentText())
                 : index < names_.size()
                     ? names_[index]
                     : QStringLiteral("%1, %2").arg(layout_.rowLabels[r], layout_.columnLabels[c]);

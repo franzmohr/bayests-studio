@@ -458,10 +458,9 @@ void PosteriorPage::showDataset(int index)
         // A constant model's a/coeffs has one row per coefficient, which the
         // names describe; a time-varying one has one per coefficient and period.
         QStringList rows;
-        const bool timePath = path == QLatin1String("/posterior/a/coeffs") && context_.report.timeVarying;
-        if (path == QLatin1String("/posterior/a/coeffs"))
+        if (path == QLatin1String("/posterior/a/coeffs") || path == QLatin1String("/posterior/a/sigma"))
         {
-            rows = names_;   // per period, for a time-varying model
+            rows = names_;   // per period, for a time-varying model's path; a/sigma one per coefficient
         }
         else if (path == QLatin1String("/posterior/beta/coeffs") && !context_.report.timeVarying)
         {
@@ -476,7 +475,12 @@ void PosteriorPage::showDataset(int index)
                 }
             }
         }
-        draws_->showDataset(context_.file, path, rows, variableNames(context_.file), timePath);
+        // Any block may be a path: the time-varying models' coefficients,
+        // covariances and volatilities are one block per period.
+        draws_->showDataset(context_.file, path, rows, variableNames(context_.file),
+                            context_.report.timeVarying || context_.report.errorSpec.startsWith(QLatin1String("sv"))
+                                ? context_.report.periods
+                                : 0);
     }
 }
 

@@ -453,6 +453,15 @@ int main(int argc, char *argv[])
                 }
                 settle(1500);
                 window.grab().save(base + QStringLiteral("-block-sigma.png"));
+                for (QComboBox *c : window.findChildren<QComboBox *>())
+                {
+                    if (c->isVisible() && c->findText(QStringLiteral("psi/coeffs")) >= 0)
+                    {
+                        c->setCurrentIndex(c->findText(QStringLiteral("psi/coeffs")));
+                        settle(1500);
+                        window.grab().save(base + QStringLiteral("-block-psi.png"));
+                    }
+                }
             }
             QCoreApplication::exit(ok ? 0 : 1);
         });
@@ -464,6 +473,26 @@ int main(int argc, char *argv[])
                     if (r->text().startsWith(QObject::tr("Time-varying")))
                     {
                         r->setChecked(true);
+                    }
+                }
+                // STUDIO_SMOKE_COVAR=1: gamma errors with a covariance block,
+                // whose Psi then varies over time too.
+                if (!qgetenv("STUDIO_SMOKE_COVAR").isEmpty())
+                {
+                    for (QRadioButton *r : window.findChildren<QRadioButton *>())
+                    {
+                        if (r->text() == QObject::tr("Gamma"))
+                        {
+                            r->setChecked(true);
+                        }
+                    }
+                    QCoreApplication::processEvents();
+                    for (QCheckBox *c : window.findChildren<QCheckBox *>())
+                    {
+                        if (c->text().startsWith(QObject::tr("Covariance block")))
+                        {
+                            c->setChecked(true);
+                        }
                     }
                 }
                 for (QSpinBox *b : window.findChildren<QSpinBox *>())

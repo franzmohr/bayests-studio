@@ -38,7 +38,8 @@ struct BlockLayout
 
 /// The layout of a block from the names of its rows -- "equation ← regressor"
 /// as the model builder writes them, "ec1: term" for beta -- or, unnamed, a
-/// k x k block of the k variables. Invalid when neither applies.
+/// k x k block of the k variables, or k of them on a diagonal (a diagonal
+/// precision). Invalid when none applies.
 BlockLayout blockLayout(std::size_t rows, const QStringList &rowNames, const QStringList &variables);
 
 /// Trace and marginal density of one row of a draws dataset, with summary
@@ -53,11 +54,12 @@ public:
 
     /// Shows the dataset at `path` of `file`; rows are quantities, columns
     /// draws, as BayesTS writes them. `variables`, the model's, lay out an
-    /// unnamed k x k block. With `timePath`, the rows are a time-varying block's
-    /// path -- `rowNames` per period, stacked period by period -- and the
-    /// whole block is shown at a period chosen.
+    /// unnamed k x k block. With `periods`, a block whose rows are that many
+    /// times a layout's -- a time-varying path, stacked period by period, of
+    /// coefficients, of a covariance or of a diagonal -- is shown at a period
+    /// chosen.
     void showDataset(const QString &file, const QString &path, const QStringList &rowNames = {},
-                     const QStringList &variables = {}, bool timePath = false);
+                     const QStringList &variables = {}, int periods = 0);
     void clear();
 
 protected:
