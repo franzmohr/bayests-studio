@@ -5,10 +5,12 @@
 
 #include <QWidget>
 
+#include <optional>
 #include <vector>
 
 #include "engine/DataSet.h"
 #include "engine/ModelRunner.h"
+#include "engine/VarBuilder.h"
 #include "views/StagePages.h"
 
 class QLabel;
@@ -44,8 +46,8 @@ class Workbench : public QWidget
 public:
     Workbench(QtReporter *reporter, QWidget *parent = nullptr);
 
-    /// The data the left-hand panels specify a model on; empty shows how to
-    /// import one.
+    /// Imported data: the left-hand panels specify a model on it, from the
+    /// builder's defaults, until a model the builder wrote is selected.
     void setData(const DataSet &data);
     void setProjectFolder(const QString &folder) { projectDir_ = folder; }
     void showModel(const ModelContext &context);
@@ -61,11 +63,15 @@ signals:
     void modelCreated(const QString &file);
 
 private:
-    void rebuildBuilder();
+    /// The form on `data`, filled in from `spec` when there is one.
+    void rebuildBuilder(const DataSet &data, const std::optional<VarBuilderSpec> &spec);
     void drawSeries();
     void specify();
 
-    DataSet data_;
+    DataSet imported_;           ///< the data set imported last
+    DataSet data_;               ///< the form's data: imported, or a model's own
+    QString formModel_;          ///< the model whose record fills the form; empty for imported data
+    QString selected_;           ///< the model selected last
     QString projectDir_;
     ModelContext context_;
 
@@ -75,6 +81,7 @@ private:
     QVBoxLayout *modifications_;
     QVBoxLayout *priors_;
     QWidget *noData_;
+    QLabel *source_;             ///< where the form's settings come from
     QLabel *priorsHint_;
     QVBoxLayout *seriesLayout_;
     QLabel *seriesNote_;

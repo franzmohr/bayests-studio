@@ -387,6 +387,15 @@ int main(int argc, char *argv[])
             {
                 if (b->text() == QObject::tr("Estimate as a New Model"))
                 {
+                    // A message box the click raises is captured, then closed.
+                    QTimer::singleShot(3000, &window, [base]() {
+                        if (QWidget *modal = QApplication::activeModalWidget())
+                        {
+                            modal->grab().save(base + QStringLiteral("-message.png"));
+                            modal->close();
+                            QCoreApplication::exit(1);
+                        }
+                    });
                     b->click();
                     return;
                 }

@@ -166,4 +166,9 @@ VarBuilderSummary summarise(const VarBuilderSpec &spec);
 /// or the data cannot support it.
 void writeVarModel(const VarBuilderSpec &spec, const QString &path);
 
+/// The data set and specification a model file was written from, as
+/// writeVarModel() records them under /model/studio; nothing for a file the
+/// builder did not write, or wrote before it kept the record.
+std::optional<VarBuilderSpec> readVarModelSpec(const QString &path);
+
 } // namespace studio

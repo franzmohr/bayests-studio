@@ -46,6 +46,12 @@ public:
     /// Panels mode: one section, which the caller reparents and so owns.
     QWidget *takeSection(Section section) const;
 
+    /// Fills the form in from a specification on this dialog's data set -- a
+    /// model's own, read back with readVarModelSpec(). What the form has no
+    /// input for (a lag decay, the surprises, own-lag means...) is kept and
+    /// written as it was.
+    void setSpec(const VarBuilderSpec &spec);
+
     /// A file name for the model as specified, "var-tvp-sv-p2.h5" and the like.
     QString suggestedName() const;
 
@@ -155,6 +161,9 @@ private:
     QLabel *notes_;
     QPushButton *createButton_;
     Mode mode_ = Mode::Dialog;
+    /// What readForm() starts from: the defaults, or the spec setSpec() was
+    /// given, whose settings without an input survive.
+    VarBuilderSpec base_;
     QWidget *sections_[5] = {};
 
 signals:

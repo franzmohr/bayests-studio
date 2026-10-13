@@ -529,6 +529,33 @@ QJsonObject specToJson(const VarBuilderSpec &s)
     {
         o[QStringLiteral("wishartScaleFromResiduals")] = true;
     }
+    // The rest of the form, so that a model the builder wrote can be read
+    // back into it (readVarModelSpec()); absent keys read as the defaults.
+    o[QStringLiteral("restrictConstant")] = s.restrictConstant;
+    o[QStringLiteral("restrictTrend")] = s.restrictTrend;
+    o[QStringLiteral("cointRho")] = s.cointRho;
+    o[QStringLiteral("structural")] = s.structural;
+    o[QStringLiteral("selection")] = static_cast<int>(s.selection);
+    o[QStringLiteral("selectDeterministic")] = s.selectDeterministic;
+    o[QStringLiteral("selectCovariances")] = s.selectCovariances;
+    o[QStringLiteral("inclusionPrior")] = s.inclusionPrior;
+    o[QStringLiteral("ssvsTau0")] = s.ssvsTau0;
+    o[QStringLiteral("ssvsTau1")] = s.ssvsTau1;
+    o[QStringLiteral("covarPrecision")] = s.covarPrecision;
+    o[QStringLiteral("nonCentred")] = s.nonCentred;
+    o[QStringLiteral("stateShape")] = s.stateShape;
+    o[QStringLiteral("stateRate")] = s.stateRate;
+    o[QStringLiteral("stateRateDet")] = s.stateRateDet;
+    o[QStringLiteral("omegaV")] = s.omegaV;
+    o[QStringLiteral("gammaShape")] = s.gammaShape;
+    o[QStringLiteral("gammaRate")] = s.gammaRate;
+    o[QStringLiteral("svMu")] = s.svMu;
+    o[QStringLiteral("svPrecision")] = s.svPrecision;
+    o[QStringLiteral("svShape")] = s.svShape;
+    o[QStringLiteral("svRate")] = s.svRate;
+    o[QStringLiteral("svStateVariance")] = s.svStateVariance;
+    o[QStringLiteral("svOffset")] = s.svOffset;
+    o[QStringLiteral("svOmegaV")] = s.svOmegaV;
     o[QStringLiteral("iterations")] = s.iterations;
     o[QStringLiteral("burnin")] = s.burnin;
     o[QStringLiteral("thin")] = s.thin;
@@ -622,6 +649,33 @@ std::optional<VarBuilderSpec> specFromJson(const QJsonObject &o, const DataSet &
     }
     s.minnesotaDetVariance = o[QStringLiteral("minnesotaDetVariance")].toDouble(0.0);
     s.wishartScaleFromResiduals = o[QStringLiteral("wishartScaleFromResiduals")].toBool(false);
+    const auto real = [&](const char *key, double &field) { field = o[QLatin1String(key)].toDouble(field); };
+    const auto flag = [&](const char *key, bool &field) { field = o[QLatin1String(key)].toBool(field); };
+    flag("restrictConstant", s.restrictConstant);
+    flag("restrictTrend", s.restrictTrend);
+    real("cointRho", s.cointRho);
+    flag("structural", s.structural);
+    s.selection = static_cast<VarBuilderSpec::Selection>(o[QStringLiteral("selection")].toInt(0));
+    flag("selectDeterministic", s.selectDeterministic);
+    flag("selectCovariances", s.selectCovariances);
+    real("inclusionPrior", s.inclusionPrior);
+    real("ssvsTau0", s.ssvsTau0);
+    real("ssvsTau1", s.ssvsTau1);
+    real("covarPrecision", s.covarPrecision);
+    flag("nonCentred", s.nonCentred);
+    real("stateShape", s.stateShape);
+    real("stateRate", s.stateRate);
+    real("stateRateDet", s.stateRateDet);
+    real("omegaV", s.omegaV);
+    real("gammaShape", s.gammaShape);
+    real("gammaRate", s.gammaRate);
+    real("svMu", s.svMu);
+    real("svPrecision", s.svPrecision);
+    real("svShape", s.svShape);
+    real("svRate", s.svRate);
+    real("svStateVariance", s.svStateVariance);
+    real("svOffset", s.svOffset);
+    real("svOmegaV", s.svOmegaV);
     s.iterations = o[QStringLiteral("iterations")].toInt(20000);
     s.burnin = o[QStringLiteral("burnin")].toInt(2000);
     s.thin = std::max(1, o[QStringLiteral("thin")].toInt(1));

@@ -14,6 +14,7 @@
 #include "engine/ModelRunner.h"
 #include "engine/VarBuilder.h"
 #include "engine/VolatilityBreak.h"
+#include "engine/Workflow.h"
 
 #include <QDir>
 #include <QTemporaryDir>
@@ -232,6 +233,14 @@ int main()
                                 for (const QString &w : report.warnings)
                                 {
                                     fail(name.toStdString() + ": check warns: " + w.toStdString());
+                                }
+                                // The builder's record reads back as the spec it was written from.
+                                if (const std::optional<VarBuilderSpec> back = readVarModelSpec(file);
+                                    !back || specToJson(*back) != specToJson(s) || back->data.names != s.data.names ||
+                                    back->data.periods != s.data.periods ||
+                                    !arma::approx_equal(back->data.values, s.data.values, "absdiff", 0.0))
+                                {
+                                    fail(name.toStdString() + ": the builder's record does not read back");
                                 }
                                 if (readStringsAttribute(file, QStringLiteral("/data/train/z"),
                                                          QStringLiteral("coefficients")).size() != summary.nparams)

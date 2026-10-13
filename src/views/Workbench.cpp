@@ -76,6 +76,10 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
         l->addWidget(import, 0, Qt::AlignLeft);
     }
     insert(modifications_, noData_);
+    source_ = new QLabel;
+    source_->setObjectName(QStringLiteral("subtle"));
+    source_->setWordWrap(true);
+    insert(modifications_, source_);
 
     auto *seriesBody = new QWidget;
     seriesLayout_ = new QVBoxLayout(seriesBody);
@@ -155,13 +159,15 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
 
 void Workbench::setData(const DataSet &data)
 {
-    data_ = data;
-    rebuildBuilder();
+    imported_ = data;
+    formModel_.clear();
+    rebuildBuilder(imported_, std::nullopt);
     drawSeries();
 }
 
-void Workbench::rebuildBuilder()
+void Workbench::rebuildBuilder(const DataSet &data, const std::optional<VarBuilderSpec> &spec)
 {
+    data_ = data;
     for (QWidget *w : sections_)
     {
         delete w;
@@ -176,6 +182,10 @@ void Workbench::rebuildBuilder()
         return;
     }
     builder_ = new BuilderDialog(data_, projectDir_, this, BuilderDialog::Mode::Panels);
+    if (spec)
+    {
+        builder_->setSpec(*spec);
+    }
     builder_->hide();
     connect(builder_, &BuilderDialog::createRequested, this, &Workbench::specify);
     using S = BuilderDialog::Section;
@@ -253,10 +263,40 @@ void Workbench::showModel(const ModelContext &context)
     posterior_->showModel(context);
     responses_->showModel(context);
     forecasts_->showModel(context);
-    if (data_.empty())
+
+    // The form follows the selected model when the builder wrote it: its own
+    // data, its own settings. Only on a change of model -- a run ending
+    // refreshes the same one, and must not undo edits in progress.
+    if (context.file != selected_)
     {
-        drawSeries();
+        selected_ = context.file;
+        if (std::optional<VarBuilderSpec> spec = context.file.isEmpty() ? std::nullopt
+                                                                        : readVarModelSpec(context.file))
+        {
+            formModel_ = context.file;
+            const DataSet data = spec->data;
+            rebuildBuilder(data, spec);
+        }
+        else if (!formModel_.isEmpty())
+        {
+            // From another model's settings back to the imported data, if any.
+            formModel_.clear();
+            rebuildBuilder(imported_, std::nullopt);
+        }
     }
+    const QString name = QFileInfo(context.file).fileName();
+    source_->setText(!formModel_.isEmpty()
+                         ? tr("Filled in from %1. Change what you like and estimate it as a new model; "
+                              "%1 itself stays as it is.").arg(name)
+                     : context.file.isEmpty() || data_.empty()
+                         ? (context.file.isEmpty() ? QString()
+                                                   : tr("%1 was not written by the studio's model builder, or "
+                                                        "written before it recorded its settings, so they cannot "
+                                                        "be filled in here.").arg(name))
+                         : tr("The builder's defaults on the imported data: %1 was not written by the studio's "
+                              "model builder, or written before it recorded its settings.").arg(name));
+    source_->setVisible(!source_->text().isEmpty());
+    drawSeries();
 }
 
 void Workbench::specify()

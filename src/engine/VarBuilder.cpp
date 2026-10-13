@@ -3,6 +3,10 @@
 
 #include "engine/VarBuilder.h"
 
+#include "engine/ModelFileTree.h"
+#include "engine/Workflow.h"
+
+#include <QJsonDocument>
 #include <QObject>
 
 #include <algorithm>
@@ -1335,6 +1339,69 @@ void writeVarModel(const VarBuilderSpec &s, const QString &path)
         writeRow(file, "/initial/h_init", logVar);
         break;
     }
+    }
+
+    // The builder's own record, for the studio to read the model back into
+    // the form (readVarModelSpec()): the whole data set, the presample and
+    // the periods outside the sample included, and the specification. Below
+    // /model, where no BayesTS reader looks and `bayests check` does not warn.
+    {
+        arma::mat values = s.data.values;   // periods x series; NaN stays NaN
+        writeMat(file, "/model/studio/data", values);   // (series, periods) on disk
+        std::vector<std::string> names, periods;
+        for (const QString &n : s.data.names)
+        {
+            names.push_back(n.toStdString());
+        }
+        for (const QString &label : s.data.periods)
+        {
+            periods.push_back(label.toStdString());
+        }
+        writeDatasetAttribute(file, "/model/studio/data", "names", names);
+        if (!periods.empty())
+        {
+            writeDatasetAttribute(file, "/model/studio/data", "periods", periods);
+        }
+        writeDatasetAttribute(file, "/model/studio/data", "source",
+                              std::vector<std::string>{s.data.source.toStdString()});
+        const QByteArray json = QJsonDocument(specToJson(s)).toJson(QJsonDocument::Compact);
+        writeDatasetAttribute(file, "/model/studio/data", "spec", std::vector<std::string>{json.toStdString()});
+    }
+}
+
+std::optional<VarBuilderSpec> readVarModelSpec(const QString &path)
+{
+    try
+    {
+        const QString data = QStringLiteral("/model/studio/data");
+        const QStringList spec = readStringsAttribute(path, data, QStringLiteral("spec"));
+        if (spec.isEmpty())
+        {
+            return std::nullopt;
+        }
+        const Matrix m = readMatrix(path, data);   // (series, periods)
+        DataSet d;
+        d.names = readStringsAttribute(path, data, QStringLiteral("names"));
+        d.periods = readStringsAttribute(path, data, QStringLiteral("periods"));
+        d.source = readStringsAttribute(path, data, QStringLiteral("source")).value(0);
+        if (d.names.size() != static_cast<qsizetype>(m.rows))
+        {
+            return std::nullopt;
+        }
+        d.values.set_size(m.cols, m.rows);
+        for (std::size_t r = 0; r < m.rows; ++r)
+        {
+            for (std::size_t c = 0; c < m.cols; ++c)
+            {
+                d.values(c, r) = m.at(r, c);
+            }
+        }
+        const QJsonDocument doc = QJsonDocument::fromJson(spec.front().toUtf8());
+        return specFromJson(doc.object(), d);
+    }
+    catch (const std::exception &)
+    {
+        return std::nullopt;
     }
 }
 

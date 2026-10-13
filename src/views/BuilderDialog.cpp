@@ -31,7 +31,11 @@
 #include <QSpinBox>
 #include <QTimer>
 #include <QToolButton>
+#include <QSet>
 #include <QVBoxLayout>
+
+#include <algorithm>
+#include <memory>
 
 #include <limits>
 
@@ -752,10 +756,144 @@ void BuilderDialog::updateEnabled()
     }
 }
 
+void BuilderDialog::setSpec(const VarBuilderSpec &s)
+{
+    // Every input at once, then one check: the blockers keep the per-input
+    // reactions (the exclusive lists, the debounced check) out of it.
+    // Each widget once -- a section is the dialog's child until a host takes
+    // it -- and released last-in first-out, so that every widget ends as it
+    // began.
+    QSet<QWidget *> inputs;
+    for (QWidget *w : findChildren<QWidget *>())
+    {
+        inputs.insert(w);
+    }
+    for (QWidget *section : sections_)
+    {
+        for (QWidget *w : section->findChildren<QWidget *>())
+        {
+            inputs.insert(w);
+        }
+    }
+    std::vector<std::unique_ptr<QSignalBlocker>> blockers;
+    for (QWidget *w : inputs)
+    {
+        blockers.push_back(std::make_unique<QSignalBlocker>(w));
+    }
+
+    // The endogenous variables first, in the model's order, ticked.
+    std::vector<QListWidgetItem *> items;
+    while (variables_->count() > 0)
+    {
+        items.push_back(variables_->takeItem(0));
+    }
+    const auto column = [](QListWidgetItem *item) { return item->data(Qt::UserRole).toInt(); };
+    for (const int c : s.columns)
+    {
+        for (QListWidgetItem *&item : items)
+        {
+            if (item != nullptr && column(item) == c)
+            {
+                item->setCheckState(Qt::Checked);
+                variables_->addItem(item);
+                item = nullptr;
+            }
+        }
+    }
+    for (QListWidgetItem *item : items)
+    {
+        if (item != nullptr)
+        {
+            item->setCheckState(Qt::Unchecked);
+            variables_->addItem(item);
+        }
+    }
+    for (int i = 0; i < exogenous_->count(); ++i)
+    {
+        const int c = column(exogenous_->item(i));
+        exogenous_->item(i)->setCheckState(std::find(s.exogenous.begin(), s.exogenous.end(), c) != s.exogenous.end()
+                                               ? Qt::Checked
+                                               : Qt::Unchecked);
+    }
+    exoLags_->setValue(s.s);
+    first_->setCurrentIndex(s.firstRow);
+    last_->setCurrentIndex(s.lastRow < 0 ? last_->count() - 1 : s.lastRow);
+
+    (s.vec() ? familyVec_ : familyVar_)->setChecked(true);
+    rank_->setValue(s.rank);
+    restrictConstant_->setChecked(s.restrictConstant);
+    restrictTrend_->setChecked(s.restrictTrend);
+    cointShrinkage_->setValue(s.cointShrinkage);
+    cointPTauInv_->setValue(s.cointPTauInv);
+    cointRho_->setValue(s.cointRho);
+    p_->setValue(s.p);
+    constant_->setChecked(s.constant);
+    trend_->setChecked(s.trend);
+    (s.timeVarying ? coefTvp_ : coefConstant_)->setChecked(true);
+    nonCentred_->setChecked(s.nonCentred);
+    (s.errors == VarBuilderSpec::Errors::Wishart ? errWishart_
+     : s.errors == VarBuilderSpec::Errors::Gamma ? errGamma_
+                                                 : errSv_)
+        ->setChecked(true);
+    covar_->setChecked(s.covar);
+    structural_->setChecked(s.structural);
+    selection_->setCurrentIndex(static_cast<int>(s.selection));
+    inprior_->setValue(s.inclusionPrior);
+    selectDet_->setChecked(s.selectDeterministic);
+    selectCovar_->setChecked(s.selectCovariances);
+
+    const auto text = [](QLineEdit *edit, double v) { edit->setText(QString::number(v, 'g', 6)); };
+    minnesota_->setChecked(s.minnesota);
+    randomWalk_->setChecked(s.randomWalkMean);
+    coefPrecision_->setValue(s.coefPrecision);
+    detPrecision_->setValue(s.detPrecision);
+    kappa1_->setValue(s.kappa1);
+    kappa2_->setValue(s.kappa2);
+    kappa4_->setValue(s.kappa4);
+    stateShape_->setValue(s.stateShape);
+    text(stateRate_, s.stateRate);
+    text(stateRateDet_, s.stateRateDet);
+    text(omegaV_, s.omegaV);
+    dfExtra_->setValue(s.wishartDfExtra);
+    wishartScale_->setValue(s.wishartScale);
+    break_->setCurrentIndex(s.volatilityBreak >= 0 ? s.volatilityBreak + 1 : 0);
+    breakScales_->setValue(s.volatilityScales);
+    breakShape_->setValue(s.volatilityShape);
+    rhoShape1_->setValue(s.rhoShape1);
+    rhoShape2_->setValue(s.rhoShape2);
+    gammaShape_->setValue(s.gammaShape);
+    text(gammaRate_, s.gammaRate);
+    svShape_->setValue(s.svShape);
+    text(svRate_, s.svRate);
+    text(svState_, s.svStateVariance);
+
+    iterations_->setValue(s.iterations);
+    burnin_->setValue(s.burnin);
+    thin_->setValue(s.thin);
+    seed_->setText(s.seed ? QString::number(*s.seed) : QString());
+    horizon_->setValue(s.horizon);
+    holdout_->setValue(s.holdout);
+
+    base_ = s;
+    while (!blockers.empty())
+    {
+        blockers.pop_back();
+    }
+    updateEnabled();
+    runCheck();
+}
+
 VarBuilderSpec BuilderDialog::readForm() const
 {
-    VarBuilderSpec s;
+    // From the spec the form was filled in from, so that what it has no
+    // input for is kept; every input below overrides its field.
+    VarBuilderSpec s = base_;
     s.data = data_;
+    const std::vector<int> baseColumns = s.columns;
+    s.columns.clear();
+    s.exogenous.clear();
+    s.volatilityBreak = -1;
+    s.seed.reset();
     for (int i = 0; i < variables_->count(); ++i)
     {
         if (variables_->item(i)->checkState() == Qt::Checked)
@@ -831,6 +969,10 @@ VarBuilderSpec BuilderDialog::readForm() const
     }
     s.horizon = horizon_->value();
     s.holdout = holdout_->value();
+    if (s.columns != baseColumns)
+    {
+        s.ownLagMean.clear();   // by position: they belonged to the old ordering
+    }
     return s;
 }
 
