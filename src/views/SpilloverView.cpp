@@ -19,6 +19,7 @@
 #include <QPen>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QScrollBar>
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -103,6 +104,22 @@ QTableWidget *makeTable()
     return t;
 }
 
+/// No taller than its rows: the space below stays the page's, not an empty
+/// grid's. A table with more rows than fit still scrolls.
+void fitToRows(QTableWidget *t)
+{
+    int height = t->horizontalHeader()->height() + 2 * t->frameWidth();
+    for (int r = 0; r < t->rowCount(); ++r)
+    {
+        height += t->rowHeight(r);
+    }
+    if (t->horizontalScrollBar()->isVisible())
+    {
+        height += t->horizontalScrollBar()->height();
+    }
+    t->setMaximumHeight(height);
+}
+
 QTableWidgetItem *cell(const QString &text, const QColor &background = {}, bool bold = false)
 {
     auto *item = new QTableWidgetItem(text);
@@ -184,7 +201,8 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
         bar->addWidget(tableExportButton(table_));
         tl->addLayout(bar);
     }
-    tl->addWidget(table_, 1);
+    tl->addWidget(table_);
+    tl->addStretch(1);
 
     // Directional measures with their intervals.
     auto *barsPage = new QWidget;
@@ -234,7 +252,8 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
         bar->addWidget(tableExportButton(pairwise_));
         pl->addLayout(bar);
     }
-    pl->addWidget(pairwise_, 1);
+    pl->addWidget(pairwise_);
+    pl->addStretch(1);
 
     // The table, or the index, over the sample.
     auto *pathPage = new QWidget;
@@ -471,7 +490,7 @@ void SpilloverView::show(const Result &result)
                               spilloverTypeName(req.type).section(QLatin1Char(' '), 0, 0).toLower())
                          .arg(req.horizon)
                          .arg(m.total.n_elem)
-                         .arg(support_.moving ? tr(", at period %1").arg(m.period) : QString()));
+                         .arg(support_.moving ? tr(", at %1").arg(period_->currentText()) : QString()));
 
     // The table, shaded by share; the diagonal is the own share and kept plain.
     table_->clear();
@@ -511,11 +530,12 @@ void SpilloverView::show(const Result &result)
     corner->setToolTip(tr("The total spillover index, posterior mean. Median %1, 90% interval %2 to %3")
                            .arg(percent(total.median), percent(total.low), percent(total.high)));
     table_->setItem(k, k, corner);
+    fitToRows(table_);
     const QString spec = tr("%1, H = %2, posterior mean over %3 draws%4")
                              .arg(spilloverTypeName(req.type))
                              .arg(req.horizon)
                              .arg(m.total.n_elem)
-                             .arg(support_.moving ? tr(", period %1").arg(m.period) : QString());
+                             .arg(support_.moving ? tr(", at %1").arg(period_->currentText()) : QString());
     setTableExportInfo(table_, tr("Connectedness table"),
                        tr("Row j, column k: the share of the forecast error variance of j due to shocks to k, in "
                           "percent. From others: what each variable receives; to others: what it transmits; the "
@@ -545,6 +565,7 @@ void SpilloverView::show(const Result &result)
                                cell(i == j ? QStringLiteral("–") : QString::number(v, 'f', 2), shade));
         }
     }
+    fitToRows(pairwise_);
     setTableExportInfo(pairwise_, tr("Net pairwise spillovers"),
                        tr("Row j, column k: what k transmits to j less what j transmits to k, in percent. %1.")
                            .arg(spec));
