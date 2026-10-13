@@ -79,7 +79,7 @@ private:
     QComboBox *impulse_;
     QComboBox *response_;
     QSpinBox *horizon_;
-    QSpinBox *period_;
+    class PeriodBox *period_;   ///< by date
     QLabel *periodLabel_;
     QCheckBox *cumulative_;
     QCheckBox *standardDeviation_;

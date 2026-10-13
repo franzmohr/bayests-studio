@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 Franz X. Mohr
 
+#include "views/PeriodBox.h"
 #include "views/SignDialog.h"
 
 #include "engine/ModelFileTree.h"
@@ -147,9 +148,8 @@ SignDialog::SignDialog(const QString &file, const StructuralSupport &support, QW
     maxTries_->setRange(1, 1000000);
     maxTries_->setValue(1000);
     maxTries_->setSingleStep(500);
-    period_ = new QSpinBox;
-    period_->setRange(1, std::max(1, support.periods));
-    period_->setValue(std::max(1, support.periods));
+    period_ = new PeriodBox;
+    period_->setPeriods(support.periods, file);
     threshold_ = new QDoubleSpinBox;
     threshold_->setObjectName(QStringLiteral("signThreshold"));
     threshold_->setRange(0.0, 1e6);

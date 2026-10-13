@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 Franz X. Mohr
 
+#include "views/PeriodBox.h"
 #include "views/MultipliersView.h"
 
 #include "engine/ModelFileTree.h"
@@ -79,8 +80,7 @@ MultipliersView::MultipliersView(QWidget *parent) : QWidget(parent)
     shock_->setToolTip(tr("The size of the change, in the exogenous variable's own units."));
     cumulative_ = new QCheckBox(tr("Cumulative"));
     cumulative_->setToolTip(tr("The multipliers summed over the horizons."));
-    period_ = new QSpinBox;
-    period_->setMinimum(1);
+    period_ = new PeriodBox;
     period_->setToolTip(tr("For a model whose coefficients or volatilities move: the period of the sample whose system the analysis describes. The last period by default."));
     periodLabel_ = new QLabel(tr("Period"));
 
@@ -162,10 +162,8 @@ MultipliersView::MultipliersView(QWidget *parent) : QWidget(parent)
     {
         connect(c, &QComboBox::currentIndexChanged, this, &MultipliersView::schedule);
     }
-    for (QSpinBox *s : {horizon_, period_})
-    {
-        connect(s, &QSpinBox::valueChanged, this, &MultipliersView::schedule);
-    }
+    connect(horizon_, &QSpinBox::valueChanged, this, &MultipliersView::schedule);
+    connect(period_, &PeriodBox::valueChanged, this, &MultipliersView::schedule);
     connect(shock_, &QDoubleSpinBox::valueChanged, this, &MultipliersView::schedule);
     connect(cumulative_, &QCheckBox::toggled, this, &MultipliersView::schedule);
     // All exogenous variables and one need grids of their own.
@@ -203,8 +201,7 @@ void MultipliersView::setModel(const QString &file)
         // The matrix while it stays legible; with one exogenous variable it
         // would be a single column, which the grid shows better.
         impulse_->setCurrentIndex(support_.m > 1 && support_.k <= 6 && support_.m <= 6 ? 0 : 1);
-        period_->setMaximum(std::max(1, support_.periods));
-        period_->setValue(std::max(1, support_.periods));
+        period_->setPeriods(support_.periods, file_);
     }
     period_->setVisible(support_.moving);
     periodLabel_->setVisible(support_.moving);
@@ -375,7 +372,7 @@ void MultipliersView::show(const Result &result)
         return;
     }
     const int draws = static_cast<int>(result.draws.front().size());
-    const QString period = support_.moving ? tr(", at period %1").arg(period_->value()) : QString();
+    const QString period = support_.moving ? tr(", at %1").arg(period_->currentText()) : QString();
     status_->setText(matrix_ ? tr("%1 change of %2 in each exogenous variable (columns), in its own units: the "
                                   "response of each variable (rows); median, 68% and 90% bands over %3 draws%4.")
                                    .arg(req.permanent ? tr("A permanent") : tr("A transitory"))

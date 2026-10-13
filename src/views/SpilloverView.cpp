@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 Franz X. Mohr
 
+#include "views/PeriodBox.h"
 #include "views/SpilloverView.h"
 
 #include "engine/ModelFileTree.h"
@@ -153,8 +154,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     horizon_->setValue(10);
     horizon_->setToolTip(tr("H: the forecast error variance decomposed is that of the H step forecast, "
                             "made of the responses of periods 0 to H - 1."));
-    period_ = new QSpinBox;
-    period_->setMinimum(1);
+    period_ = new PeriodBox;
     period_->setToolTip(tr("For a model whose coefficients or volatilities move: the period of the sample whose system the analysis describes. The last period by default."));
     periodLabel_ = new QLabel(tr("Period"));
 
@@ -336,10 +336,8 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
         period_->setEnabled(static_cast<SpilloverType>(type_->currentData().toInt()) != SpilloverType::Sign);
         schedule();
     });
-    for (QSpinBox *s : {horizon_, period_})
-    {
-        connect(s, &QSpinBox::valueChanged, this, &SpilloverView::schedule);
-    }
+    connect(horizon_, &QSpinBox::valueChanged, this, &SpilloverView::schedule);
+    connect(period_, &PeriodBox::valueChanged, this, &SpilloverView::schedule);
     setModel(QString());
 }
 
@@ -376,8 +374,7 @@ void SpilloverView::setModel(const QString &file)
         {
             type_->addItem(spilloverTypeName(SpilloverType::Sign), static_cast<int>(SpilloverType::Sign));
         }
-        period_->setMaximum(std::max(1, support_.periods));
-        period_->setValue(std::max(1, support_.periods));
+        period_->setPeriods(support_.periods, file_);
         period_->setEnabled(true);
     }
     period_->setVisible(support_.moving);

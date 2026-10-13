@@ -89,7 +89,7 @@ private:
     QSpinBox *maxTries_;
     QDoubleSpinBox *threshold_;
     QSpinBox *rotated_;
-    QSpinBox *period_;
+    class PeriodBox *period_;   ///< by date
     QGroupBox *arwBox_;
     QSpinBox *arwTries_;
     QCheckBox *smooth_;

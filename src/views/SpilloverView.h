@@ -69,7 +69,7 @@ private:
     QLabel *status_;
     QComboBox *type_;
     QSpinBox *horizon_;
-    QSpinBox *period_;
+    class PeriodBox *period_;   ///< by date
     QLabel *periodLabel_;
     QTabWidget *tabs_;
     QTableWidget *table_;

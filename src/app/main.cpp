@@ -409,6 +409,20 @@ int main(int argc, char *argv[])
                 }
             }
             window.grab().save(base + QStringLiteral("-estimated.png"));
+            // A time-varying model's impulse responses at its first period.
+            if (tvp)
+            {
+                for (QComboBox *c : window.findChildren<QComboBox *>())
+                {
+                    if (c->isVisible() && c->count() > 1 &&
+                        c->toolTip().startsWith(QObject::tr("For a model whose coefficients")))
+                    {
+                        c->setCurrentIndex(0);
+                    }
+                }
+                settle(10000);
+                window.grab().save(base + QStringLiteral("-irf-first.png"));
+            }
             // STUDIO_SMOKE_BLOCK=1: the draws as whole blocks, a/coeffs and
             // then the error precision.
             if (!qgetenv("STUDIO_SMOKE_BLOCK").isEmpty())

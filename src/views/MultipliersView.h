@@ -67,7 +67,7 @@ private:
     QSpinBox *horizon_;
     QDoubleSpinBox *shock_;
     QCheckBox *cumulative_;
-    QSpinBox *period_;
+    class PeriodBox *period_;   ///< by date
     QLabel *periodLabel_;
     QWidget *gridHost_;
     QGridLayout *grid_;

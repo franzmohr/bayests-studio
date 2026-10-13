@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 Franz X. Mohr
 
+#include "views/PeriodBox.h"
 #include "views/StructuralView.h"
 
 #include "engine/ModelFileTree.h"
@@ -132,8 +133,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     horizon_->setRange(0, 200);
     horizon_->setValue(20);
     horizon_->setToolTip(tr("How many periods after the shock the responses run."));
-    period_ = new QSpinBox;
-    period_->setMinimum(1);
+    period_ = new PeriodBox;
     period_->setToolTip(tr("For a model whose coefficients or volatilities move: the period of the sample whose system the analysis describes. The last period by default."));
     periodLabel_ = new QLabel(tr("Period"));
     cumulative_ = new QCheckBox(tr("Cumulative"));
@@ -317,10 +317,8 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     {
         connect(c, &QComboBox::currentIndexChanged, this, &StructuralView::schedule);
     }
-    for (QSpinBox *s : {horizon_, period_})
-    {
-        connect(s, &QSpinBox::valueChanged, this, &StructuralView::schedule);
-    }
+    connect(horizon_, &QSpinBox::valueChanged, this, &StructuralView::schedule);
+    connect(period_, &PeriodBox::valueChanged, this, &StructuralView::schedule);
     for (QCheckBox *c : {cumulative_, standardDeviation_})
     {
         connect(c, &QCheckBox::toggled, this, &StructuralView::schedule);
@@ -437,8 +435,7 @@ void StructuralView::setModel(const QString &file)
         response_->addItem(tr("All variables"));
         response_->addItems(support_.variables);
         response_->setCurrentIndex(support_.k <= 6 ? 0 : 1);
-        period_->setMaximum(std::max(1, support_.periods));
-        period_->setValue(std::max(1, support_.periods));
+        period_->setPeriods(support_.periods, file_);
     }
     if (support_.sign)
     {
@@ -721,7 +718,7 @@ void StructuralView::show(const Result &result)
         return;
     }
     const int draws = static_cast<int>(result.responses.front().size());
-    const QString period = support_.moving ? tr(", at period %1").arg(period_->value()) : QString();
+    const QString period = support_.moving ? tr(", at %1").arg(period_->currentText()) : QString();
     status_->setText(matrix_ ? tr("%1 responses, a column per shock and a row per response; median, 68% and 90% "
                                   "bands over %2 draws%3.")
                                    .arg(responseTypeName(req.type))

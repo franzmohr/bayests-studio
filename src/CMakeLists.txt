@@ -117,6 +117,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/Workbench.cpp
     views/Workbench.h
     views/PaletteDialog.h
+    views/PeriodBox.cpp
+    views/PeriodBox.h
     views/PlotStyle.cpp
     views/PlotStyle.h
     views/SeriesPlot.cpp
