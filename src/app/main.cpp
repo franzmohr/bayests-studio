@@ -377,12 +377,55 @@ int main(int argc, char *argv[])
                 QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
             }
         };
-        QObject::connect(&window, &studio::MainWindow::runEnded, &window, [&window, base, settle](bool ok) {
-            settle(12000);
+        // STUDIO_SMOKE_TVP=1: time-varying coefficients on a short chain, and
+        // the state variance ladder run once the model is estimated.
+        const bool tvp = !qgetenv("STUDIO_SMOKE_TVP").isEmpty();
+        QObject::connect(&window, &studio::MainWindow::runEnded, &window, [&window, base, settle, tvp](bool ok) {
+            settle(tvp ? 3000 : 12000);
+            if (tvp)
+            {
+                for (QPushButton *b : window.findChildren<QPushButton *>())
+                {
+                    if (b->text() == QObject::tr("Estimate ÷10, ×1, ×10") && b->isVisible())
+                    {
+                        b->click();
+                        settle(1000);
+                        QElapsedTimer t;
+                        t.start();
+                        while (!b->isEnabled() && t.elapsed() < 600000)
+                        {
+                            settle(500);
+                        }
+                        settle(2000);
+                    }
+                }
+            }
             window.grab().save(base + QStringLiteral("-estimated.png"));
             QCoreApplication::exit(ok ? 0 : 1);
         });
-        QTimer::singleShot(800, &window, [&window, base]() {
+        QTimer::singleShot(800, &window, [&window, base, tvp]() {
+            if (tvp)
+            {
+                for (QRadioButton *r : window.findChildren<QRadioButton *>())
+                {
+                    if (r->text().startsWith(QObject::tr("Time-varying")))
+                    {
+                        r->setChecked(true);
+                    }
+                }
+                for (QSpinBox *b : window.findChildren<QSpinBox *>())
+                {
+                    if (b->value() == 20000)
+                    {
+                        b->setValue(1000);   // draws kept
+                    }
+                    else if (b->value() == 2000)
+                    {
+                        b->setValue(1000);   // burn-in
+                    }
+                }
+                QCoreApplication::processEvents();
+            }
             window.grab().save(base + QStringLiteral("-specify.png"));
             for (QPushButton *b : window.findChildren<QPushButton *>())
             {

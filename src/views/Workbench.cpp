@@ -4,7 +4,9 @@
 #include "views/Workbench.h"
 
 #include "views/BuilderDialog.h"
+#include "engine/ModelFileTree.h"
 #include "views/SeriesPlot.h"
+#include "views/StateVarianceView.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -134,7 +136,17 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
 
     // The builder's forms need their width: below it their labels clip.
     left->setMinimumWidth(440);
-    QWidget *priorColumn = column(tr("Priors"), priorScroll);
+    // Under the priors, the state variance of the selected model: what the
+    // prior on its random walks does to its paths.
+    stateVariance_ = new StateVarianceView;
+    auto *priorSplit = new QSplitter(Qt::Vertical);
+    priorSplit->addWidget(column(tr("Priors"), priorScroll));
+    priorSplit->addWidget(column(tr("State variance"), stateVariance_));
+    priorSplit->setStretchFactor(0, 1);
+    priorSplit->setStretchFactor(1, 1);
+    priorSplit->setSizes({600, 600});
+    priorSplit->setChildrenCollapsible(false);
+    QWidget *priorColumn = priorSplit;
     priorColumn->setMinimumWidth(440);
 
     auto *split = new QSplitter(Qt::Horizontal);
@@ -261,6 +273,11 @@ void Workbench::showModel(const ModelContext &context)
 {
     context_ = context;
     posterior_->showModel(context);
+    const bool tvp = !context.file.isEmpty() && context.report.timeVarying;
+    stateVariance_->setModel(tvp ? context.file : QString(),
+                             tvp ? readStringsAttribute(context.file, QStringLiteral("/data/train/z"),
+                                                        QStringLiteral("coefficients"))
+                                 : QStringList());
     responses_->showModel(context);
     forecasts_->showModel(context);
 

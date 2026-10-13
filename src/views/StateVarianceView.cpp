@@ -11,6 +11,7 @@
 #include <QComboBox>
 #include <QDoubleValidator>
 #include <QFileInfo>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -132,25 +133,25 @@ StateVarianceView::StateVarianceView(QWidget *parent) : QWidget(parent)
         redraw();
     });
 
-    auto *controls = new QHBoxLayout;
-    controls->addWidget(new QLabel(tr("Coefficient")));
-    controls->addWidget(coefficient_);
-    controls->addSpacing(12);
-    controls->addWidget(new QLabel(tr("State variance")));
-    controls->addWidget(variance_);
-    controls->addWidget(fixed_);
-    controls->addSpacing(12);
-    controls->addWidget(new QLabel(tr("Draws")));
-    controls->addWidget(iterations_);
-    controls->addWidget(new QLabel(tr("Burn-in")));
-    controls->addWidget(burnin_);
-    controls->addStretch(1);
+    // Three short rows rather than one long one: the view also sits in the
+    // workbench's narrow priors column.
+    auto *controls = new QGridLayout;
+    controls->addWidget(new QLabel(tr("Coefficient")), 0, 0);
+    controls->addWidget(coefficient_, 0, 1, 1, 3);
+    controls->addWidget(new QLabel(tr("State variance")), 1, 0);
+    controls->addWidget(variance_, 1, 1);
+    controls->addWidget(fixed_, 1, 2, 1, 2);
+    controls->addWidget(new QLabel(tr("Draws")), 2, 0);
+    controls->addWidget(iterations_, 2, 1);
+    controls->addWidget(new QLabel(tr("Burn-in")), 2, 2);
+    controls->addWidget(burnin_, 2, 3);
+    controls->setColumnStretch(4, 1);
 
-    auto *buttons = new QHBoxLayout;
     status_ = new QLabel;
     status_->setObjectName(QStringLiteral("subtle"));
     status_->setWordWrap(true);
-    buttons->addWidget(status_, 1);
+    auto *buttons = new QHBoxLayout;
+    buttons->addStretch(1);
     buttons->addWidget(clear_);
     buttons->addWidget(ladder_);
     buttons->addWidget(run_);
@@ -175,6 +176,9 @@ StateVarianceView::StateVarianceView(QWidget *parent) : QWidget(parent)
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
 
+    // Small enough to share a column with the priors above it.
+    plot_->setMinimumHeight(150);
+    table_->setMinimumHeight(90);
     auto *split = new QSplitter(Qt::Vertical);
     split->addWidget(plot_);
     split->addWidget(table_);
@@ -184,6 +188,7 @@ StateVarianceView::StateVarianceView(QWidget *parent) : QWidget(parent)
     auto *layout = new QVBoxLayout(this);
     layout->addWidget(intro_);
     layout->addLayout(controls);
+    layout->addWidget(status_);
     layout->addLayout(buttons);
     layout->addWidget(split, 1);
 

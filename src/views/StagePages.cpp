@@ -394,9 +394,12 @@ void PosteriorPage::showModel(const ModelContext &context)
     volatility_->setModel(vbreak ? context.file : QString());
     tabs_->setTabEnabled(volatilityTab_, vbreak);
     const bool tvp = have && r.timeVarying;
-    stateVariance_->setModel(tvp ? context.file : QString(), names);
-    tabs_->setTabEnabled(stateVarianceTab_, tvp);
-    if (!tvp && tabs_->currentIndex() == stateVarianceTab_)
+    if (stateVarianceTab_ >= 0)
+    {
+        stateVariance_->setModel(tvp ? context.file : QString(), names);
+        tabs_->setTabEnabled(stateVarianceTab_, tvp);
+    }
+    if (!tvp && stateVarianceTab_ >= 0 && tabs_->currentIndex() == stateVarianceTab_)
     {
         tabs_->setCurrentIndex(1);
     }
@@ -478,6 +481,11 @@ void PosteriorPage::showDataset(int index)
 
 void PosteriorPage::setCompact()
 {
+    // The workbench shows the state variance beside the priors instead.
+    tabs_->removeTab(stateVarianceTab_);
+    stateVariance_->deleteLater();
+    stateVariance_ = nullptr;
+    stateVarianceTab_ = -1;
     if (auto *title = findChild<QLabel *>(QStringLiteral("pageTitle")))
     {
         title->hide();
