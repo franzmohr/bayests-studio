@@ -692,12 +692,17 @@ void ApplicationPage::showOnly(Panel panel)
     layout()->setContentsMargins(8, 6, 8, 6);
     only_ = true;
     panel_ = panel;
+    const auto relay = [this](int height) {
+        const QMargins m = layout()->contentsMargins();
+        emit naturalHeightChanged(height < 0 ? -1 : height + m.top() + m.bottom());
+    };
     if (panel == Panel::Spillover)
     {
-        connect(spillover_, &SpilloverView::naturalHeightChanged, this, [this](int height) {
-            const QMargins m = layout()->contentsMargins();
-            emit naturalHeightChanged(height < 0 ? -1 : height + m.top() + m.bottom());
-        });
+        connect(spillover_, &SpilloverView::naturalHeightChanged, this, relay);
+    }
+    if (panel == Panel::Multipliers)
+    {
+        connect(multipliers_, &MultipliersView::naturalHeightChanged, this, relay);
     }
     tabs_->setCurrentWidget(panel == Panel::Historical  ? static_cast<QWidget *>(historical_)
                             : panel == Panel::Structural ? static_cast<QWidget *>(structural_)

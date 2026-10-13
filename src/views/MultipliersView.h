@@ -39,7 +39,18 @@ public:
 
     void setModel(const QString &file);
 
+    /// The height the view needs: its controls and note, and its rows of
+    /// panels at a height that reads -- or the note alone where there are
+    /// no multipliers to show.
+    int naturalHeight() const;
+
+signals:
+    void naturalHeightChanged(int height);
+
 private:
+    void reportHeight();
+    int plotRows_ = 0;            ///< rows of panels in the grid
+    bool headerRow_ = false;      ///< the matrix's row of column headers
     struct Result
     {
         QString error;

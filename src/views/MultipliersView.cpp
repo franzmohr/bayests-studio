@@ -176,6 +176,33 @@ MultipliersView::MultipliersView(QWidget *parent) : QWidget(parent)
     setModel(QString());
 }
 
+int MultipliersView::naturalHeight() const
+{
+    const auto *layout = static_cast<const QVBoxLayout *>(this->layout());
+    const QMargins m = layout->contentsMargins();
+    int height = m.top() + m.bottom() + layout->itemAt(0)->sizeHint().height() + layout->spacing() * 2 +
+                 (status_->hasHeightForWidth() ? status_->heightForWidth(std::max(width(), 400))
+                                               : status_->sizeHint().height());
+    if (plotRows_ > 0)
+    {
+        // A panel per response a little under the impulse responses' -- the
+        // matrix's smaller, as its panels are.
+        const int row = headerRow_ ? 220 : 320;
+        height += plotRows_ * row + (plotRows_ - 1) * grid_->spacing();
+        if (headerRow_ && !headers_.empty())
+        {
+            height += headers_.front()->sizeHint().height() + grid_->spacing();
+        }
+        height += 8;
+    }
+    return height;
+}
+
+void MultipliersView::reportHeight()
+{
+    QTimer::singleShot(0, this, [this]() { emit naturalHeightChanged(naturalHeight()); });
+}
+
 void MultipliersView::setModel(const QString &file)
 {
     file_ = file;
@@ -291,6 +318,8 @@ void MultipliersView::rebuildGrid()
         w->deleteLater();
     }
     plots_.clear();
+    plotRows_ = 0;
+    headerRow_ = false;
     for (QWidget *h : headers_)
     {
         grid_->removeWidget(h);
@@ -308,6 +337,8 @@ void MultipliersView::rebuildGrid()
         // As the impulse responses: exogenous variable j's column, response
         // i's row, the headers along the top and the left.
         columns_ = m;
+        plotRows_ = k;
+        headerRow_ = true;
         for (int j = 0; j < m; ++j)
         {
             auto *head = new QLabel(tr("Change in %1").arg(support_.exogenous.value(j)));
@@ -339,10 +370,12 @@ void MultipliersView::rebuildGrid()
                 plots_.push_back(plot);
             }
         }
+        reportHeight();
         return;
     }
     const int columns = k <= 4 ? std::max(1, std::min(k, 2)) : 3;
     columns_ = columns;
+    plotRows_ = k > 0 ? (k + columns - 1) / columns : 0;
     for (int i = 0; i < k; ++i)
     {
         auto *plot = new QwtPlot;
@@ -356,10 +389,12 @@ void MultipliersView::rebuildGrid()
         grid_->addWidget(plot, i / columns, i % columns);
         plots_.push_back(plot);
     }
+    reportHeight();
 }
 
 void MultipliersView::show(const Result &result)
 {
+    reportHeight();   // the note's new text may wrap differently; measured once it is set
     if (!result.error.isEmpty())
     {
         status_->setText(tr("✗  %1").arg(result.error));

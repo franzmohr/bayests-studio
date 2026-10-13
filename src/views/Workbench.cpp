@@ -134,6 +134,12 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     multipliers_ = new ApplicationPage;
     multipliers_->showOnly(ApplicationPage::Panel::Multipliers);
     auto *multiplierPane = new FoldPane(QStringLiteral("multipliers"), tr("Multipliers"), multipliers_);
+    // Its panels at a height that reads, or its note alone: the rest of the
+    // column to the forecasts.
+    connect(multipliers_, &ApplicationPage::naturalHeightChanged, this, [this, multiplierPane](int height) {
+        multiplierPane->setContentLimit(height);
+        relayoutColumns();
+    });
     // Settings only, never draws: the state variance view, whose runs are
     // posteriors, stays a tab of the posterior column.
     auto *priorPane = new FoldPane(QStringLiteral("priors"), tr("Priors"), priorScroll);
