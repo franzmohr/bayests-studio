@@ -4,6 +4,7 @@
 #include "views/Workbench.h"
 
 #include "views/BuilderDialog.h"
+#include "engine/ModelFileTree.h"
 #include "views/FoldablePanes.h"
 #include "views/SeriesPlot.h"
 
@@ -156,6 +157,11 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
         {
             panes_.push_back(pane);
             connect(pane, &FoldPane::focusRequested, this, [this, pane]() { focusPane(pane); });
+            if (pane->id() == QLatin1String("multipliers"))
+            {
+                // Folded or unfolded by hand: the user's, from now on.
+                connect(pane, &FoldPane::foldToggled, this, [this]() { multipliersAutoFolded_ = false; });
+            }
         }
     }
     restoreFolds();
@@ -246,12 +252,48 @@ void Workbench::setFoldedPanes(const QStringList &ids)
     saveFolds();
 }
 
+void Workbench::foldMultipliersFor(const QString &file)
+{
+    FoldPane *pane = nullptr;
+    for (FoldPane *p : panes_)
+    {
+        if (p->id() == QLatin1String("multipliers"))
+        {
+            pane = p;
+        }
+    }
+    // Once per model: a run ending refreshes the same one, and a pane the
+    // user unfolded stays so.
+    if (pane == nullptr || file == multipliersFile_)
+    {
+        return;
+    }
+    multipliersFile_ = file;
+    // Dynamic multipliers need weakly exogenous variables, /model/m of them.
+    const bool exogenous = !file.isEmpty() && readGroupInt(file, QStringLiteral("/model"), QStringLiteral("m"), 0) > 0;
+    if (!exogenous && !pane->isFolded())
+    {
+        pane->setFolded(true);
+        multipliersAutoFolded_ = true;
+        relayoutColumns();
+    }
+    else if (exogenous && multipliersAutoFolded_)
+    {
+        multipliersAutoFolded_ = false;
+        if (pane->isFolded())
+        {
+            pane->setFolded(false);
+            relayoutColumns();
+        }
+    }
+}
+
 void Workbench::saveFolds()
 {
     QStringList folded;
     for (const FoldPane *p : panes_)
     {
-        if (p->isFolded())
+        if (p->isFolded() && !(multipliersAutoFolded_ && p->id() == QLatin1String("multipliers")))
         {
             folded << p->id();
         }
@@ -392,6 +434,7 @@ void Workbench::showModel(const ModelContext &context)
     posterior_->showModel(context);
     responses_->showModel(context);
     forecasts_->showModel(context);
+    foldMultipliersFor(context.file);
     historical_->showModel(context);
     spillovers_->showModel(context);
     multipliers_->showModel(context);

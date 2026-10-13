@@ -87,6 +87,12 @@ private:
     std::vector<FoldColumn *> columns_;
     std::vector<FoldPane *> panes_;
     bool arranged_ = false;
+    /// The multipliers pane folded because the model has no exogenous
+    /// variables, not by the user: unfolded again by a model with some, and
+    /// not remembered as the user's fold.
+    bool multipliersAutoFolded_ = false;
+    QString multipliersFile_;   ///< the model the fold was decided for
+    void foldMultipliersFor(const QString &file);
 
     /// The form on `data`, filled in from `spec` when there is one.
     void rebuildBuilder(const DataSet &data, const std::optional<VarBuilderSpec> &spec);
