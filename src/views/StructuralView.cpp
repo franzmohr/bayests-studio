@@ -768,9 +768,11 @@ void StructuralView::show(const Result &result)
     const QString kind = req.type == ResponseType::Sir    ? tr("structural")
                          : req.type == ResponseType::Sign ? tr("sign-identified")
                                                           : tr("orthogonalised");
-    const QString over = req.type == ResponseType::Sign
-                             ? tr(", over the %1 identified draws").arg(result.shares.front().size())
-                             : QString();
+    // The period too, for a model whose system moves: the shares are that period's.
+    const QString over = (req.type == ResponseType::Sign
+                              ? tr(", over the %1 identified draws").arg(result.shares.front().size())
+                              : QString()) +
+                         period;
     if (fevdMatrix_)
     {
         fevdNote_->setText(tr("The share of each %1 shock (columns) in the forecast error variance of each variable "

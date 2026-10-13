@@ -422,6 +422,29 @@ int main(int argc, char *argv[])
                 }
                 settle(10000);
                 window.grab().save(base + QStringLiteral("-irf-first.png"));
+                // The variance decomposition at the first period, then the last.
+                for (QTabWidget *tabs : window.findChildren<QTabWidget *>())
+                {
+                    for (int i = 0; i < tabs->count(); ++i)
+                    {
+                        if (tabs->isVisible() && tabs->tabText(i) == QObject::tr("Variance decomposition"))
+                        {
+                            tabs->setCurrentIndex(i);
+                        }
+                    }
+                }
+                settle(4000);
+                window.grab().save(base + QStringLiteral("-fevd-first.png"));
+                for (QComboBox *c : window.findChildren<QComboBox *>())
+                {
+                    if (c->isVisible() && c->count() > 1 &&
+                        c->toolTip().startsWith(QObject::tr("For a model whose coefficients")))
+                    {
+                        c->setCurrentIndex(c->count() - 1);
+                    }
+                }
+                settle(10000);
+                window.grab().save(base + QStringLiteral("-fevd-last.png"));
             }
             // STUDIO_SMOKE_BLOCK=1: the draws as whole blocks, a/coeffs and
             // then the error precision.
