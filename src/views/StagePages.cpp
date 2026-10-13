@@ -782,7 +782,7 @@ void ApplicationPage::showVariable(int variable)
         // y.size() for a VAR; the forecast takes over from there.
         const double last = vec ? static_cast<double>(y.size() - 1) : static_cast<double>(y.size());
         fan_->addLine(tr("Observed"), tail, 0, last - static_cast<double>(shown));
-        fan_->addFan(tr("Forecast median"), draws, 1, last);
+        fan_->addFan(tr("Forecast median"), draws, 1, last, y.back());
         forecastNote_->setText(tr("%1-step forecast from %2 draws; median with 68% and 90% bands. "
                                   "VEC forecasts are in levels.")
                                    .arg(horizon)

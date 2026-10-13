@@ -86,11 +86,18 @@ void SeriesPlot::addLine(const QString &name, const std::vector<double> &y, int 
 }
 
 void SeriesPlot::addFan(const QString &name, const std::vector<std::vector<double>> &draws, int colorIndex,
-                        double xOffset)
+                        double xOffset, std::optional<double> origin)
 {
     QVector<QwtIntervalSample> b90;
     QVector<QwtIntervalSample> b68;
     QVector<QPointF> med;
+    if (origin && std::isfinite(*origin))
+    {
+        // The last observation: known, so every band is a point there.
+        b90.append({xOffset, QwtInterval(*origin, *origin)});
+        b68.append({xOffset, QwtInterval(*origin, *origin)});
+        med.append({xOffset, *origin});
+    }
     for (std::size_t t = 0; t < draws.size(); ++t)
     {
         std::vector<double> sorted = draws[t];

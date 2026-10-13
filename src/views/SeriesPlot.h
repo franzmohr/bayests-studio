@@ -5,6 +5,7 @@
 
 #include <QWidget>
 
+#include <optional>
 #include <vector>
 
 class QwtPlot;
@@ -31,9 +32,11 @@ public:
     void addLine(const QString &name, const std::vector<double> &y, int colorIndex, double xOffset = 0.0);
 
     /// A fan from per-period draws: draws[t] holds all draws of period t,
-    /// plotted at x = xOffset + t + 1.
+    /// plotted at x = xOffset + t + 1. With `origin`, the value observed at
+    /// x = xOffset, the median and the bands start from it there, joining the
+    /// fan to the history instead of leaving a period's gap before it.
     void addFan(const QString &name, const std::vector<std::vector<double>> &draws, int colorIndex,
-                double xOffset);
+                double xOffset, std::optional<double> origin = std::nullopt);
 
     void replot();
 
