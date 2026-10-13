@@ -30,6 +30,9 @@ public:
     bool isFolded() const { return folded_; }
     void setFolded(bool folded);
     int headerHeight() const;
+    /// No taller than its header and `height`, -1 for no limit: a pane whose
+    /// content needs less than its share leaves the rest to the others.
+    void setContentLimit(int height);
 
 signals:
     void foldToggled();
@@ -39,6 +42,7 @@ private:
     QString id_;
     QString title_;
     bool folded_ = false;
+    int limit_ = -1;
     QWidget *header_;
     QToolButton *toggle_;
     QWidget *content_;

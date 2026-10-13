@@ -692,6 +692,13 @@ void ApplicationPage::showOnly(Panel panel)
     layout()->setContentsMargins(8, 6, 8, 6);
     only_ = true;
     panel_ = panel;
+    if (panel == Panel::Spillover)
+    {
+        connect(spillover_, &SpilloverView::naturalHeightChanged, this, [this](int height) {
+            const QMargins m = layout()->contentsMargins();
+            emit naturalHeightChanged(height < 0 ? -1 : height + m.top() + m.bottom());
+        });
+    }
     tabs_->setCurrentWidget(panel == Panel::Historical  ? static_cast<QWidget *>(historical_)
                             : panel == Panel::Structural ? static_cast<QWidget *>(structural_)
                             : panel == Panel::Spillover  ? static_cast<QWidget *>(spillover_)

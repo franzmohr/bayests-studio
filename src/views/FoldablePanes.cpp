@@ -61,7 +61,13 @@ void FoldPane::setFolded(bool folded)
     folded_ = folded;
     toggle_->setArrowType(folded ? Qt::RightArrow : Qt::DownArrow);
     content_->setVisible(!folded);
-    setMaximumHeight(folded ? headerHeight() : QWIDGETSIZE_MAX);
+    setMaximumHeight(folded ? headerHeight() : limit_ > 0 ? headerHeight() + limit_ : QWIDGETSIZE_MAX);
+}
+
+void FoldPane::setContentLimit(int height)
+{
+    limit_ = height;
+    setFolded(folded_);
 }
 
 int FoldPane::headerHeight() const
@@ -169,26 +175,51 @@ void FoldColumn::relayout()
     stack_->setCurrentIndex(0);
     setMinimumWidth(minimumWidth_);
     setMaximumWidth(QWIDGETSIZE_MAX);
-    // A folded pane keeps its header; the unfolded share the rest by weight.
+    // A folded pane keeps its header, a pane with a limit no more than that;
+    // the others share the rest by weight -- again, as long as a share
+    // exceeds some pane's limit.
     const int total = std::max(splitter_->height(), 400);
-    int headers = 0, weights = 0;
-    for (std::size_t i = 0; i < panes_.size(); ++i)
+    std::vector<int> size(panes_.size(), -1);
+    bool settled = false;
+    while (!settled)
     {
-        if (panes_[i]->isFolded())
+        settled = true;
+        int left = total, weights = 0;
+        for (std::size_t i = 0; i < panes_.size(); ++i)
         {
-            headers += panes_[i]->headerHeight();
+            if (size[i] >= 0)
+            {
+                left -= size[i];
+            }
+            else
+            {
+                weights += paneWeights_[i];
+            }
         }
-        else
+        for (std::size_t i = 0; i < panes_.size(); ++i)
         {
-            weights += paneWeights_[i];
+            if (size[i] < 0)
+            {
+                const int share = std::max(1, left * paneWeights_[i] / std::max(1, weights));
+                if (panes_[i]->maximumHeight() < share)
+                {
+                    size[i] = panes_[i]->maximumHeight();
+                    settled = false;
+                }
+            }
+        }
+        if (settled)
+        {
+            for (std::size_t i = 0; i < panes_.size(); ++i)
+            {
+                if (size[i] < 0)
+                {
+                    size[i] = std::max(1, left * paneWeights_[i] / std::max(1, weights));
+                }
+            }
         }
     }
-    QList<int> sizes;
-    for (std::size_t i = 0; i < panes_.size(); ++i)
-    {
-        sizes << (panes_[i]->isFolded() ? panes_[i]->headerHeight()
-                                        : std::max(1, (total - headers) * paneWeights_[i] / std::max(1, weights)));
-    }
+    QList<int> sizes(size.begin(), size.end());
     splitter_->setSizes(sizes);
 }
 

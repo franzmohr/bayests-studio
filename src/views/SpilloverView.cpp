@@ -21,6 +21,7 @@
 #include <QTabWidget>
 #include <QScrollBar>
 #include <QTableWidget>
+#include <QTabBar>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrentRun>
@@ -188,6 +189,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
 
     // The table as the literature prints it.
     auto *tablePage = new QWidget;
+    tablePage_ = tablePage;
     auto *tl = new QVBoxLayout(tablePage);
     tl->setContentsMargins(0, 8, 0, 0);
     tl->addWidget(subtle(tr("Row j, column k: the share of the forecast error variance of j due to shocks "
@@ -240,6 +242,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
 
     // Net pairwise.
     auto *pairPage = new QWidget;
+    pairPage_ = pairPage;
     auto *pl = new QVBoxLayout(pairPage);
     pl->setContentsMargins(0, 8, 0, 0);
     pl->addWidget(subtle(tr("Row j, column k: what k transmits to j less what j transmits to k, in percent, "
@@ -331,6 +334,7 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     tabs_->addTab(pairPage, tr("Net pairwise"));
     tabs_->addTab(pathPage, tr("Over time"));
     tabs_->setObjectName(QStringLiteral("spilloverTabs"));
+    connect(tabs_, &QTabWidget::currentChanged, this, &SpilloverView::reportHeight);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 8, 0, 0);
@@ -358,6 +362,35 @@ SpilloverView::SpilloverView(QWidget *parent) : QWidget(parent)
     connect(horizon_, &QSpinBox::valueChanged, this, &SpilloverView::schedule);
     connect(period_, &PeriodBox::valueChanged, this, &SpilloverView::schedule);
     setModel(QString());
+}
+
+int SpilloverView::naturalHeight() const
+{
+    QWidget *page = tabs_->currentWidget();
+    if (page != tablePage_ && page != pairPage_)
+    {
+        return -1;
+    }
+    // The view less the tab widget's own hint -- the largest of its pages --
+    // plus the tab bar and the page showing, whose table is its rows tall.
+    const QTableWidget *table = page == tablePage_ ? table_ : pairwise_;
+    int pageHeight = 0;
+    for (const QWidget *w : page->findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly))
+    {
+        if (w->isVisibleTo(page))
+        {
+            pageHeight += w == table ? table->maximumHeight()
+                                     : (w->hasHeightForWidth() ? w->heightForWidth(page->width()) : w->sizeHint().height());
+        }
+    }
+    const QMargins m = page->layout()->contentsMargins();
+    pageHeight += m.top() + m.bottom() + page->layout()->spacing() * 3;
+    return sizeHint().height() - tabs_->sizeHint().height() + tabs_->tabBar()->sizeHint().height() + pageHeight;
+}
+
+void SpilloverView::reportHeight()
+{
+    QTimer::singleShot(0, this, [this]() { emit naturalHeightChanged(naturalHeight()); });
 }
 
 void SpilloverView::setModel(const QString &file)
@@ -531,6 +564,7 @@ void SpilloverView::show(const Result &result)
                            .arg(percent(total.median), percent(total.low), percent(total.high)));
     table_->setItem(k, k, corner);
     fitToRows(table_);
+    reportHeight();
     const QString spec = tr("%1, H = %2, posterior mean over %3 draws%4")
                              .arg(spilloverTypeName(req.type))
                              .arg(req.horizon)
@@ -566,6 +600,7 @@ void SpilloverView::show(const Result &result)
         }
     }
     fitToRows(pairwise_);
+    reportHeight();
     setTableExportInfo(pairwise_, tr("Net pairwise spillovers"),
                        tr("Row j, column k: what k transmits to j less what j transmits to k, in percent. %1.")
                            .arg(spec));

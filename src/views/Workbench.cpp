@@ -125,6 +125,12 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     spillovers_ = new ApplicationPage;
     spillovers_->showOnly(ApplicationPage::Panel::Spillover);
     auto *spilloverPane = new FoldPane(QStringLiteral("spillovers"), tr("Spillovers"), spillovers_);
+    // A table's tab needs its rows, the plots' all they get: the pane fits
+    // the tab showing, and the multipliers and forecasts take the rest.
+    connect(spillovers_, &ApplicationPage::naturalHeightChanged, this, [this, spilloverPane](int height) {
+        spilloverPane->setContentLimit(height);
+        relayoutColumns();
+    });
     multipliers_ = new ApplicationPage;
     multipliers_->showOnly(ApplicationPage::Panel::Multipliers);
     auto *multiplierPane = new FoldPane(QStringLiteral("multipliers"), tr("Multipliers"), multipliers_);

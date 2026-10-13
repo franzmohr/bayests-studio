@@ -432,6 +432,30 @@ int main(int argc, char *argv[])
                 }
             }
             window.grab().save(base + QStringLiteral("-estimated.png"));
+            // STUDIO_SMOKE_DIRECTIONAL=1: the spillovers on a plot tab, which
+            // takes the pane's whole share again.
+            if (!qgetenv("STUDIO_SMOKE_DIRECTIONAL").isEmpty())
+            {
+                for (QTabWidget *tabs : window.findChildren<QTabWidget *>(QStringLiteral("spilloverTabs")))
+                {
+                    if (tabs->isVisible())
+                    {
+                        tabs->setCurrentIndex(1);
+                    }
+                }
+                settle(2000);
+                window.grab().save(base + QStringLiteral("-directional.png"));
+                // And back on the table, which needs only its rows.
+                for (QTabWidget *tabs : window.findChildren<QTabWidget *>(QStringLiteral("spilloverTabs")))
+                {
+                    if (tabs->isVisible())
+                    {
+                        tabs->setCurrentIndex(0);
+                    }
+                }
+                settle(2000);
+                window.grab().save(base + QStringLiteral("-table.png"));
+            }
             // A time-varying model's impulse responses at its first period.
             if (tvp)
             {

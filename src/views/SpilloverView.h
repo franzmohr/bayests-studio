@@ -40,7 +40,17 @@ public:
 
     void setModel(const QString &file);
 
+    /// The height the view needs for the tab showing: a table's tabs their
+    /// rows and what is above them; -1 for the plots, which take what they get.
+    int naturalHeight() const;
+
+signals:
+    void naturalHeightChanged(int height);
+
 private:
+    /// Tells the host, once the layouts have settled.
+    void reportHeight();
+
     struct Result
     {
         QString error;
@@ -73,6 +83,8 @@ private:
     QLabel *periodLabel_;
     QTabWidget *tabs_;
     QTableWidget *table_;
+    QWidget *tablePage_ = nullptr;
+    QWidget *pairPage_ = nullptr;
     QComboBox *measure_;
     QwtPlot *bars_;
     QTableWidget *pairwise_;

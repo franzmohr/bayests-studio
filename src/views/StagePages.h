@@ -190,6 +190,10 @@ public:
     enum class Panel { Forecasting, Structural, Historical, Spillover, Multipliers };
     void showOnly(Panel panel);
 
+signals:
+    /// Showing one panel: the height it needs, -1 for all it gets.
+    void naturalHeightChanged(int height);
+
 private:
     void showVariable(int variable);
 
