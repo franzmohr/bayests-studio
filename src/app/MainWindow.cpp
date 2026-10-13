@@ -119,9 +119,19 @@ MainWindow::MainWindow()
     setWindowTitle(QApplication::applicationDisplayName());
     if (!settings.contains(QStringLiteral("window/geometry")))
     {
+        // The first start: the workbench wants the whole screen.
         resize(1360, 860);
+        // Not offscreen, where the smoke runs size the window themselves.
+        if (QGuiApplication::platformName() != QLatin1String("offscreen"))
+        {
+            setWindowState(windowState() | Qt::WindowMaximized);
+        }
     }
-    setWorkbench(settings.value(QStringLiteral("window/layout")).toString() == QLatin1String("workbench"));
+    // The workbench unless the stages were chosen from the menu. A key of its
+    // own: builds before this one stored "window/layout" on every start,
+    // which says nothing about what the user picked.
+    setWorkbench(settings.value(QStringLiteral("window/arrangement"), QStringLiteral("workbench")).toString() !=
+                 QLatin1String("stages"));
 }
 
 void MainWindow::buildActions()
@@ -200,9 +210,9 @@ void MainWindow::buildActions()
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
     QMenu *layoutMenu = viewMenu->addMenu(tr("&Layout"));
     auto *layouts = new QActionGroup(this);
-    stagesLayout_ = layoutMenu->addAction(tr("&Stages, One at a Time"), this, [this]() { setWorkbench(false); });
+    stagesLayout_ = layoutMenu->addAction(tr("&Stages, One at a Time"), this, [this]() { setWorkbench(false, true); });
     workbenchLayout_ = layoutMenu->addAction(tr("&Workbench, Side by Side (Wide Screens)"), this,
-                                             [this]() { setWorkbench(true); });
+                                             [this]() { setWorkbench(true, true); });
     workbenchLayout_->setShortcut(QKeySequence(tr("Ctrl+Shift+W")));
     for (QAction *a : {stagesLayout_, workbenchLayout_})
     {
@@ -382,11 +392,15 @@ void MainWindow::buildLayout()
     statusBar()->addPermanentWidget(cancel_);
 }
 
-void MainWindow::setWorkbench(bool on)
+void MainWindow::setWorkbench(bool on, bool remember)
 {
     layouts_->setCurrentWidget(on ? static_cast<QWidget *>(workbench_) : layouts_->widget(0));
     (on ? workbenchLayout_ : stagesLayout_)->setChecked(true);
-    QSettings().setValue(QStringLiteral("window/layout"), on ? QStringLiteral("workbench") : QStringLiteral("stages"));
+    if (remember)
+    {
+        QSettings().setValue(QStringLiteral("window/arrangement"),
+                             on ? QStringLiteral("workbench") : QStringLiteral("stages"));
+    }
 }
 
 bool MainWindow::workbenchActive() const

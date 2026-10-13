@@ -44,8 +44,10 @@ public:
     void runAll() { run({Stage::Coefficients, Stage::Forecast, Stage::LogLikelihood}); }
     void showStage(StageId stage);
     /// The workbench layout -- every stage's panels side by side, for a wide
-    /// screen -- or the stage bar with one page at a time.
-    void setWorkbench(bool on);
+    /// screen -- or the stage bar with one page at a time. `remember` makes it
+    /// the layout the next start opens with: the menu's choice, not a switch
+    /// a stage shortcut or the assistant makes in passing.
+    void setWorkbench(bool on, bool remember = false);
     bool workbenchActive() const;
 
 signals:
