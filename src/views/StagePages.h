@@ -185,8 +185,9 @@ public:
     void showStructural();
 
     /// One of the page's tabs alone, without the title or the tab bar: a
-    /// panel of the workbench.
-    enum class Panel { Forecasting, Structural };
+    /// panel of the workbench. Only that panel is computed then -- the
+    /// workbench holds a page per panel, and the others' work would be lost.
+    enum class Panel { Forecasting, Structural, Historical };
     void showOnly(Panel panel);
 
 private:
@@ -202,6 +203,8 @@ private:
     SpilloverView *spillover_;
     MultipliersView *multipliers_;
     HistoricalDecompositionView *historical_;
+    bool only_ = false;
+    Panel panel_ = Panel::Forecasting;
 };
 
 } // namespace studio

@@ -115,6 +115,7 @@ HistoricalDecompositionView::HistoricalDecompositionView(QWidget *parent) : QWid
     atTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     atTable_->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     atTable_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    atTable_->hide();   // until there is a decomposition to tabulate
 
     auto *controls = new QHBoxLayout;
     controls->addWidget(new QLabel(tr("Variable")));

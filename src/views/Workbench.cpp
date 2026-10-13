@@ -117,6 +117,10 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     connect(forecasts_, &StagePage::runRequested, this, &Workbench::runRequested);
     auto *responsesPane = new FoldPane(QStringLiteral("responses"), tr("Impulse responses"), responses_);
     auto *forecastsPane = new FoldPane(QStringLiteral("forecasts"), tr("Forecasts"), forecasts_);
+    historical_ = new ApplicationPage;
+    historical_->showOnly(ApplicationPage::Panel::Historical);
+    auto *historicalPane =
+        new FoldPane(QStringLiteral("historical"), tr("Historical decomposition"), historical_);
     // Settings only, never draws: the state variance view, whose runs are
     // posteriors, stays a tab of the posterior column.
     auto *priorPane = new FoldPane(QStringLiteral("priors"), tr("Priors"), priorScroll);
@@ -130,7 +134,7 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     split_->setChildrenCollapsible(false);
     columns_ = {new FoldColumn({modPane, dataPane}, 2, 440, {3, 2}), new FoldColumn({priorPane}, 2, 440, {1}),
                 new FoldColumn({posteriorPane}, 4, 0, {1}),
-                new FoldColumn({responsesPane, forecastsPane}, 4, 0, {1, 1})};
+                new FoldColumn({responsesPane, historicalPane, forecastsPane}, 4, 0, {1, 1, 1})};
     for (FoldColumn *c : columns_)
     {
         split_->addWidget(c);
@@ -259,7 +263,8 @@ void Workbench::restoreFolds()
     {
         // A first start on a laptop: the specification and the draws; the
         // priors and the application a click away.
-        folded = {QStringLiteral("priors"), QStringLiteral("responses"), QStringLiteral("forecasts")};
+        folded = {QStringLiteral("priors"), QStringLiteral("responses"), QStringLiteral("historical"),
+                  QStringLiteral("forecasts")};
     }
     for (FoldPane *p : panes_)
     {
@@ -377,6 +382,7 @@ void Workbench::showModel(const ModelContext &context)
     posterior_->showModel(context);
     responses_->showModel(context);
     forecasts_->showModel(context);
+    historical_->showModel(context);
 
     // The form follows the selected model when the builder wrote it: its own
     // data, its own settings. Only on a change of model -- a run ending

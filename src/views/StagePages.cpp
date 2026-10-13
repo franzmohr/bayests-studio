@@ -690,7 +690,11 @@ void ApplicationPage::showOnly(Panel panel)
     }
     tabs_->tabBar()->hide();
     layout()->setContentsMargins(8, 6, 8, 6);
-    tabs_->setCurrentIndex(panel == Panel::Forecasting ? 0 : 1);
+    only_ = true;
+    panel_ = panel;
+    tabs_->setCurrentWidget(panel == Panel::Historical ? static_cast<QWidget *>(historical_)
+                            : panel == Panel::Structural ? static_cast<QWidget *>(structural_)
+                                                         : tabs_->widget(0));
 }
 
 void ApplicationPage::showStructural()
@@ -703,10 +707,12 @@ void ApplicationPage::showModel(const ModelContext &context)
     context_ = context;
     const CheckReport &r = context.report;
     forecast_->setEnabled(!context.file.isEmpty() && r.hasPosterior && r.horizon > 0);
-    structural_->setModel(r.hasPosterior ? context.file : QString());
-    spillover_->setModel(r.hasPosterior ? context.file : QString());
-    multipliers_->setModel(r.hasPosterior ? context.file : QString());
-    historical_->setModel(r.hasPosterior ? context.file : QString());
+    const QString drawn = r.hasPosterior ? context.file : QString();
+    const auto wanted = [this](Panel panel) { return !only_ || panel_ == panel; };
+    structural_->setModel(wanted(Panel::Structural) ? drawn : QString());
+    spillover_->setModel(only_ ? QString() : drawn);
+    multipliers_->setModel(only_ ? QString() : drawn);
+    historical_->setModel(wanted(Panel::Historical) ? drawn : QString());
 
     const QSignalBlocker block(variable_);
     variable_->clear();
