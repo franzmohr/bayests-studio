@@ -132,6 +132,7 @@ MainWindow::MainWindow()
     // which says nothing about what the user picked.
     setWorkbench(settings.value(QStringLiteral("window/arrangement"), QStringLiteral("workbench")).toString() !=
                  QLatin1String("stages"));
+    setAssistantEnabled(settings.value(QStringLiteral("assistant/enabled"), false).toBool());
 }
 
 void MainWindow::buildActions()
@@ -248,19 +249,25 @@ void MainWindow::buildActions()
     runMenu->addAction(runForecast_);
     runMenu->addAction(runLoglik_);
 
-    QMenu *assistant = menuBar()->addMenu(tr("A&ssistant"));
+    // The assistant's menu, there only while it is turned on.
+    assistantMenu_ = menuBar()->addMenu(tr("A&ssistant"));
     for (const Workflow &w : workflows())
     {
-        assistant->addAction(tr("%1…").arg(w.title), this, [this, id = w.id]() {
+        assistantMenu_->addAction(tr("%1…").arg(w.title), this, [this, id = w.id]() {
+            ensureAssistant()->start(id);
             assistantDock_->show();
-            assistant_->start(id);
         });
     }
-    assistant->addSeparator();
-    assistant->addAction(tr("Choose a Workflow or an Example…"), this, [this]() {
+    assistantMenu_->addSeparator();
+    assistantMenu_->addAction(tr("Choose a Workflow or an Example…"), this, [this]() {
+        ensureAssistant()->showChooser();
         assistantDock_->show();
-        assistant_->showChooser();
     });
+    viewMenu->addSeparator();
+    assistantToggle_ = viewMenu->addAction(tr("&Assistant"), this, [this](bool on) { setAssistantEnabled(on, true); });
+    assistantToggle_->setCheckable(true);
+    assistantToggle_->setToolTip(tr("Guidance through a workflow, step by step, with worked examples. Optional: "
+                                    "everything it does can be done from the stages and the workbench."));
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
     help->addAction(tr("&About %1").arg(QApplication::applicationDisplayName()), this,
@@ -270,7 +277,10 @@ void MainWindow::buildActions()
     help->addAction(tr("&Extensions…"), this, [this]() {
         ExtensionsDialog dialog(this);
         connect(&dialog, &ExtensionsDialog::reloaded, this, [this]() {
-            assistant_->extensionsReloaded();
+            if (assistant_ != nullptr)
+            {
+                assistant_->extensionsReloaded();
+            }
             // Plots draw again, in a palette an extension may have changed.
             reloadProject();
         });
@@ -371,15 +381,6 @@ void MainWindow::buildLayout()
     addDockWidget(Qt::BottomDockWidgetArea, logDock);
     resizeDocks({logDock}, {120}, Qt::Vertical);
 
-    // The assistant, beside the pages.
-    assistant_ = new AssistantPanel(this);
-    assistantDock_ = new QDockWidget(tr("Assistant"), this);
-    assistantDock_->setObjectName(QStringLiteral("assistantDock"));
-    assistantDock_->setWidget(assistant_);
-    assistantDock_->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
-    addDockWidget(Qt::RightDockWidgetArea, assistantDock_);
-    resizeDocks({assistantDock_}, {380}, Qt::Horizontal);
-
     stageLabel_ = new QLabel;
     progress_ = new QProgressBar;
     progress_->setMaximumWidth(320);
@@ -390,6 +391,42 @@ void MainWindow::buildLayout()
     statusBar()->addPermanentWidget(stageLabel_);
     statusBar()->addPermanentWidget(progress_);
     statusBar()->addPermanentWidget(cancel_);
+}
+
+AssistantPanel *MainWindow::ensureAssistant()
+{
+    if (assistant_ == nullptr)
+    {
+        // Beside the pages, made the first time it is wanted.
+        assistant_ = new AssistantPanel(this);
+        assistantDock_ = new QDockWidget(tr("Assistant"), this);
+        assistantDock_->setObjectName(QStringLiteral("assistantDock"));
+        assistantDock_->setWidget(assistant_);
+        assistantDock_->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
+        addDockWidget(Qt::RightDockWidgetArea, assistantDock_);
+        resizeDocks({assistantDock_}, {380}, Qt::Horizontal);
+        assistant_->projectChanged();
+    }
+    return assistant_;
+}
+
+void MainWindow::setAssistantEnabled(bool on, bool remember)
+{
+    assistantMenu_->menuAction()->setVisible(on);
+    assistantToggle_->setChecked(on);
+    if (on)
+    {
+        ensureAssistant();
+        assistantDock_->show();
+    }
+    else if (assistantDock_ != nullptr)
+    {
+        assistantDock_->hide();
+    }
+    if (remember)
+    {
+        QSettings().setValue(QStringLiteral("assistant/enabled"), on);
+    }
 }
 
 void MainWindow::setWorkbench(bool on, bool remember)

@@ -298,7 +298,20 @@ open source under the BSD 3-Clause License, as BayesTS is; see
   interface's family, or another, such as the typeface of the document the
   figures go into -- with the size of an exported figure's text.
 
-- **Assistant** (the dock on the right; Assistant menu): a workflow as
+- **Workbench** (View › Layout, the default): every stage side by side on
+  a wide screen -- the specification and the series on the left, the
+  priors, the posterior draws, and impulse responses above forecasts. A
+  model the builder wrote fills the form in with its own data and
+  settings; Estimate saves the form as a new model and runs it. The stage
+  bar, one page at a time, is the other layout.
+
+- **State variance** (Posterior simulation › State variance): a
+  time-varying model estimated again at a state variance you name, each
+  run's path of a coefficient drawn over the model's own, with the prior
+  state variance against the posterior one.
+
+- **Assistant** (optional, off by default; View › Assistant turns it on,
+  and with it the Assistant menu and the dock on the right): a workflow as
   steps, each with what to do, why and the usual choices with their
   references, buttons that do it, and the stage it concerns opened beside
   it. A step ticks itself off when the project shows it done -- data

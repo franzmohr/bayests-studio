@@ -58,6 +58,7 @@ void runAssistantSmoke(MainWindow &window, const QString &which, const QString &
 {
     const QString workflow = which.section(QLatin1Char(':'), 0, 0);
     const QString example = which.section(QLatin1Char(':'), 1, 1);
+    window.setAssistantEnabled(true);   // optional, off by default
     AssistantPanel *assistant = window.assistant();
     int n = 0;
     const auto shot = [&](const QString &name) {

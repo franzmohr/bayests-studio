@@ -96,10 +96,17 @@ public:
     void showStageTab(WorkflowStage stage, const QString &tab) override;
     void openSignRestrictions(const std::vector<SignRestriction> &preset, int rotated) override;
     void reloadProject() override;
-    AssistantPanel *assistant() const { return assistant_; }
+    /// The assistant, created on first use.
+    AssistantPanel *assistant() { return ensureAssistant(); }
+
+    /// The assistant is optional: off, it has neither a panel nor a menu, and
+    /// View > Assistant turns it on. `remember` keeps the choice for the next
+    /// start.
+    void setAssistantEnabled(bool on, bool remember = false);
 
 private:
     void newModel();
+    AssistantPanel *ensureAssistant();
 
     QString projectDir_;
     QStringList projectFiles_;
@@ -122,6 +129,8 @@ private:
     PosteriorPage *liveTarget_ = nullptr;
     AssistantPanel *assistant_ = nullptr;
     QDockWidget *assistantDock_ = nullptr;
+    QMenu *assistantMenu_ = nullptr;
+    QAction *assistantToggle_ = nullptr;
     QPlainTextEdit *log_;
 
     QLabel *stageLabel_;

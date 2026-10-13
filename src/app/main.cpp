@@ -235,6 +235,7 @@ int main(int argc, char *argv[])
         }
         {
             studio::MainWindow w;
+            w.setAssistantEnabled(true);   // optional, and off by default: audited all the same
             audit(&w, "views", true);
         }
         // The licence Help > Licence shows.
