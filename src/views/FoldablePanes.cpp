@@ -145,7 +145,8 @@ FoldColumn::FoldColumn(const std::vector<FoldPane *> &panes, int weight, int min
     auto *holder = new QWidget;
     auto *v = new QVBoxLayout(holder);
     v->setContentsMargins(0, 0, 0, 0);
-    v->addWidget(splitter_);
+    v->addWidget(splitter_, 1);
+    v->addStretch(0);   // what panes that all fit their content leave, below them
     stack_ = new QStackedLayout(this);
     stack_->setContentsMargins(0, 0, 0, 0);
     stack_->addWidget(holder);
@@ -220,6 +221,23 @@ void FoldColumn::relayout()
         }
     }
     QList<int> sizes(size.begin(), size.end());
+    // Every pane at its limit: the splitter no taller than they are, and the
+    // space they leave below the last rather than spread between them.
+    const bool allLimited = std::all_of(panes_.begin(), panes_.end(),
+                                        [](const FoldPane *p) { return p->maximumHeight() < QWIDGETSIZE_MAX; });
+    if (allLimited)
+    {
+        int sum = splitter_->handleWidth() * static_cast<int>(panes_.size() - 1);
+        for (const FoldPane *p : panes_)
+        {
+            sum += p->maximumHeight();
+        }
+        splitter_->setMaximumHeight(sum);
+    }
+    else
+    {
+        splitter_->setMaximumHeight(QWIDGETSIZE_MAX);
+    }
     splitter_->setSizes(sizes);
 }
 

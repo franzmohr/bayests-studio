@@ -118,6 +118,11 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     connect(forecasts_, &StagePage::runRequested, this, &Workbench::runRequested);
     auto *responsesPane = new FoldPane(QStringLiteral("responses"), tr("Impulse responses"), responses_);
     auto *forecastsPane = new FoldPane(QStringLiteral("forecasts"), tr("Forecasts"), forecasts_);
+    // The fan at a height that reads, or the note alone without a forecast.
+    connect(forecasts_, &ApplicationPage::naturalHeightChanged, this, [this, forecastsPane](int height) {
+        forecastsPane->setContentLimit(height);
+        relayoutColumns();
+    });
     historical_ = new ApplicationPage;
     historical_->showOnly(ApplicationPage::Panel::Historical);
     auto *historicalPane =

@@ -31,6 +31,7 @@
 #include <QTableWidget>
 #include <QTabBar>
 #include <QTabWidget>
+#include <QTimer>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -738,26 +739,27 @@ void ApplicationPage::showModel(const ModelContext &context)
     showVariable(0);
 }
 
-void ApplicationPage::showVariable(int variable)
+bool ApplicationPage::drawForecast(int variable)
 {
     fan_->clear();
+    bool drawn = false;
     const CheckReport &r = context_.report;
     if (context_.file.isEmpty() || variable < 0 || r.k <= 0)
     {
         forecastNote_->setText(tr("Select a model of the project."));
-        return;
+        return false;
     }
     if (r.horizon <= 0)
     {
         forecastNote_->setText(tr("This model has no forecast horizon (/model/h)."));
-        return;
+        return false;
     }
     const H5Node *node =
         context_.tree ? context_.tree->find(QStringLiteral("/posterior/forecast/forecasts")) : nullptr;
     if (node == nullptr)
     {
         forecastNote_->setText(tr("No forecast yet. Estimate the model, then run the forecast."));
-        return;
+        return false;
     }
     try
     {
@@ -803,6 +805,7 @@ void ApplicationPage::showVariable(int variable)
         const double last = vec ? static_cast<double>(y.size() - 1) : static_cast<double>(y.size());
         fan_->addLine(tr("Observed"), tail, 0, last - static_cast<double>(shown));
         fan_->addFan(tr("Forecast median"), draws, 1, last, y.back());
+        drawn = true;
         forecastNote_->setText(tr("%1-step forecast from %2 draws; median with 68% and 90% bands. "
                                   "VEC forecasts are in levels.")
                                    .arg(horizon)
@@ -813,6 +816,29 @@ void ApplicationPage::showVariable(int variable)
         forecastNote_->setText(tr("The forecast cannot be shown: %1").arg(QString::fromUtf8(e.what())));
     }
     fan_->replot();
+    return drawn;
+}
+
+void ApplicationPage::showVariable(int variable)
+{
+    // The fan only where there is one to draw: without, the note says why,
+    // and an empty set of axes would only take room.
+    const bool drawn = drawForecast(variable);
+    fan_->setVisible(drawn);
+    if (only_ && panel_ == Panel::Forecasting)
+    {
+        QTimer::singleShot(0, this, [this, drawn]() {
+            const QMargins m = layout()->contentsMargins();
+            const int noteWidth = std::max(forecastNote_->width(), 400);
+            int height = m.top() + m.bottom() + 8 + forecast_->sizeHint().height() + 2 * layout()->spacing() +
+                         forecastNote_->heightForWidth(noteWidth);
+            if (drawn)
+            {
+                height += 420 + layout()->spacing();   // the fan, at a height that reads
+            }
+            emit naturalHeightChanged(height);
+        });
+    }
 }
 
 } // namespace studio

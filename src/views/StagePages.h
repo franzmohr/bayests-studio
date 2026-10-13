@@ -196,6 +196,8 @@ signals:
 
 private:
     void showVariable(int variable);
+    /// The forecast of `variable`, or the note why there is none: true if drawn.
+    bool drawForecast(int variable);
 
     ModelContext context_;
     QTabWidget *tabs_;
