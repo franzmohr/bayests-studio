@@ -302,8 +302,11 @@ open source under the BSD 3-Clause License, as BayesTS is; see
   a wide screen -- the specification and the series on the left, the
   priors, the posterior draws, and impulse responses above forecasts. A
   model the builder wrote fills the form in with its own data and
-  settings; Estimate saves the form as a new model and runs it. The stage
-  bar, one page at a time, is the other layout.
+  settings; Estimate saves the form as a new model and runs it. Every pane
+  folds from its title, and its corner button shows it alone, the others
+  folded -- a column of folded panes becomes a narrow strip, so a laptop
+  works with one or two at a time (View › Layout › Unfold All Panes brings
+  them back). The stage bar, one page at a time, is the other layout.
 
 - **State variance** (Posterior simulation › State variance): a
   time-varying model estimated again at a state variance you name, each

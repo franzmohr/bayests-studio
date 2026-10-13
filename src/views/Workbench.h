@@ -23,6 +23,8 @@ namespace studio
 {
 
 class BuilderDialog;
+class FoldColumn;
+class FoldPane;
 class QtReporter;
 
 /// The whole workflow side by side, for a wide screen -- the alternative to
@@ -54,6 +56,12 @@ public:
 
     PosteriorPage *posterior() const { return posterior_; }
 
+    /// Every pane unfolded, side by side again.
+    void unfoldAll();
+    /// These panes folded -- by id: modifications, data, priors, posterior,
+    /// responses, forecasts -- and the others unfolded.
+    void setFoldedPanes(const QStringList &ids);
+
 signals:
     void runRequested(const std::vector<studio::Stage> &stages);
     void importRequested();
@@ -62,7 +70,22 @@ signals:
     /// A model derived from the selected one (a sign and zero resample).
     void modelCreated(const QString &file);
 
+protected:
+    void showEvent(QShowEvent *event) override;
+
 private:
+    /// The columns' strips and panes after a fold, and their widths.
+    void relayoutColumns();
+    void arrangeColumns();
+    void focusPane(FoldPane *pane);
+    void saveFolds();
+    void restoreFolds();
+
+    QSplitter *split_ = nullptr;
+    std::vector<FoldColumn *> columns_;
+    std::vector<FoldPane *> panes_;
+    bool arranged_ = false;
+
     /// The form on `data`, filled in from `spec` when there is one.
     void rebuildBuilder(const DataSet &data, const std::optional<VarBuilderSpec> &spec);
     void drawSeries();

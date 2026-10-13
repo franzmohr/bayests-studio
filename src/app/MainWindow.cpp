@@ -221,6 +221,11 @@ void MainWindow::buildActions()
         layouts->addAction(a);
     }
     stagesLayout_->setChecked(true);
+    layoutMenu->addSeparator();
+    layoutMenu->addAction(tr("&Unfold All Panes"), this, [this]() {
+        setWorkbench(true);
+        workbench_->unfoldAll();
+    });
     viewMenu->addSeparator();
     viewMenu->addAction(tr("Colour &Palette…"), this, [this]() {
         PaletteDialog dialog(this);

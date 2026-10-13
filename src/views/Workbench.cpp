@@ -4,36 +4,28 @@
 #include "views/Workbench.h"
 
 #include "views/BuilderDialog.h"
+#include "views/FoldablePanes.h"
 #include "views/SeriesPlot.h"
 
 #include <QDir>
 #include <QFileInfo>
 #include <QFrame>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QSettings>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSplitter>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace studio
 {
 
 namespace
 {
-
-/// A column of the workbench: its title over its content.
-QWidget *column(const QString &title, QWidget *content)
-{
-    auto *panel = new QWidget;
-    auto *layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(6, 8, 6, 0);
-    layout->setSpacing(4);
-    auto *label = new QLabel(title);
-    label->setObjectName(QStringLiteral("sectionTitle"));
-    layout->addWidget(label);
-    layout->addWidget(content, 1);
-    return panel;
-}
 
 /// A scrolling stack the builder's sections are put in.
 QScrollArea *scrolling(QVBoxLayout *&inner)
@@ -100,12 +92,8 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
         l->addWidget(seriesScroll, 1);
     }
 
-    auto *left = new QSplitter(Qt::Vertical);
-    left->addWidget(column(tr("Modifications"), modScroll));
-    left->addWidget(column(tr("Data"), seriesPanel));
-    left->setStretchFactor(0, 3);
-    left->setStretchFactor(1, 2);
-    left->setChildrenCollapsible(false);
+    auto *modPane = new FoldPane(QStringLiteral("modifications"), tr("Modifications"), modScroll);
+    auto *dataPane = new FoldPane(QStringLiteral("data"), tr("Data"), seriesPanel);
 
     // 2. Priors, and what BayesTS says about the model so specified.
     QScrollArea *priorScroll = scrolling(priors_);
@@ -127,36 +115,160 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     forecasts_ = new ApplicationPage;
     forecasts_->showOnly(ApplicationPage::Panel::Forecasting);
     connect(forecasts_, &StagePage::runRequested, this, &Workbench::runRequested);
-    auto *right = new QSplitter(Qt::Vertical);
-    right->addWidget(column(tr("Impulse responses"), responses_));
-    right->addWidget(column(tr("Forecasts"), forecasts_));
-    right->setChildrenCollapsible(false);
-
-    // The builder's forms need their width: below it their labels clip.
-    left->setMinimumWidth(440);
+    auto *responsesPane = new FoldPane(QStringLiteral("responses"), tr("Impulse responses"), responses_);
+    auto *forecastsPane = new FoldPane(QStringLiteral("forecasts"), tr("Forecasts"), forecasts_);
     // Settings only, never draws: the state variance view, whose runs are
     // posteriors, stays a tab of the posterior column.
-    QWidget *priorColumn = column(tr("Priors"), priorScroll);
-    priorColumn->setMinimumWidth(440);
+    auto *priorPane = new FoldPane(QStringLiteral("priors"), tr("Priors"), priorScroll);
+    auto *posteriorPane = new FoldPane(QStringLiteral("posterior"), tr("Posterior draws"), posterior_);
 
-    auto *split = new QSplitter(Qt::Horizontal);
-    split->addWidget(left);
-    split->addWidget(priorColumn);
-    split->addWidget(column(tr("Posterior draws"), posterior_));
-    split->addWidget(right);
-    split->setChildrenCollapsible(false);
-    // A wide screen: the two specification columns narrow, the results wide.
-    split->setStretchFactor(0, 2);
-    split->setStretchFactor(1, 2);
-    split->setStretchFactor(2, 4);
-    split->setStretchFactor(3, 4);
-    split->setSizes({440, 440, 760, 760});
+    // A wide screen: the two specification columns narrow -- the builder's
+    // forms need 440 pixels, below which their labels clip -- the results
+    // wide. Each pane folds; a column whose panes are all folded becomes a
+    // strip, so a laptop shows one or two panes at a time.
+    split_ = new QSplitter(Qt::Horizontal);
+    split_->setChildrenCollapsible(false);
+    columns_ = {new FoldColumn({modPane, dataPane}, 2, 440, {3, 2}), new FoldColumn({priorPane}, 2, 440, {1}),
+                new FoldColumn({posteriorPane}, 4, 0, {1}),
+                new FoldColumn({responsesPane, forecastsPane}, 4, 0, {1, 1})};
+    for (FoldColumn *c : columns_)
+    {
+        split_->addWidget(c);
+        connect(c, &FoldColumn::changed, this, [this]() {
+            arrangeColumns();
+            saveFolds();
+        });
+        for (FoldPane *pane : c->panes())
+        {
+            panes_.push_back(pane);
+            connect(pane, &FoldPane::focusRequested, this, [this, pane]() { focusPane(pane); });
+        }
+    }
+    restoreFolds();
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(split);
+    layout->addWidget(split_);
 
     drawSeries();
+}
+
+void Workbench::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (!arranged_)
+    {
+        arranged_ = true;
+        relayoutColumns();
+    }
+}
+
+void Workbench::relayoutColumns()
+{
+    for (FoldColumn *c : columns_)
+    {
+        c->relayout();
+    }
+    // Folded columns their strip; the others the rest by weight, each at
+    // least what it needs.
+    const int handles = split_->handleWidth() * static_cast<int>(columns_.size() - 1);
+    int free = std::max(split_->width(), 1200) - handles;
+    int weights = 0;
+    for (const FoldColumn *c : columns_)
+    {
+        if (c->allFolded())
+        {
+            free -= c->stripWidth();
+        }
+        else
+        {
+            weights += c->weight();
+        }
+    }
+    QList<int> sizes;
+    for (const FoldColumn *c : columns_)
+    {
+        sizes << (c->allFolded() ? c->stripWidth()
+                                 : std::max(c->unfoldedMinimum(), free * c->weight() / std::max(1, weights)));
+    }
+    split_->setSizes(sizes);
+}
+
+void Workbench::arrangeColumns()
+{
+    relayoutColumns();
+}
+
+void Workbench::focusPane(FoldPane *pane)
+{
+    // Alone already: unfold them all again. Otherwise fold the others.
+    const bool alone = std::none_of(panes_.begin(), panes_.end(),
+                                    [pane](const FoldPane *p) { return p != pane && !p->isFolded(); });
+    for (FoldPane *p : panes_)
+    {
+        p->setFolded(alone ? false : p != pane);
+    }
+    relayoutColumns();
+    saveFolds();
+}
+
+void Workbench::unfoldAll()
+{
+    for (FoldPane *p : panes_)
+    {
+        p->setFolded(false);
+    }
+    relayoutColumns();
+    saveFolds();
+}
+
+void Workbench::setFoldedPanes(const QStringList &ids)
+{
+    for (FoldPane *p : panes_)
+    {
+        p->setFolded(ids.contains(p->id()));
+    }
+    relayoutColumns();
+    saveFolds();
+}
+
+void Workbench::saveFolds()
+{
+    QStringList folded;
+    for (const FoldPane *p : panes_)
+    {
+        if (p->isFolded())
+        {
+            folded << p->id();
+        }
+    }
+    QSettings().setValue(QStringLiteral("workbench/folded"), folded);
+}
+
+void Workbench::restoreFolds()
+{
+    QSettings settings;
+    QStringList folded;
+    if (settings.contains(QStringLiteral("workbench/folded")))
+    {
+        folded = settings.value(QStringLiteral("workbench/folded")).toStringList();
+    }
+    else if (const QScreen *screen = QGuiApplication::primaryScreen();
+             screen != nullptr && QGuiApplication::platformName() != QLatin1String("offscreen") &&
+             screen->availableGeometry().width() < 1900)
+    {
+        // A first start on a laptop: the specification and the draws; the
+        // priors and the application a click away.
+        folded = {QStringLiteral("priors"), QStringLiteral("responses"), QStringLiteral("forecasts")};
+    }
+    for (FoldPane *p : panes_)
+    {
+        p->setFolded(folded.contains(p->id()));
+    }
+    for (FoldColumn *c : columns_)
+    {
+        c->relayout();
+    }
 }
 
 void Workbench::setData(const DataSet &data)

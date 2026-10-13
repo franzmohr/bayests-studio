@@ -5,6 +5,7 @@
 #include "app/Theme.h"
 #include "views/AssistantDialogs.h"
 #include "views/BuilderDialog.h"
+#include "views/Workbench.h"
 #include "engine/Extensions.h"
 #include "views/FigureExport.h"
 #include "views/ExtensionsDialog.h"
@@ -361,8 +362,15 @@ int main(int argc, char *argv[])
     // folder given and captures <prefix>-estimated.png once the panels are drawn.
     if (const QByteArray prefix = qgetenv("STUDIO_SMOKE_WORKBENCH"); !prefix.isEmpty())
     {
-        window.resize(2560, 1300);
+        // STUDIO_SMOKE_SIZE=<w>x<h>: a smaller screen, a laptop's say, and
+        // STUDIO_SMOKE_FOLDED=<pane>,...: the panes folded on it.
+        const QStringList size = QString::fromLocal8Bit(qgetenv("STUDIO_SMOKE_SIZE")).split(QLatin1Char('x'));
+        window.resize(size.size() == 2 ? size[0].toInt() : 2560, size.size() == 2 ? size[1].toInt() : 1300);
         window.setWorkbench(true);
+        if (const QByteArray folded = qgetenv("STUDIO_SMOKE_FOLDED"); !folded.isEmpty())
+        {
+            window.workbench()->setFoldedPanes(QString::fromLocal8Bit(folded).split(QLatin1Char(',')));
+        }
         const QString data = QString::fromLocal8Bit(qgetenv("STUDIO_SMOKE_DATA"));
         if (!data.isEmpty())
         {

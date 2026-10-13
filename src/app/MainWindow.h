@@ -49,6 +49,7 @@ public:
     /// a stage shortcut or the assistant makes in passing.
     void setWorkbench(bool on, bool remember = false);
     bool workbenchActive() const;
+    Workbench *workbench() const { return workbench_; }
 
 signals:
     void runEnded(bool ok);
