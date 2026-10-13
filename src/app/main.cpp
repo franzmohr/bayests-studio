@@ -526,6 +526,36 @@ int main(int argc, char *argv[])
             QCoreApplication::exit(ok ? 0 : 1);
         });
         QTimer::singleShot(800, &window, [&window, base, tvp]() {
+            // STUDIO_SMOKE_EXO=<series>: that series weakly exogenous, a VARX,
+            // with no forecast horizon -- its future values are not in the data.
+            if (const QString exo = QString::fromLocal8Bit(qgetenv("STUDIO_SMOKE_EXO")); !exo.isEmpty())
+            {
+                for (QListWidget *list : window.findChildren<QListWidget *>())
+                {
+                    if (!list->isVisible())
+                    {
+                        continue;
+                    }
+                    const bool exogenous = list->toolTip().startsWith(QObject::tr("Regressors the model does not"));
+                    const bool endogenous = list->toolTip().startsWith(QObject::tr("The variables the model explains"));
+                    for (int i = 0; (exogenous || endogenous) && i < list->count(); ++i)
+                    {
+                        if (list->item(i)->text() == exo)
+                        {
+                            list->item(i)->setCheckState(exogenous ? Qt::Checked : Qt::Unchecked);
+                        }
+                    }
+                }
+                for (QSpinBox *b : window.findChildren<QSpinBox *>())
+                {
+                    if (b->isVisible() && b->toolTip().contains(QObject::tr("forecast"), Qt::CaseInsensitive) &&
+                        b->value() == 8)
+                    {
+                        b->setValue(0);
+                    }
+                }
+                QCoreApplication::processEvents();
+            }
             if (tvp)
             {
                 for (QRadioButton *r : window.findChildren<QRadioButton *>())

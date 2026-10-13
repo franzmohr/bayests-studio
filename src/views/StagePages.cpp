@@ -695,6 +695,7 @@ void ApplicationPage::showOnly(Panel panel)
     tabs_->setCurrentWidget(panel == Panel::Historical  ? static_cast<QWidget *>(historical_)
                             : panel == Panel::Structural ? static_cast<QWidget *>(structural_)
                             : panel == Panel::Spillover  ? static_cast<QWidget *>(spillover_)
+                            : panel == Panel::Multipliers ? static_cast<QWidget *>(multipliers_)
                                                          : tabs_->widget(0));
 }
 
@@ -712,7 +713,7 @@ void ApplicationPage::showModel(const ModelContext &context)
     const auto wanted = [this](Panel panel) { return !only_ || panel_ == panel; };
     structural_->setModel(wanted(Panel::Structural) ? drawn : QString());
     spillover_->setModel(wanted(Panel::Spillover) ? drawn : QString());
-    multipliers_->setModel(only_ ? QString() : drawn);
+    multipliers_->setModel(wanted(Panel::Multipliers) ? drawn : QString());
     historical_->setModel(wanted(Panel::Historical) ? drawn : QString());
 
     const QSignalBlocker block(variable_);

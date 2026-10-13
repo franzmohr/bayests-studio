@@ -124,6 +124,9 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     spillovers_ = new ApplicationPage;
     spillovers_->showOnly(ApplicationPage::Panel::Spillover);
     auto *spilloverPane = new FoldPane(QStringLiteral("spillovers"), tr("Spillovers"), spillovers_);
+    multipliers_ = new ApplicationPage;
+    multipliers_->showOnly(ApplicationPage::Panel::Multipliers);
+    auto *multiplierPane = new FoldPane(QStringLiteral("multipliers"), tr("Multipliers"), multipliers_);
     // Settings only, never draws: the state variance view, whose runs are
     // posteriors, stays a tab of the posterior column.
     auto *priorPane = new FoldPane(QStringLiteral("priors"), tr("Priors"), priorScroll);
@@ -137,7 +140,8 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     split_->setChildrenCollapsible(false);
     columns_ = {new FoldColumn({modPane, dataPane}, 2, 440, {3, 2}), new FoldColumn({priorPane}, 2, 440, {1}),
                 new FoldColumn({posteriorPane}, 4, 0, {1}),
-                new FoldColumn({responsesPane, historicalPane, spilloverPane, forecastsPane}, 4, 0, {1, 1, 1, 1})};
+                new FoldColumn({responsesPane, historicalPane, spilloverPane, multiplierPane, forecastsPane}, 4, 0,
+                               {1, 1, 1, 1, 1})};
     for (FoldColumn *c : columns_)
     {
         split_->addWidget(c);
@@ -267,7 +271,7 @@ void Workbench::restoreFolds()
         // A first start on a laptop: the specification and the draws; the
         // priors and the application a click away.
         folded = {QStringLiteral("priors"), QStringLiteral("responses"), QStringLiteral("historical"),
-                  QStringLiteral("spillovers"), QStringLiteral("forecasts")};
+                  QStringLiteral("spillovers"), QStringLiteral("multipliers"), QStringLiteral("forecasts")};
     }
     for (FoldPane *p : panes_)
     {
@@ -387,6 +391,7 @@ void Workbench::showModel(const ModelContext &context)
     forecasts_->showModel(context);
     historical_->showModel(context);
     spillovers_->showModel(context);
+    multipliers_->showModel(context);
 
     // The form follows the selected model when the builder wrote it: its own
     // data, its own settings. Only on a change of model -- a run ending
