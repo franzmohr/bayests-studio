@@ -693,17 +693,27 @@ void ApplicationPage::showOnly(Panel panel)
     layout()->setContentsMargins(8, 6, 8, 6);
     only_ = true;
     panel_ = panel;
-    const auto relay = [this](int height) {
-        const QMargins m = layout()->contentsMargins();
-        emit naturalHeightChanged(height < 0 ? -1 : height + m.top() + m.bottom());
+    // What the page adds around the view -- its margins, the tab widget's
+    // frame -- measured where it is laid out, the margins alone before.
+    const auto relay = [this](QWidget *view) {
+        return [this, view](int height) {
+            const QMargins m = layout()->contentsMargins();
+            const int around = this->height() > 0 && view->height() > 0 ? this->height() - view->height()
+                                                                          : m.top() + m.bottom() + 8;
+            emit naturalHeightChanged(height < 0 ? -1 : height + around);
+        };
     };
     if (panel == Panel::Spillover)
     {
-        connect(spillover_, &SpilloverView::naturalHeightChanged, this, relay);
+        connect(spillover_, &SpilloverView::naturalHeightChanged, this, relay(spillover_));
     }
     if (panel == Panel::Multipliers)
     {
-        connect(multipliers_, &MultipliersView::naturalHeightChanged, this, relay);
+        connect(multipliers_, &MultipliersView::naturalHeightChanged, this, relay(multipliers_));
+    }
+    if (panel == Panel::Structural)
+    {
+        connect(structural_, &StructuralView::naturalHeightChanged, this, relay(structural_));
     }
     tabs_->setCurrentWidget(panel == Panel::Historical  ? static_cast<QWidget *>(historical_)
                             : panel == Panel::Structural ? static_cast<QWidget *>(structural_)

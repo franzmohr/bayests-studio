@@ -13,6 +13,7 @@
 
 class QCheckBox;
 class QPushButton;
+class QScrollArea;
 class QComboBox;
 class QGridLayout;
 class QLabel;
@@ -43,7 +44,14 @@ public:
     /// the view with the reason.
     void setModel(const QString &file);
 
+    /// The height the view needs for the tab showing: its controls and
+    /// notes as they stand, and its rows of panels at a height that reads.
+    /// -1 before the view is laid out.
+    int naturalHeight() const;
+
 signals:
+    void naturalHeightChanged(int height);
+
     /// A sign and zero identification wrote a new model file.
     void modelCreated(const QString &file);
 
@@ -85,6 +93,8 @@ private:
     QCheckBox *standardDeviation_;
     QPushButton *signButton_;
     QTabWidget *tabs_;
+    QScrollArea *irfScroll_ = nullptr;
+    void reportHeight();
     QWidget *gridHost_;
     QGridLayout *grid_;
     std::vector<QwtPlot *> plots_;   // row by row: response i, shock j at i * k + j in the matrix

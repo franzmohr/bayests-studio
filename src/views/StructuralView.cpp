@@ -244,6 +244,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     grid_ = new QGridLayout(gridHost_);
     grid_->setSpacing(12);
     auto *scroll = new QScrollArea;
+    irfScroll_ = scroll;
     scroll->setWidget(gridHost_);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -290,6 +291,7 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
     tabs_->setDocumentMode(true);
     tabs_->addTab(scroll, tr("Impulse responses"));
     tabs_->addTab(fevdPage, tr("Variance decomposition"));
+    connect(tabs_, &QTabWidget::currentChanged, this, &StructuralView::reportHeight);
     tabs_->setObjectName(QStringLiteral("structuralTabs"));
     attachFigureExport(fevd_, figure_);
 
@@ -379,6 +381,48 @@ StructuralView::StructuralView(QWidget *parent) : QWidget(parent)
         }
     });
     setModel(QString());
+}
+
+int StructuralView::naturalHeight() const
+{
+    // The view less its scroll area's viewport is its controls, tab bar and
+    // notes as they stand; to that, the grid's rows of panels.
+    const bool fevd = tabs_->currentIndex() == 1;
+    const auto *scroll = qobject_cast<const QScrollArea *>(fevd ? fevdScroll_ : static_cast<QWidget *>(irfScroll_));
+    if (scroll == nullptr || height() <= 0 || !scroll->isVisible())
+    {
+        return -1;
+    }
+    const int k = std::max(1, support_.k);
+    const bool matrix = fevd ? fevdMatrix_ : matrix_;
+    const int columns = std::max(1, fevd ? (matrix ? k : fevdColumns_) : (matrix ? k : columns_));
+    const int cells = fevd ? (matrix ? k * k : static_cast<int>(fevdPlots_.size()) + 1)
+                           : (matrix ? k * k : static_cast<int>(plots_.size()));
+    if (cells == 0)
+    {
+        return height() - scroll->viewport()->height();
+    }
+    const int rows = (cells + columns - 1) / columns;
+    const QGridLayout *grid = fevd ? fevdGrid_ : grid_;
+    const int row = matrix ? 220 : 300;
+    int content = rows * row + (rows - 1) * grid->spacing() + 2 * scroll->frameWidth() + 8;
+    if (matrix)
+    {
+        const std::vector<QWidget *> &headers = fevd ? fevdHeaders_ : headers_;
+        content += (headers.empty() ? 20 : headers.front()->sizeHint().height()) + grid->spacing();
+    }
+    // Never less than the grid needs, its panels' minimum heights and all.
+    const QWidget *host = fevd ? fevdGridHost_ : gridHost_;
+    content = std::max({content, host->minimumSizeHint().height(), host->sizeHint().height()}) +
+              2 * scroll->frameWidth() + 16;
+    return height() - scroll->viewport()->height() + content;
+}
+
+void StructuralView::reportHeight()
+{
+    // A moment after the change: the panels' axes, the last row's title
+    // among them, settle their sizes once replotted.
+    QTimer::singleShot(80, this, [this]() { emit naturalHeightChanged(naturalHeight()); });
 }
 
 void StructuralView::setModel(const QString &file)
@@ -540,6 +584,7 @@ bool StructuralView::allShocks() const
 
 void StructuralView::rebuildGrid(int k)
 {
+    reportHeight();   // measured once the event loop has laid the change out
     // Out of the grid at once: a deferred delete can wait for an outer event
     // loop, and the old panels would stand beside the new ones until then.
     for (QWidget *w : std::vector<QWidget *>(plots_.begin(), plots_.end()))
@@ -620,6 +665,7 @@ bool StructuralView::allResponses() const
 
 void StructuralView::rebuildFevdGrid(int k)
 {
+    reportHeight();   // measured once the event loop has laid the change out
     for (QWidget *w : std::vector<QWidget *>(fevdPlots_.begin(), fevdPlots_.end()))
     {
         fevdGrid_->removeWidget(w);
@@ -706,6 +752,7 @@ void StructuralView::rebuildFevdGrid(int k)
 
 void StructuralView::show(const Result &result)
 {
+    reportHeight();   // measured once the event loop has laid the change out
     if (!result.error.isEmpty())
     {
         status_->setText(tr("✗  %1").arg(result.error));

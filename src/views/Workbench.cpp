@@ -117,6 +117,12 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     forecasts_->showOnly(ApplicationPage::Panel::Forecasting);
     connect(forecasts_, &StagePage::runRequested, this, &Workbench::runRequested);
     auto *responsesPane = new FoldPane(QStringLiteral("responses"), tr("Impulse responses"), responses_);
+    // Its rows of panels at a height that reads: the decomposition below
+    // takes the rest of the column.
+    connect(responses_, &ApplicationPage::naturalHeightChanged, this, [this, responsesPane](int height) {
+        responsesPane->setContentLimit(height);
+        relayoutColumns();
+    });
     auto *forecastsPane = new FoldPane(QStringLiteral("forecasts"), tr("Forecasts"), forecasts_);
     // The fan at a height that reads, or the note alone without a forecast.
     connect(forecasts_, &ApplicationPage::naturalHeightChanged, this, [this, forecastsPane](int height) {
