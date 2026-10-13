@@ -413,6 +413,18 @@ int main(int argc, char *argv[])
             // then the error precision.
             if (!qgetenv("STUDIO_SMOKE_BLOCK").isEmpty())
             {
+                // A time-varying model opens on its paths: the draws' tab first.
+                for (QTabWidget *tabs : window.findChildren<QTabWidget *>())
+                {
+                    for (int i = 0; i < tabs->count(); ++i)
+                    {
+                        if (tabs->isVisible() && tabs->tabText(i) == QObject::tr("Draws and convergence"))
+                        {
+                            tabs->setCurrentIndex(i);
+                        }
+                    }
+                }
+                settle(500);
                 for (QComboBox *c : window.findChildren<QComboBox *>())
                 {
                     if (c->isVisible() && c->findText(QObject::tr("Whole block")) >= 0)
@@ -422,6 +434,16 @@ int main(int argc, char *argv[])
                 }
                 settle(1500);
                 window.grab().save(base + QStringLiteral("-block-a.png"));
+                // A path's block at its first period too.
+                for (QComboBox *c : window.findChildren<QComboBox *>())
+                {
+                    if (c->isVisible() && c->toolTip().startsWith(QObject::tr("The period at which")))
+                    {
+                        c->setCurrentIndex(0);
+                        settle(1500);
+                        window.grab().save(base + QStringLiteral("-block-a-first.png"));
+                    }
+                }
                 for (QComboBox *c : window.findChildren<QComboBox *>())
                 {
                     if (c->isVisible() && c->findText(QStringLiteral("u_sigma_inv/coeffs")) >= 0)

@@ -58,6 +58,11 @@ int readGroupInt(const QString &file, const QString &path, const QString &name, 
 /// Reads a one- or two-dimensional numeric dataset. Throws on anything else.
 Matrix readMatrix(const QString &file, const QString &path);
 
+/// Labels for `count` periods from the first of the estimation sample, by the
+/// `tsp` of /data/train/y -- "1960 Q2", "2020-03", "1984" -- or 1, 2, ...
+/// where the file has none.
+QStringList samplePeriodLabels(const QString &file, int count);
+
 /// The tree of a model file, for the navigator.
 class ModelFileTree : public QAbstractItemModel
 {

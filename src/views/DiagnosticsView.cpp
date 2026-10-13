@@ -287,12 +287,21 @@ DiagnosticsView::DiagnosticsView(QWidget *parent) : QWidget(parent)
         blockBuilt_ = false;
         buildBlock();
     });
+    period_ = new QComboBox;
+    period_->setToolTip(tr("The period at which a time-varying block is shown: each cell the posterior of that "
+                           "coefficient in that period."));
+    period_->setMaxVisibleItems(24);
+    connect(period_, &QComboBox::currentIndexChanged, this, [this]() {
+        blockBuilt_ = false;
+        buildBlock();
+    });
+    periodLabel_ = new QLabel(tr("Period"));
     blockNote_ = new QLabel;
     blockNote_->setObjectName(QStringLiteral("subtle"));
     blockNote_->setWordWrap(true);
     QToolButton *exportBlock = figureExportButton([this]() {
         FigureSpec spec;
-        spec.title = path_;
+        spec.title = pathCoefficients_ > 0 ? tr("%1 at %2").arg(path_, period_->currentText()) : path_;
         spec.columns = layout_.columns();
         spec.columnLabels = layout_.columnLabels;
         spec.rowLabels = layout_.rowLabels;
@@ -306,6 +315,8 @@ DiagnosticsView::DiagnosticsView(QWidget *parent) : QWidget(parent)
     auto *blockBar = new QHBoxLayout;
     blockBar->addWidget(new QLabel(tr("Each cell")));
     blockBar->addWidget(show_);
+    blockBar->addWidget(periodLabel_);
+    blockBar->addWidget(period_);
     blockBar->addWidget(blockNote_, 1);
     blockBar->addWidget(exportBlock);
     grid_ = new QWidget;
@@ -338,6 +349,13 @@ void DiagnosticsView::clear()
     path_.clear();
     names_.clear();
     layout_ = {};
+    pathCoefficients_ = 0;
+    {
+        const QSignalBlocker block(period_);
+        period_->clear();
+    }
+    period_->setVisible(false);
+    periodLabel_->setVisible(false);
     title_->setText(tr("Select a dataset under /posterior in the navigator."));
     row_->clear();
     stats_->clear();
@@ -371,7 +389,7 @@ void DiagnosticsView::clearBlock()
 }
 
 void DiagnosticsView::showDataset(const QString &file, const QString &path, const QStringList &rowNames,
-                                  const QStringList &variables)
+                                  const QStringList &variables, bool timePath)
 {
     clear();
     try
@@ -387,13 +405,38 @@ void DiagnosticsView::showDataset(const QString &file, const QString &path, cons
     names_ = rowNames;
     title_->setText(tr("%1 — %2 parameters × %3 draws")
                         .arg(path).arg(matrix_.rows).arg(matrix_.cols));
-    layout_ = blockLayout(matrix_.rows, rowNames, variables);
+    const auto n = static_cast<std::size_t>(rowNames.size());
+    const bool isPath = timePath && n > 0 && matrix_.rows % n == 0;
+    QStringList periods;
+    if (isPath)
+    {
+        // Row t*n + i is coefficient i in period t.
+        pathCoefficients_ = static_cast<int>(n);
+        periods = samplePeriodLabels(file, static_cast<int>(matrix_.rows / n));
+        layout_ = blockLayout(n, rowNames, variables);
+        const QSignalBlocker block(period_);
+        period_->addItems(periods);
+        period_->setCurrentIndex(static_cast<int>(periods.size()) - 1);   // the last: where a forecast starts
+        period_->setVisible(true);
+        periodLabel_->setVisible(true);
+    }
+    else
+    {
+        layout_ = blockLayout(matrix_.rows, rowNames, variables);
+    }
 
     const QSignalBlocker block(row_);
     for (std::size_t r = 0; r < matrix_.rows; ++r)
     {
-        row_->addItem(r < static_cast<std::size_t>(rowNames.size()) ? rowNames[static_cast<qsizetype>(r)]
-                                                                     : tr("Row %1").arg(r + 1));
+        if (isPath)
+        {
+            row_->addItem(tr("%1 — %2").arg(rowNames[static_cast<qsizetype>(r % n)],
+                                            periods.value(static_cast<qsizetype>(r / n))));
+        }
+        else
+        {
+            row_->addItem(r < n ? rowNames[static_cast<qsizetype>(r)] : tr("Row %1").arg(r + 1));
+        }
     }
     showRow(0);
     modeChanged();
@@ -427,8 +470,7 @@ void DiagnosticsView::buildBlock()
     if (!layout_.valid())
     {
         blockNote_->setText(tr("This block has no matrix layout to show it in: its rows are not named by "
-                               "equation and regressor, nor is it k × k. A time-varying path has a row per "
-                               "coefficient and period -- see Time-varying coefficients."));
+                               "equation and regressor, nor is it k × k."));
         return;
     }
     if (layout_.rows() * layout_.columns() > maxCells)
@@ -455,11 +497,15 @@ void DiagnosticsView::buildBlock()
         gridLayout_->addWidget(header(layout_.rowLabels[r], Qt::AlignRight | Qt::AlignVCenter), r + 1, 0);
         for (int c = 0; c < layout_.columns(); ++c)
         {
-            const int index = layout_.cell[static_cast<std::size_t>(r * layout_.columns() + c)];
-            if (index < 0)
+            const int cellIndex = layout_.cell[static_cast<std::size_t>(r * layout_.columns() + c)];
+            if (cellIndex < 0)
             {
                 continue;
             }
+            // A path's coefficient at the chosen period.
+            const int index = pathCoefficients_ > 0
+                                  ? std::max(0, period_->currentIndex()) * pathCoefficients_ + cellIndex
+                                  : cellIndex;
             const auto row = static_cast<std::size_t>(index);
             std::vector<double> draws = rowOf(matrix_, row);
             std::vector<double> sorted = draws;
@@ -503,7 +549,7 @@ void DiagnosticsView::buildBlock()
                     auto *zero = new QwtPlotMarker;
                     zero->setLineStyle(QwtPlotMarker::VLine);
                     zero->setXValue(0.0);
-                    zero->setLinePen(seriesColor(1), 1.0, Qt::DashLine);
+                    zero->setLinePen(seriesColor(1), 1.6, Qt::DashLine);   // thin lines fade at fractional pixels
                     zero->setZ(hist->z() + 1.0);   // over the bars, not tinted by them
                     zero->attach(plot);
                 }
@@ -516,8 +562,10 @@ void DiagnosticsView::buildBlock()
                 ss += (d - mean) * (d - mean);
             }
             const QString name =
-                index < names_.size() ? names_[index] : QStringLiteral("%1, %2").arg(layout_.rowLabels[r],
-                                                                                     layout_.columnLabels[c]);
+                pathCoefficients_ > 0 ? tr("%1 — %2").arg(names_.value(cellIndex), period_->currentText())
+                : index < names_.size()
+                    ? names_[index]
+                    : QStringLiteral("%1, %2").arg(layout_.rowLabels[r], layout_.columnLabels[c]);
             plot->setToolTip(tr("%1\nmean %2, sd %3, 90% interval [%4, %5]\nClick to see it on its own.")
                                  .arg(name)
                                  .arg(mean, 0, 'g', 4)

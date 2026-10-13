@@ -53,9 +53,11 @@ public:
 
     /// Shows the dataset at `path` of `file`; rows are quantities, columns
     /// draws, as BayesTS writes them. `variables`, the model's, lay out an
-    /// unnamed k x k block.
+    /// unnamed k x k block. With `timePath`, the rows are a time-varying block's
+    /// path -- `rowNames` per period, stacked period by period -- and the
+    /// whole block is shown at a period chosen.
     void showDataset(const QString &file, const QString &path, const QStringList &rowNames = {},
-                     const QStringList &variables = {});
+                     const QStringList &variables = {}, bool timePath = false);
     void clear();
 
 protected:
@@ -85,6 +87,9 @@ private:
 
     // The whole block.
     QComboBox *show_;
+    QComboBox *period_;              ///< a time-varying block's period
+    QLabel *periodLabel_;
+    int pathCoefficients_ = 0;       ///< coefficients per period of a path, 0 for none
     QLabel *blockNote_;
     QWidget *grid_;
     QGridLayout *gridLayout_;

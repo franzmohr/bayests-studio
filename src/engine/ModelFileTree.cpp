@@ -8,6 +8,7 @@
 
 #include <highfive/highfive.hpp>
 
+#include <cmath>
 #include <stdexcept>
 
 namespace studio
@@ -144,6 +145,55 @@ QStringList readStringsAttribute(const QString &file, const QString &path, const
         out.clear();
     }
     return out;
+}
+
+QStringList samplePeriodLabels(const QString &file, int count)
+{
+    double start = 0.0, frequency = 0.0;
+    {
+        const std::lock_guard<std::recursive_mutex> hdf5(hdf5Mutex());
+        try
+        {
+            HighFive::File h5(file.toStdString(), HighFive::File::ReadOnly);
+            if (h5.exist("/data/train/y"))
+            {
+                const HighFive::DataSet ds = h5.getDataSet("/data/train/y");
+                if (ds.hasAttribute("tsp"))
+                {
+                    const auto tsp = ds.getAttribute("tsp").read<std::vector<double>>();
+                    if (tsp.size() == 3 && tsp[2] > 0)
+                    {
+                        start = tsp[0];
+                        frequency = tsp[2];
+                    }
+                }
+            }
+        }
+        catch (const std::exception &)
+        {
+            frequency = 0.0;
+        }
+    }
+    QStringList labels;
+    const long long f = std::llround(frequency);
+    for (int c = 0; c < count; ++c)
+    {
+        if (f <= 0)
+        {
+            labels << QString::number(c + 1);
+            continue;
+        }
+        // The period's index from the start of its year, rounded against
+        // the floating point of tsp.
+        const long long whole = std::llround(start * frequency) + c;
+        const long long year = whole / f;
+        const long long sub = whole % f + 1;
+        labels << (f == 12  ? QStringLiteral("%1-%2").arg(year).arg(sub, 2, 10, QLatin1Char('0'))
+                   : f == 4 ? QStringLiteral("%1 Q%2").arg(year).arg(sub)
+                   : f == 1 ? QString::number(year)
+                            : QStringLiteral("%1.%2").arg(year).arg(sub));
+    }
+    return labels;
 }
 
 int readGroupInt(const QString &file, const QString &path, const QString &name, int fallback)
