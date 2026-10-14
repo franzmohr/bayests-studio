@@ -23,9 +23,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #####################################################################
 # BayesTS
 #
-# Pulled in as a subproject and pinned to a commit, so a build of the studio
-# always names the sampler code it ships. For working on both at once, point
-# FetchContent at a local checkout instead of the pinned commit:
+# Pulled in as a subproject and pinned to a release tag, so a build of the
+# studio always names the sampler code it ships. For working on both at once,
+# point FetchContent at a local checkout instead of the pinned tag:
 #
 #   -DFETCHCONTENT_SOURCE_DIR_BAYESTS=<path-to-BayesTS>
 #
@@ -34,7 +34,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
-set(STUDIO_BAYESTS_GIT_TAG "main" CACHE STRING
+set(STUDIO_BAYESTS_GIT_TAG "v0.4.0" CACHE STRING
     "BayesTS commit or tag to build against; pin a release tag for shipping builds")
 
 FetchContent_Declare(BayesTS

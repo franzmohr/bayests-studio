@@ -384,7 +384,8 @@ open source under the BSD 3-Clause License, as BayesTS is; see
 ## Building
 
 BayesTS is pulled in as a CMake subproject (`FetchContent`), pinned by
-`STUDIO_BAYESTS_GIT_TAG`. Its dependencies (Armadillo, OpenBLAS, HDF5,
+`STUDIO_BAYESTS_GIT_TAG` to the release `v0.4.0`, the first with the hooks
+the studio needs to follow, stop and watch a run. Its dependencies (Armadillo, OpenBLAS, HDF5,
 HighFive) are found the same way the BayesTS build finds them; on top of
 those this needs Qt ≥ 6.5 and Qwt 6.3 built against Qt 6.
 
