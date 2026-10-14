@@ -62,6 +62,9 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const QString dir = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
+    // bvartools' e1, which test/structural_reference.R writes and a clone does
+    // not have: the checks that compare with it are skipped without it.
+    const bool haveE1 = !dir.isEmpty() && QFile::exists(dir + "/e1.csv");
 
     // -- The thesis workflow advances as the project fills.
     const Workflow *thesis = findWorkflow(QStringLiteral("thesis"));
@@ -149,11 +152,20 @@ int main(int argc, char **argv)
         }
         check(papers, "... the two textbook examples introductory, every other a paper reproduced");
         const DataSet d = prepareExampleData(e1->recipe, QString());
-        const DataSet ref = readDelimited(dir + "/e1.csv");   // bvartools' diff(log(e1)) * 100, to 1982Q4
-        check(d.length() == 75 && d.series() == 3 && d.periods.front() == QStringLiteral("1960 Q2") &&
-                  d.periods.back() == QStringLiteral("1978 Q4") && d.names == ref.names &&
-                  arma::approx_equal(d.values, ref.values.rows(0, 74), "absdiff", 1e-9),
-              "... 75 quarters of 100 x log differences, 1960Q2 to 1978Q4, as bvartools has them");
+        if (haveE1)
+        {
+            const DataSet ref = readDelimited(dir + "/e1.csv");   // bvartools' diff(log(e1)) * 100, to 1982Q4
+            check(d.length() == 75 && d.series() == 3 && d.periods.front() == QStringLiteral("1960 Q2") &&
+                      d.periods.back() == QStringLiteral("1978 Q4") && d.names == ref.names &&
+                      arma::approx_equal(d.values, ref.values.rows(0, 74), "absdiff", 1e-9),
+                  "... 75 quarters of 100 x log differences, 1960Q2 to 1978Q4, as bvartools has them");
+        }
+        else
+        {
+            check(d.length() == 75 && d.series() == 3 && d.periods.front() == QStringLiteral("1960 Q2") &&
+                      d.periods.back() == QStringLiteral("1978 Q4"),
+                  "... 75 quarters, 1960Q2 to 1978Q4 (bvartools' values not compared: no reference data)");
+        }
 
         QTemporaryDir t;
         DataRecipe bad;
@@ -663,6 +675,11 @@ int main(int argc, char **argv)
     // -- Multipliers of every exogenous variable, as the multipliers view's
     // matrix asks for them: invest, with income and cons weakly exogenous.
     // STUDIO_TEST_KEEP=<folder> keeps the model, to look at.
+    if (!haveE1)
+    {
+        std::printf("skip  multipliers of two exogenous variables: no reference data\n");
+    }
+    else
     {
         QTemporaryDir t;
         VarBuilderSpec x;
@@ -832,7 +849,7 @@ int main(int argc, char **argv)
         loadExtensions({});
     }
 
-    if (dir.isEmpty() || !QFile::exists(dir + "/e1.csv"))
+    if (!haveE1)
     {
         std::printf("skip  specifications and the methods paragraph: no reference data\n");
         std::printf(failures == 0 ? "PASS\n" : "%d FAILURES\n", failures);
