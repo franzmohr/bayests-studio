@@ -1,0 +1,111 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
+# Build the studio and run its tests.
+#
+# Windows only for now, on the MSYS2 UCRT64 toolchain a local build uses: it is
+# the platform the installers are built for, and pacman has everything the
+# studio needs -- Qt 6, Qwt built against it, Armadillo, OpenBLAS and HDF5.
+# Ubuntu's apt stops at Qt 6.4, below the 6.5 the studio asks for, so a Linux
+# job would have to install Qt and build Qwt itself.
+#
+# BayesTS comes in through FetchContent at the tag CMakeLists.txt pins
+# (STUDIO_BAYESTS_GIT_TAG), so this builds the sampler code a release ships.
+# Two tests stay unregistered here, as on any clone: structural.bvartools_reference
+# and horserace.end_to_end read test/reference, which bvartools generates and
+# which is not checked in. workflow.assistant skips the paper examples without
+# STUDIO_REPRODUCTIONS.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: windows / msys2 ucrt64 / ${{ matrix.build_type }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    env:
+      # Draws are reproducible from a seed only single-threaded; the tests that
+      # estimate set these themselves, and this covers the rest.
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # gcc-fortran named explicitly, as BayesTS's CI does: BayesTS's project()
+      # declares Fortran, and the toolchain group alone has left a job without
+      # gfortran before.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+          pacboy: >-
+            toolchain:p
+            gcc-fortran:p
+            cmake:p
+            ninja:p
+            armadillo:p
+            hdf5:p
+            openblas:p
+            qt6-base:p
+            qt6-svg:p
+            qwt-qt6:p
+
+      - name: Verify the toolchain
+        run: |
+          for tool in gcc g++ gfortran cmake ninja; do
+            command -v "$tool" >/dev/null || { echo "::error::$tool not on PATH"; exit 1; }
+            printf '%-9s %s\n' "$tool" "$($tool --version | head -1)"
+          done
+          pacman -Q mingw-w64-ucrt-x86_64-qt6-base mingw-w64-ucrt-x86_64-qwt-qt6
+
+      # HighFive is header-only and not in pacman. BayesTS pins the version it
+      # is built against in .github/highfive-version, so read that file at the
+      # tag this build fetches rather than repeating the pin here.
+      - name: Fetch HighFive
+        run: |
+          tag=$(sed -n 's/^set(STUDIO_BAYESTS_GIT_TAG "\([^"]*\)".*/\1/p' CMakeLists.txt)
+          test -n "$tag" || { echo "::error::no STUDIO_BAYESTS_GIT_TAG in CMakeLists.txt"; exit 1; }
+          ref=$(curl -fsSL "https://raw.githubusercontent.com/franzmohr/BayesTS/$tag/.github/highfive-version" | tr -d '[:space:]')
+          echo "BayesTS $tag, HighFive $ref"
+          git clone --depth 1 --branch "$ref" \
+            https://github.com/BlueBrain/HighFive.git "$RUNNER_TEMP/highfive"
+          test -f "$RUNNER_TEMP/highfive/include/highfive/H5File.hpp"
+
+      # Without a preset: the committed ones carry no paths, which live in the
+      # gitignored CMakeUserPresets.json. nvpl is BayesTS's optional NVIDIA
+      # BLAS, which the runner does not have.
+      - name: Configure
+        run: |
+          cmake -S . -B build/ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DHIGHFIVE_DIR="$RUNNER_TEMP/highfive" \
+            -DCMAKE_DISABLE_FIND_PACKAGE_nvpl=TRUE
+
+      - name: Build
+        run: cmake --build build/ci --parallel
+
+      - name: Test
+        run: ctest --test-dir build/ci --output-on-failure
