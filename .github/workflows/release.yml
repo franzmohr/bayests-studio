@@ -175,6 +175,7 @@ jobs:
           if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "bayests-studio.exe from the layout did not finish in 5 minutes." }
           if ($p.ExitCode -ne 0) { throw "bayests-studio.exe from the layout exited $($p.ExitCode)." }
           Write-Host "Both executables run from the layout alone."
+          exit 0   # the runner would otherwise report bayests's expected 2 as the step's result
 
       - name: Checksum the installers
         shell: bash
