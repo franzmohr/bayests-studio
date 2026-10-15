@@ -106,9 +106,11 @@ parts:
       "$qmake" qwt.pro
       make -j"$CRAFT_PARALLEL_BUILD_COUNT"
       make install
+      # Qwt's licence travels with the library; its make install does not copy it.
+      install -Dm644 COPYING "$CRAFT_PART_INSTALL/usr/share/doc/qwt/COPYING"
     prime:
       - usr/lib/libqwt*
-      - usr/doc/COPYING
+      - usr/share/doc/qwt/COPYING
 
   bayests-studio:
     after: [highfive, bayests-source, qwt]
