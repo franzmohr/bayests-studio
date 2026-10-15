@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "BayesTS Studio"
+abstract: >-
+  A desktop application for Bayesian vector autoregressive and vector error
+  correction models along the bvartools workflow: data, model, priors,
+  posterior draws and their application, without writing code. Impulse
+  responses, variance decompositions, sign and zero restrictions, historical
+  decompositions, spillovers and dynamic multipliers, for constant and
+  time-varying models. All estimation is done by BayesTS.
+type: software
+authors:
+  - family-names: Mohr
+    given-names: Franz X.
+    orcid: "https://orcid.org/0009-0003-8890-7781"
+version: 0.1.0
+date-released: "2026-10-15"
+doi: 10.5281/zenodo.23388738
+license: BSD-3-Clause
+repository-code: "https://github.com/franzmohr/bayests-studio"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23388738
+    description: Concept DOI, resolving to the latest release
+  - type: doi
+    value: 10.5281/zenodo.23388739
+    description: Version DOI for 0.1.0
+references:
+  - type: software
+    title: "BayesTS: Bayesian time series estimation in C++"
+    authors:
+      - family-names: Mohr
+        given-names: Franz X.
+        orcid: "https://orcid.org/0009-0003-8890-7781"
+    version: 0.4.0
+    doi: 10.5281/zenodo.23360540
+    repository-code: "https://github.com/franzmohr/BayesTS"
+keywords:
+  - Bayesian VAR
+  - vector autoregression
+  - vector error correction
+  - impulse responses
+  - sign restrictions
+  - time-varying parameters
+  - graphical user interface
+  - Qt

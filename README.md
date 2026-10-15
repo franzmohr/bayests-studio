@@ -404,3 +404,18 @@ checkout instead of the pinned commit.
 cmake --preset <your-preset>
 cmake --build build/<your-preset>
 ```
+
+## Citing BayesTS Studio
+
+[CITATION.cff](CITATION.cff) is the machine-readable version, and is what
+GitHub's "Cite this repository" box reads. Cite the version you used:
+
+> Mohr, F. X. (2026). *BayesTS Studio*. Version 0.1.0. Zenodo.
+> <https://doi.org/10.5281/zenodo.23388739>
+
+That is the **version** DOI, which resolves to the exact release. The
+**concept** DOI [10.5281/zenodo.23388738](https://doi.org/10.5281/zenodo.23388738)
+always resolves to the newest one. The numbers come from BayesTS, so cite the
+release the studio builds on as well -- 0.1.0 builds on BayesTS 0.4.0,
+<https://doi.org/10.5281/zenodo.23360540> -- and the methods behind the
+models you estimated.
