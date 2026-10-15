@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
+# Build the snap and check that what it installs starts.
+#
+# It uploads nothing to the Snap Store: that needs a store credential this
+# repository does not hold, so `snapcraft upload` is a manual step. The snap is
+# kept as an artifact of the run, to install with --dangerous; release.yml
+# calls this workflow for a tag and attaches it to the release.
+
+name: Snap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'snap/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'src/**'
+      - '.github/workflows/snap.yml'
+  pull_request:
+    paths:
+      - 'snap/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'src/**'
+      - '.github/workflows/snap.yml'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to build, for release.yml's tag.
+        type: string
+        required: true
+
+# Called from release.yml, github.ref is the caller's, so the group names the
+# ref being built, or a push to main would cancel the release's snap.
+concurrency:
+  group: snap-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: snap / core24 / amd64
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      # snapcraft.yaml names the BayesTS tag and the HighFive tag again, since a
+      # snap part has no copy of the repository to read them from. Nothing in
+      # the snap build would notice either disagreeing; it would build the
+      # studio against other sampler code than every other job. So both are
+      # compared here: BayesTS against STUDIO_BAYESTS_GIT_TAG, HighFive against
+      # the .github/highfive-version of that BayesTS tag.
+      - name: Check the pins agree with CMakeLists.txt
+        run: |
+          pinned=$(sed -n 's/^set(STUDIO_BAYESTS_GIT_TAG "\([^"]*\)".*/\1/p' CMakeLists.txt)
+          insnap=$(awk '/^  bayests-source:/{p=1} p && /source-tag:/{print $2; exit}' snap/snapcraft.yaml)
+          echo "BayesTS: CMakeLists.txt $pinned, snapcraft.yaml $insnap"
+          [ -n "$pinned" ] && [ "$pinned" = "$insnap" ] || {
+            echo "::error::the BayesTS tag differs between CMakeLists.txt and snap/snapcraft.yaml; bump both."
+            exit 1
+          }
+          hf=$(curl -fsSL "https://raw.githubusercontent.com/franzmohr/BayesTS/$pinned/.github/highfive-version" | tr -d '[:space:]')
+          hfsnap=$(awk '/^  highfive:/{p=1} p && /source-tag:/{print $2; exit}' snap/snapcraft.yaml)
+          echo "HighFive: BayesTS $pinned names $hf, snapcraft.yaml $hfsnap"
+          [ "$hf" = "$hfsnap" ] || {
+            echo "::error::snap/snapcraft.yaml's HighFive tag is not the one BayesTS $pinned is built against."
+            exit 1
+          }
+
+      - name: Build the snap
+        id: build
+        uses: snapcore/action-build@v1
+
+      # A snap that builds and does not start is the failure worth guarding
+      # against: a missing library makes no build error. bayests with no
+      # arguments prints its usage and exits 2; the studio opens every dialog,
+      # names any input without a tooltip and exits 0, on the offscreen
+      # platform because the runner has no display.
+      - name: Install and run it
+        run: |
+          sudo snap install --dangerous "${{ steps.build.outputs.snap }}"
+          set +e
+          snap run --shell bayests-studio -c '"$SNAP/usr/bin/bayests"' </dev/null >/dev/null 2>&1
+          status=$?
+          set -e
+          echo "bayests: exit=$status"
+          if [ "$status" -ne 2 ]; then
+            echo "::error::bayests inside the snap: expected exit 2, got $status. Libraries it cannot resolve:"
+            snap run --shell bayests-studio -c 'ldd "$SNAP/usr/bin/bayests"' </dev/null 2>&1 | grep -i "not found" || true
+            exit 1
+          fi
+          cp test/data/tooltips.csv "$HOME/tooltips.csv"
+          QT_QPA_PLATFORM=offscreen STUDIO_SMOKE_TOOLTIPS="$HOME/tooltips.csv" \
+            timeout 300 bayests-studio
+          echo "bayests-studio: exit=$?"
+
+      - name: Diagnose a studio that does not start
+        if: failure()
+        run: |
+          snap run --shell bayests-studio -c 'ldd "$SNAP/usr/bin/bayests-studio"' </dev/null 2>&1 | grep -i "not found" \
+            || echo "(no library reported missing)"
+
+      - name: Upload the snap
+        uses: actions/upload-artifact@v7
+        with:
+          name: bayests-studio-snap-amd64
+          path: ${{ steps.build.outputs.snap }}
+          if-no-files-found: error

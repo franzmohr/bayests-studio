@@ -76,20 +76,27 @@ endif()
 # makes no network connection, and a security review reads the package's file
 # list, so they are kept out. The D3D and DXC compilers are part of Windows
 # 10 and later and need not travel with it either.
-qt_generate_deploy_app_script(
-    TARGET bayests-studio
-    OUTPUT_SCRIPT _studio_deploy_script
-    NO_TRANSLATIONS
-    NO_COMPILER_RUNTIME
-    NO_UNSUPPORTED_PLATFORM_ERROR
-    DEPLOY_TOOL_OPTIONS
-        --no-network
-        --skip-plugin-types tls,networkinformation,generic
-        --no-system-d3d-compiler
-        --no-system-dxc-compiler
-        --no-opengl-sw
-)
-install(SCRIPT "${_studio_deploy_script}")
+#
+# A package that brings its own Qt turns this off: the snap takes Qt from the
+# kde-neon-6 runtime it connects to, and a second copy in the install tree
+# would be loaded instead of it.
+option(STUDIO_DEPLOY_QT "Copy Qt's libraries and plugins into the install tree" ON)
+if(STUDIO_DEPLOY_QT)
+    qt_generate_deploy_app_script(
+        TARGET bayests-studio
+        OUTPUT_SCRIPT _studio_deploy_script
+        NO_TRANSLATIONS
+        NO_COMPILER_RUNTIME
+        NO_UNSUPPORTED_PLATFORM_ERROR
+        DEPLOY_TOOL_OPTIONS
+            --no-network
+            --skip-plugin-types tls,networkinformation,generic
+            --no-system-d3d-compiler
+            --no-system-dxc-compiler
+            --no-opengl-sw
+    )
+    install(SCRIPT "${_studio_deploy_script}")
+endif()
 
 #####################################################################
 # Licence texts

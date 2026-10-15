@@ -1,0 +1,187 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
+# Snap package for BayesTS Studio.
+#
+#   snapcraft                       # build here (needs LXD)
+#   sudo snap install --dangerous ./bayests-studio_*.snap    # try it before uploading
+#   snapcraft upload --release=edge ./bayests-studio_*.snap
+#
+# Qt comes from the kde-neon-6 extension: the build compiles against its SDK
+# snap and the installed snap connects to its runtime (kf6-core24), which
+# carries Qt 6.8 or newer. core24's own archive stops at Qt 6.4, below the 6.5
+# the studio needs, and core26 is not out yet. Because the runtime is Qt, the
+# install step's Qt deploy is turned off (STUDIO_DEPLOY_QT=OFF): a copy in the
+# snap would be loaded instead of it.
+#
+# Qwt is built here against that same Qt -- no archive packages it for Qt 6 --
+# and BayesTS and HighFive come in as parts of their own rather than through
+# FetchContent, so the build needs no network once the sources are pulled.
+
+name: bayests-studio
+title: BayesTS Studio
+base: core24
+adopt-info: bayests-studio
+summary: Bayesian VAR and VEC models, from data to impulse responses
+description: |
+  BayesTS Studio is a desktop application for Bayesian vector autoregressive
+  (VAR) and vector error correction (VEC) models along the bvartools
+  workflow: data, model, priors, posterior draws and their application,
+  without writing code. Estimation is done by BayesTS.
+
+  Impulse responses and variance decompositions, identified by sign or by sign
+  and zero restrictions; historical decompositions; Diebold-Yilmaz spillovers;
+  dynamic multipliers; time-varying models at a chosen period. Every table and
+  figure exports.
+
+  Under strict confinement the studio reads and writes files below your home
+  directory; for data on another filesystem, connect removable-media:
+
+      sudo snap connect bayests-studio:removable-media
+license: BSD-3-Clause
+grade: stable
+confinement: strict
+
+platforms:
+  amd64:
+
+apps:
+  bayests-studio:
+    command: usr/bin/bayests-studio
+    desktop: usr/share/applications/bayests-studio.desktop
+    extensions: [kde-neon-6]
+    plugs:
+      - home
+      - removable-media
+
+parts:
+  # Header-only: staged for the build, kept out of the snap. The tag is the one
+  # the pinned BayesTS release names in its .github/highfive-version, which
+  # snap.yml checks.
+  highfive:
+    plugin: dump
+    source: https://github.com/BlueBrain/HighFive.git
+    source-type: git
+    source-tag: v3.0.0-beta2
+    source-depth: 1
+    stage:
+      - include/highfive
+    prime:
+      - -include
+
+  # The sampler code, at the tag CMakeLists.txt pins (STUDIO_BAYESTS_GIT_TAG),
+  # which snap.yml checks. Staged as a source tree for FetchContent to take in
+  # place of a download, and kept out of the snap.
+  bayests-source:
+    plugin: dump
+    source: https://github.com/franzmohr/BayesTS.git
+    source-type: git
+    source-tag: v0.4.0
+    source-depth: 1
+    organize:
+      '*': bayests-source/
+    stage:
+      - bayests-source
+    prime:
+      - -bayests-source
+
+  # Built with the SDK's qmake, against the runtime's Qt. The designer plugin
+  # and the examples are switched off, as in .github/scripts/build-qwt.sh,
+  # whose version and checksum this repeats.
+  qwt:
+    plugin: nil
+    source: https://downloads.sourceforge.net/project/qwt/qwt/6.3.0/qwt-6.3.0.tar.bz2
+    source-checksum: sha256/dcb085896c28aaec5518cbc08c0ee2b4e60ada7ac929d82639f6189851a6129a
+    override-build: |
+      qmake=$(command -v qmake6 || command -v qmake || ls /snap/kde-qt6-core24-sdk/current/usr/bin/qmake* 2>/dev/null | head -1)
+      test -n "$qmake" || { echo "no qmake for Qt 6 in the build environment" >&2; exit 1; }
+      echo "qmake: $qmake ($("$qmake" -query QT_VERSION))"
+      sed -i \
+        -e "s|^\(\s*QWT_INSTALL_PREFIX\s*=\).*|\1 $CRAFT_PART_INSTALL/usr|" \
+        -e 's|^\(\s*QWT_CONFIG\s*+=\s*QwtDesigner\)|#\1|' \
+        -e 's|^\(\s*QWT_CONFIG\s*+=\s*QwtExamples\)|#\1|' \
+        -e 's|^\(\s*QWT_CONFIG\s*+=\s*QwtPlayground\)|#\1|' \
+        -e 's|^\(\s*QWT_CONFIG\s*+=\s*QwtTests\)|#\1|' \
+        qwtconfig.pri
+      "$qmake" qwt.pro
+      make -j"$CRAFT_PARALLEL_BUILD_COUNT"
+      make install
+    prime:
+      - usr/lib/libqwt*
+      - usr/doc/COPYING
+
+  bayests-studio:
+    after: [highfive, bayests-source, qwt]
+    plugin: cmake
+    source: "."
+    source-type: local
+    override-pull: |
+      craftctl default
+      # A local source is copied wholesale, build/ included.
+      rm -rf build
+      declared=$(sed -n 's/^ *VERSION \([0-9][0-9.]*\).*/\1/p' CMakeLists.txt | head -1)
+      test -n "$declared" || { echo "no project(VERSION ...) in CMakeLists.txt" >&2; exit 1; }
+      echo "version from CMakeLists.txt: $declared"
+      craftctl set version="$declared"
+    cmake-parameters:
+      - -DCMAKE_INSTALL_PREFIX=/usr
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DHIGHFIVE_DIR=$CRAFT_STAGE
+      - -DFETCHCONTENT_SOURCE_DIR_BAYESTS=$CRAFT_STAGE/bayests-source
+      - -DQwt_ROOT=$CRAFT_STAGE/usr
+      - -DSTUDIO_DEPLOY_QT=OFF
+      - -DCMAKE_DISABLE_FIND_PACKAGE_nvpl=TRUE
+      # Qwt sits in usr/lib and the archive's libraries in usr/lib/<triplet>.
+      - -DCMAKE_INSTALL_RPATH=$ORIGIN/../lib:$ORIGIN/../lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
+    override-build: |
+      craftctl default
+      install -Dm644 "$CRAFT_PART_SRC/snap/local/bayests-studio.desktop" \
+        "$CRAFT_PART_INSTALL/usr/share/applications/bayests-studio.desktop"
+      install -Dm644 "$CRAFT_PART_SRC/src/app/icons/bayests-studio.svg" \
+        "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/scalable/apps/bayests-studio.svg"
+    build-packages:
+      - gfortran
+      - libarmadillo-dev
+      - libhdf5-dev
+      - libopenblas-dev
+      - pkg-config
+    # The libraries the two executables load beyond Qt, as BayesTS's own snap
+    # names them for core24; see its snapcraft.yaml for how to find the right
+    # sonames after a base bump.
+    stage-packages:
+      - libarmadillo12
+      - libhdf5-103-1t64
+      - libgfortran5
+      - libgomp1
+      - libopenblas0-pthread
+    prime:
+      - -usr/include
+      - -usr/lib/*/cmake
+      - -usr/lib/*/pkgconfig
+      - -usr/share/man
+    # Ubuntu's OpenBLAS installs its sonames in a subdirectory and links them
+    # into place from a maintainer script, which a snap never runs; without
+    # the links neither executable starts. BayesTS's snapcraft.yaml has the
+    # whole story; this is its fix.
+    override-prime: |
+      craftctl default
+      present=0
+      for impl in "$CRAFT_PRIME"/usr/lib/*/openblas-pthread; do
+        [ -d "$impl" ] || continue
+        libdir=$(dirname "$impl")
+        for so in "$impl"/lib*.so.*; do
+          [ -e "$so" ] || continue
+          soname=$(basename "$so")
+          if [ -e "$libdir/$soname" ] || [ -L "$libdir/$soname" ]; then
+            present=$((present + 1))
+            continue
+          fi
+          ln -s "openblas-pthread/$soname" "$libdir/$soname"
+          echo "linked $soname -> openblas-pthread/$soname"
+          present=$((present + 1))
+        done
+      done
+      if [ "$present" -eq 0 ]; then
+        echo "no BLAS sonames under \$CRAFT_PRIME/usr/lib/<triplet>/openblas-pthread/" >&2
+        exit 1
+      fi

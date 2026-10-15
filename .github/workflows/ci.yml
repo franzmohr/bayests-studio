@@ -3,11 +3,12 @@
 
 # Build the studio and run its tests.
 #
-# Windows only for now, on the MSYS2 UCRT64 toolchain a local build uses: it is
-# the platform the installers are built for, and pacman has everything the
-# studio needs -- Qt 6, Qwt built against it, Armadillo, OpenBLAS and HDF5.
-# Ubuntu's apt stops at Qt 6.4, below the 6.5 the studio asks for, so a Linux
-# job would have to install Qt and build Qwt itself.
+# Windows on the MSYS2 UCRT64 toolchain a local build uses: the platform the
+# installers are built for, where pacman has everything the studio needs -- Qt
+# 6, Qwt built against it, Armadillo, OpenBLAS and HDF5. Linux on Ubuntu 26.04,
+# whose apt has Qt 6.10 (24.04's stops at 6.4, below the 6.5 the studio asks
+# for); no distribution packages Qwt for Qt 6, so that job builds it,
+# .github/scripts/build-qwt.sh, and caches the result.
 #
 # BayesTS comes in through FetchContent at the tag CMakeLists.txt pins
 # (STUDIO_BAYESTS_GIT_TAG), so this builds the sampler code a release ships.
@@ -102,6 +103,67 @@ jobs:
           cmake -S . -B build/ci -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DHIGHFIVE_DIR="$RUNNER_TEMP/highfive" \
+            -DCMAKE_DISABLE_FIND_PACKAGE_nvpl=TRUE
+
+      - name: Build
+        run: cmake --build build/ci --parallel
+
+      - name: Test
+        run: ctest --test-dir build/ci --output-on-failure
+
+  linux:
+    name: ubuntu 26.04 / ${{ matrix.build_type }}
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+      # The UI tests open every dialog; the runner has no display.
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gfortran cmake ninja-build pkg-config \
+            qt6-base-dev qt6-base-dev-tools qmake6 qt6-svg-dev libgl-dev \
+            libarmadillo-dev libopenblas-dev libhdf5-dev
+
+      # Keyed on the script, which pins Qwt's version and checksum, and on the
+      # runner image, whose Qt it is built against.
+      - name: Cache Qwt
+        id: qwt
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/qwt
+          key: qwt-${{ runner.os }}-${{ hashFiles('.github/scripts/build-qwt.sh') }}-${{ env.ImageVersion }}
+
+      - name: Build Qwt
+        if: steps.qwt.outputs.cache-hit != 'true'
+        run: bash .github/scripts/build-qwt.sh "$RUNNER_TEMP/qwt"
+
+      - name: Fetch HighFive
+        run: |
+          tag=$(sed -n 's/^set(STUDIO_BAYESTS_GIT_TAG "\([^"]*\)".*/\1/p' CMakeLists.txt)
+          test -n "$tag" || { echo "::error::no STUDIO_BAYESTS_GIT_TAG in CMakeLists.txt"; exit 1; }
+          ref=$(curl -fsSL "https://raw.githubusercontent.com/franzmohr/BayesTS/$tag/.github/highfive-version" | tr -d '[:space:]')
+          echo "BayesTS $tag, HighFive $ref"
+          git clone --depth 1 --branch "$ref" \
+            https://github.com/BlueBrain/HighFive.git "$RUNNER_TEMP/highfive"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build/ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DHIGHFIVE_DIR="$RUNNER_TEMP/highfive" \
+            -DQwt_ROOT="$RUNNER_TEMP/qwt" \
             -DCMAKE_DISABLE_FIND_PACKAGE_nvpl=TRUE
 
       - name: Build

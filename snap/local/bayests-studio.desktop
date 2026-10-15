@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=BayesTS Studio
+GenericName=Bayesian time series models
+Comment=Bayesian VAR and VEC models, from data to impulse responses
+Exec=bayests-studio
+Icon=${SNAP}/usr/share/icons/hicolor/scalable/apps/bayests-studio.svg
+Terminal=false
+Categories=Education;Science;Math;Office;
+Keywords=Bayesian;VAR;VEC;econometrics;time series;impulse response;
