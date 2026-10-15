@@ -16,8 +16,11 @@ Dates are ISO. Versions follow the `project(VERSION)` in `CMakeLists.txt`.
 ## Unreleased
 
 New entries go here, under an `### Added`, `### Changed` or `### Fixed`
-heading, and move down into a version section when one is cut. The first
-release will be 0.1.0; everything below is what it carries.
+heading, and move down into a version section when one is cut.
+
+## 0.1.0 — 2026-10-15
+
+The first release, built against BayesTS v0.4.0.
 
 ### Added
 
