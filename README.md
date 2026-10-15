@@ -405,6 +405,46 @@ cmake --preset <your-preset>
 cmake --build build/<your-preset>
 ```
 
+### Linux
+
+What the Linux CI job does, on Ubuntu 26.04 or anything else with Qt ≥ 6.5
+(Ubuntu 24.04's apt stops at 6.4). No distribution packages Qwt for Qt 6, so
+it is built first, into a prefix of your choosing, by the script CI uses; it
+pins Qwt's version and checks the tarball's checksum.
+
+```bash
+sudo apt install build-essential gfortran cmake ninja-build pkg-config curl git \
+  qt6-base-dev qt6-base-dev-tools qmake6 qt6-svg-dev libgl-dev \
+  libarmadillo-dev libopenblas-dev libhdf5-dev
+.github/scripts/build-qwt.sh ~/.local/qwt
+```
+
+HighFive is header-only; clone it at the tag the pinned BayesTS release names
+in its `.github/highfive-version` (`v3.0.0-beta2` for v0.4.0):
+
+```bash
+git clone --depth 1 --branch v3.0.0-beta2 https://github.com/BlueBrain/HighFive.git ~/.local/highfive
+```
+
+Then configure with both, by hand or in a `CMakeUserPresets.json`:
+
+```bash
+cmake --preset release -DHIGHFIVE_DIR=$HOME/.local/highfive -DQwt_ROOT=$HOME/.local/qwt
+cmake --build build/release
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 ctest --test-dir build/release
+```
+
+The executable is `build/release/src/bayests-studio`, with `bayests` copied
+beside it. Without a display, set `QT_QPA_PLATFORM=offscreen` for the tests.
+
+The snap (`snap/snapcraft.yaml`) builds the same thing on core24 against the
+Qt of the kde-neon-6 runtime:
+
+```bash
+snapcraft
+sudo snap install --dangerous ./bayests-studio_*.snap
+```
+
 ## Citing BayesTS Studio
 
 [CITATION.cff](CITATION.cff) is the machine-readable version, and is what
