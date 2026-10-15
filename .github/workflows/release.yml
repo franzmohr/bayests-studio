@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Franz X. Mohr
 
-# Build the Windows installers for a tag and attach them to its release.
+# Build the Windows installers and the snap for a tag and attach them to its
+# release. The snap is built by snap.yml, which installs and runs it first; it
+# is attached as a file to install with --dangerous, and reaches the Snap Store
+# only by `snapcraft upload`, which needs a store login this repository does
+# not hold.
 #
 # The setup.exe is always built; it is signed when the repository has the
 # secrets below, and otherwise ships unsigned, which SmartScreen warns about.
@@ -196,6 +200,15 @@ jobs:
             dist/*.sha256
           if-no-files-found: error
 
+  # snap.yml builds, installs and runs the snap and uploads it as an artifact of
+  # this run; calling it keeps one copy of those steps.
+  snap:
+    name: package / snap
+    needs: check-tag
+    uses: ./.github/workflows/snap.yml
+    with:
+      ref: ${{ github.event.inputs.tag || github.ref }}
+
   # Upload to the tag's release when it has one, whether it was made in the web
   # page or drafted by an earlier run; otherwise draft one. A draft, not a
   # published release: its notes should be the tag's section of CHANGELOG.md,
@@ -204,15 +217,24 @@ jobs:
   publish:
     name: publish release
     if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
-    needs: package
+    needs: [package, snap]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: installers
           path: dist
+          merge-multiple: true
+
+      # The installers come with their checksums; the snap, from snapcraft,
+      # without one.
+      - name: Checksum the snap
+        working-directory: dist
+        run: |
+          for f in *.snap; do
+            if [ -e "$f" ]; then sha256sum "$f" > "$f.sha256"; fi
+          done
 
       - name: Attach the installers
         working-directory: dist
