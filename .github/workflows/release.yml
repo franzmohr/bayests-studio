@@ -1,0 +1,234 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
+# Build the Windows installers for a tag and attach them to its release.
+#
+# The setup.exe is always built; it is signed when the repository has the
+# secrets below, and otherwise ships unsigned, which SmartScreen warns about.
+# The MSIX is built only when it can be signed, since Windows refuses to
+# install an unsigned one:
+#
+#   STUDIO_PFX_BASE64    the code signing certificate, a .pfx, base64 encoded
+#   STUDIO_PFX_PASSWORD  its password
+#
+# For the MSIX the certificate's subject has to be the publisher the manifest
+# names, STUDIO_MSIX_PUBLISHER in packaging/msix/CMakeLists.txt.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build the installers for.
+        required: true
+      publish:
+        description: >-
+          Attach the installers to the tag's release, drafting one if it has none.
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  # The installers are named from project(VERSION), so a tag that disagrees
+  # with it would publish BayesTSStudio-0.1.0-setup.exe under v0.2.0. Checked
+  # before the build spends a quarter of an hour on it.
+  check-tag:
+    name: check tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # The tag reaches the script through the environment rather than being
+      # pasted into it, so a dispatched tag name cannot inject shell.
+      - name: Check the tag matches project(VERSION)
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          declared=$(sed -n 's/^ *VERSION \([0-9][0-9.]*\).*/\1/p' CMakeLists.txt | head -1)
+          echo "CMakeLists declares $declared, tag is $TAG"
+          if [ "$TAG" != "v$declared" ]; then
+            echo "::error::tag $TAG does not match project(VERSION $declared);" \
+                 "bump CMakeLists.txt or retag."
+            exit 1
+          fi
+
+  package:
+    name: package / windows
+    needs: check-tag
+    runs-on: windows-latest
+
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # The list ci.yml installs, plus NSIS for the setup.
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+          pacboy: >-
+            toolchain:p
+            gcc-fortran:p
+            cmake:p
+            ninja:p
+            armadillo:p
+            hdf5:p
+            openblas:p
+            qt6-base:p
+            qt6-svg:p
+            qwt-qt6:p
+            nsis:p
+
+      # As in ci.yml: HighFive at the version the pinned BayesTS tag names.
+      - name: Fetch HighFive
+        shell: msys2 {0}
+        run: |
+          tag=$(sed -n 's/^set(STUDIO_BAYESTS_GIT_TAG "\([^"]*\)".*/\1/p' CMakeLists.txt)
+          test -n "$tag" || { echo "::error::no STUDIO_BAYESTS_GIT_TAG in CMakeLists.txt"; exit 1; }
+          ref=$(curl -fsSL "https://raw.githubusercontent.com/franzmohr/BayesTS/$tag/.github/highfive-version" | tr -d '[:space:]')
+          echo "BayesTS $tag, HighFive $ref"
+          git clone --depth 1 --branch "$ref" \
+            https://github.com/BlueBrain/HighFive.git "$RUNNER_TEMP/highfive"
+
+      # An installer nobody has tested is not a release candidate.
+      - name: Configure, build and test
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build/release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHIGHFIVE_DIR="$RUNNER_TEMP/highfive" \
+            -DCMAKE_DISABLE_FIND_PACKAGE_nvpl=TRUE
+          cmake --build build/release --parallel
+          ctest --test-dir build/release --output-on-failure
+
+      # Written to a file only when the secret is set; every step after this
+      # one decides by whether the file exists.
+      - name: Restore the signing certificate
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.STUDIO_PFX_BASE64 }}
+        run: |
+          if ($env:PFX_BASE64) {
+            [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\signing.pfx", [Convert]::FromBase64String($env:PFX_BASE64))
+            Write-Host "A signing certificate is configured: the setup is signed and the MSIX built."
+          } else {
+            Write-Host "::warning::No STUDIO_PFX_BASE64 secret: the setup ships unsigned and no MSIX is built."
+          }
+
+      # The packaging scripts are PowerShell and call cmake --install, which
+      # runs windeployqt: both come from MSYS2, so its bin goes first on PATH.
+      - name: Build the setup
+        shell: pwsh
+        env:
+          STUDIO_PFX_PASSWORD: ${{ secrets.STUDIO_PFX_PASSWORD }}
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $env:PATH = "$env:MSYS2_ROOT\ucrt64\bin;$env:PATH"
+          $opts = @{ BuildDir = 'build\release'; OutDir = 'dist'; Makensis = "$env:MSYS2_ROOT\ucrt64\bin\makensis.exe" }
+          if (Test-Path "$env:RUNNER_TEMP\signing.pfx") { $opts.PfxFile = "$env:RUNNER_TEMP\signing.pfx" }
+          & packaging\nsis\build-setup.ps1 @opts
+
+      - name: Build the MSIX
+        shell: pwsh
+        env:
+          STUDIO_PFX_PASSWORD: ${{ secrets.STUDIO_PFX_PASSWORD }}
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          if (-not (Test-Path "$env:RUNNER_TEMP\signing.pfx")) { Write-Host "Skipped: no certificate."; exit 0 }
+          $env:PATH = "$env:MSYS2_ROOT\ucrt64\bin;$env:PATH"
+          & packaging\msix\build-msix.ps1 -BuildDir build\release -OutDir dist -PfxFile "$env:RUNNER_TEMP\signing.pfx"
+
+      # The runner has every DLL under MSYS2's bin, so a test of the build tree
+      # would pass whatever the installer forgot. The layout the setup packed is
+      # run here with nothing but Windows on PATH: bayests prints its usage and
+      # exits 2, and the studio opens every dialog on the windows platform
+      # plugin -- the one the layout ships, not the offscreen one the tests use.
+      - name: Run what the setup installs, alone
+        shell: pwsh
+        run: |
+          $layout = (Resolve-Path 'build\release\nsis\layout').Path
+          $env:PATH = "$env:SystemRoot\system32;$env:SystemRoot"
+          & "$layout\bin\bayests.exe" 2>$null | Out-Null
+          if ($LASTEXITCODE -ne 2) { throw "bayests.exe from the layout exited $LASTEXITCODE, not 2: a DLL is missing." }
+          $env:STUDIO_SMOKE_TOOLTIPS = (Resolve-Path 'test\data\tooltips.csv').Path
+          $env:STUDIO_SETTINGS = "$env:RUNNER_TEMP\smoke-settings"
+          $p = Start-Process "$layout\bin\bayests-studio.exe" -NoNewWindow -PassThru
+          $null = $p.Handle   # without it, ExitCode stays empty after the wait
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "bayests-studio.exe from the layout did not finish in 5 minutes." }
+          if ($p.ExitCode -ne 0) { throw "bayests-studio.exe from the layout exited $($p.ExitCode)." }
+          Write-Host "Both executables run from the layout alone."
+
+      - name: Checksum the installers
+        shell: bash
+        working-directory: dist
+        run: |
+          for f in *.exe *.msix; do
+            if [ -e "$f" ]; then sha256sum "$f" > "$f.sha256"; fi
+          done
+          ls -l
+
+      - name: Collect the installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: installers
+          path: |
+            dist/*.exe
+            dist/*.msix
+            dist/*.sha256
+          if-no-files-found: error
+
+  # Upload to the tag's release when it has one, whether it was made in the web
+  # page or drafted by an earlier run; otherwise draft one. A draft, not a
+  # published release: its notes should be the tag's section of CHANGELOG.md,
+  # and publishing is a human's call. gh comes preinstalled on the runner, so
+  # no third-party action holds the write token.
+  publish:
+    name: publish release
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: installers
+          path: dist
+
+      - name: Attach the installers
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          ls -l
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; uploading to it."
+            gh release upload "$TAG" * --clobber
+          else
+            echo "No release for $TAG; drafting one."
+            gh release create "$TAG" * \
+              --draft \
+              --verify-tag \
+              --title "BayesTS Studio $TAG" \
+              --notes "Draft. Replace this with the $TAG section of CHANGELOG.md before publishing."
+          fi
