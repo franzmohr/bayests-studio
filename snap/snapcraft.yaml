@@ -131,16 +131,25 @@ parts:
       - -DQwt_ROOT=$CRAFT_STAGE/usr
       - -DSTUDIO_DEPLOY_QT=OFF
       - -DCMAKE_DISABLE_FIND_PACKAGE_nvpl=TRUE
-      # Qwt sits in usr/lib and the archive's libraries in usr/lib/<triplet>.
-      - -DCMAKE_INSTALL_RPATH=$ORIGIN/../lib:$ORIGIN/../lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
+    # Qwt sits in usr/lib and the archive's libraries in usr/lib/<triplet>: the
+    # executables find both through an RPATH relative to themselves. Set here
+    # rather than as CMAKE_INSTALL_RPATH, since snapcraft's build script runs
+    # under `set -u` and would expand $ORIGIN in a cmake-parameter as a shell
+    # variable.
     override-build: |
       craftctl default
+      for exe in bayests-studio bayests; do
+        patchelf --set-rpath "\$ORIGIN/../lib:\$ORIGIN/../lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR" \
+          "$CRAFT_PART_INSTALL/usr/bin/$exe"
+        echo "$exe: $(patchelf --print-rpath "$CRAFT_PART_INSTALL/usr/bin/$exe")"
+      done
       install -Dm644 "$CRAFT_PART_SRC/snap/local/bayests-studio.desktop" \
         "$CRAFT_PART_INSTALL/usr/share/applications/bayests-studio.desktop"
       install -Dm644 "$CRAFT_PART_SRC/src/app/icons/bayests-studio.svg" \
         "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/scalable/apps/bayests-studio.svg"
     build-packages:
       - gfortran
+      - patchelf
       - libarmadillo-dev
       - libhdf5-dev
       - libopenblas-dev
