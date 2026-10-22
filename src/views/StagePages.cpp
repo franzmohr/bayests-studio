@@ -10,8 +10,10 @@
 #include "views/LiveBandsView.h"
 #include "views/OverviewView.h"
 #include "views/SeriesPlot.h"
+#include "views/FactorView.h"
 #include "views/HistoricalDecompositionView.h"
 #include "views/MultipliersView.h"
+#include "views/TrendCycleView.h"
 #include "views/SpilloverView.h"
 #include "views/SummaryPlotView.h"
 #include "views/TableExport.h"
@@ -679,6 +681,11 @@ ApplicationPage::ApplicationPage(QWidget *parent) : StagePage(parent)
     tabs_->addTab(multipliers_, tr("Multipliers"));
     historical_ = new HistoricalDecompositionView;
     tabs_->addTab(historical_, tr("Historical decomposition"));
+    // Appended: the smoke runs pick the tabs above by index.
+    factor_ = new FactorView;
+    tabs_->addTab(factor_, tr("Factors"));
+    trendCycle_ = new TrendCycleView;
+    tabs_->addTab(trendCycle_, tr("Trend and cycle"));
     tabs_->setObjectName(QStringLiteral("applicationTabs"));
     layout->addWidget(tabs_, 1);
 }
@@ -719,6 +726,8 @@ void ApplicationPage::showOnly(Panel panel)
                             : panel == Panel::Structural ? static_cast<QWidget *>(structural_)
                             : panel == Panel::Spillover  ? static_cast<QWidget *>(spillover_)
                             : panel == Panel::Multipliers ? static_cast<QWidget *>(multipliers_)
+                            : panel == Panel::Factors    ? static_cast<QWidget *>(factor_)
+                            : panel == Panel::TrendCycle ? static_cast<QWidget *>(trendCycle_)
                                                          : tabs_->widget(0));
 }
 
@@ -738,6 +747,28 @@ void ApplicationPage::showModel(const ModelContext &context)
     spillover_->setModel(wanted(Panel::Spillover) ? drawn : QString());
     multipliers_->setModel(wanted(Panel::Multipliers) ? drawn : QString());
     historical_->setModel(wanted(Panel::Historical) ? drawn : QString());
+    factor_->setModel(wanted(Panel::Factors) ? drawn : QString());
+    trendCycle_->setModel(wanted(Panel::TrendCycle) ? drawn : QString());
+
+    // As a page of tabs, only those that apply to the model: the VAR and VEC
+    // analyses, the factors or trend and cycle. Forecasting applies to all.
+    if (!only_)
+    {
+        const bool factor = r.factors > 0 || r.algorithm.startsWith(QLatin1String("Favar")) ||
+                            r.algorithm.startsWith(QLatin1String("Dfm"));
+        const bool uc = r.algorithm.startsWith(QLatin1String("Uc"));
+        const bool var = !factor && !uc;
+        for (QWidget *w : std::initializer_list<QWidget *>{structural_, spillover_, multipliers_, historical_})
+        {
+            tabs_->setTabVisible(tabs_->indexOf(w), var || context.file.isEmpty());
+        }
+        tabs_->setTabVisible(tabs_->indexOf(factor_), factor);
+        tabs_->setTabVisible(tabs_->indexOf(trendCycle_), uc);
+        if (!tabs_->isTabVisible(tabs_->currentIndex()))
+        {
+            tabs_->setCurrentIndex(factor ? tabs_->indexOf(factor_) : uc ? tabs_->indexOf(trendCycle_) : 0);
+        }
+    }
 
     const QSignalBlocker block(variable_);
     variable_->clear();
@@ -745,6 +776,17 @@ void ApplicationPage::showModel(const ModelContext &context)
     for (int i = 0; i < r.k; ++i)
     {
         variable_->addItem(i < names.size() ? names[i] : tr("Variable %1").arg(i + 1));
+    }
+    // A FAVAR forecasts its observed factors too, after the panel.
+    if (!context.file.isEmpty() && r.algorithm.startsWith(QLatin1String("Favar")))
+    {
+        const int observed = readGroupInt(context.file, QStringLiteral("/model"), QStringLiteral("n_obs_factors"), 0);
+        const QStringList obsNames =
+            readStringsAttribute(context.file, QStringLiteral("/data/train/f_obs"), QStringLiteral("variables"));
+        for (int i = 0; i < observed; ++i)
+        {
+            variable_->addItem(i < obsNames.size() ? obsNames[i] : tr("Observed factor %1").arg(i + 1));
+        }
     }
     showVariable(0);
 }
@@ -774,8 +816,22 @@ bool ApplicationPage::drawForecast(int variable)
     try
     {
         const bool vec = r.algorithm.startsWith(QLatin1String("Vec"));
+        // A FAVAR's forecast carries its observed factors after the panel,
+        // k + n_obs_factors per horizon.
+        const int observed = r.algorithm.startsWith(QLatin1String("Favar"))
+                                 ? readGroupInt(context_.file, QStringLiteral("/model"), QStringLiteral("n_obs_factors"), 0)
+                                 : 0;
+        const auto width = static_cast<std::size_t>(r.k + observed);
         std::vector<double> y;
-        if (vec)
+        if (variable >= r.k)
+        {
+            const Matrix fo = readMatrix(context_.file, QStringLiteral("/data/train/f_obs"));   // (n_obs, tt)
+            for (std::size_t t = 0; t < fo.cols; ++t)
+            {
+                y.push_back(fo.at(static_cast<std::size_t>(variable - r.k), t));
+            }
+        }
+        else if (vec)
         {
             // A VEC is estimated in differences and forecast in levels. Its
             // levels are in the file all the same: column t of /data/train/w
@@ -798,15 +854,15 @@ bool ApplicationPage::drawForecast(int variable)
         const std::size_t shown = std::min<std::size_t>(y.size(), static_cast<std::size_t>(4 * r.horizon));
         const std::vector<double> tail(y.end() - static_cast<std::ptrdiff_t>(shown), y.end());
 
-        // Forecasts are stacked by period like the data: row h*k + i.
+        // Forecasts are stacked by period like the data: row h*width + i.
         const Matrix f = readMatrix(context_.file, QStringLiteral("/posterior/forecast/forecasts"));
-        const std::size_t horizon = f.rows / static_cast<std::size_t>(r.k);
+        const std::size_t horizon = f.rows / width;
         std::vector<std::vector<double>> draws(horizon, std::vector<double>(f.cols));
         for (std::size_t h = 0; h < horizon; ++h)
         {
             for (std::size_t d = 0; d < f.cols; ++d)
             {
-                draws[h][d] = f.at(h * static_cast<std::size_t>(r.k) + static_cast<std::size_t>(variable), d);
+                draws[h][d] = f.at(h * width + static_cast<std::size_t>(variable), d);
             }
         }
         // The history ends at the last sample period, x = y.size() - 1 for a

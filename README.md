@@ -3,12 +3,13 @@
 **Homepage, screenshots and downloads:
 <https://franzmohr.github.io/bayests-studio/>**
 
-A desktop application for specifying, estimating and analysing the Bayesian
-time series models of [BayesTS](https://github.com/franzmohr/BayesTS): VARs,
-VECs, dynamic factor models, FAVARs and unobserved components models, with
-constant or time-varying coefficients.
+A desktop application for the Bayesian time series models of
+[BayesTS](https://github.com/franzmohr/BayesTS). It specifies VARs and VECs,
+with constant or time-varying coefficients, in its model builder; and it
+estimates and analyses those and the dynamic factor models, FAVARs and
+unobserved components models a model file describes.
 
-Built with Qt 6 Widgets and Qwt; runs on Windows, macOS and Linux. Free and
+Built with Qt 6 Widgets and Qwt; built and tested on Windows and Linux. Free and
 open source under the BSD 3-Clause License, as BayesTS is; see
 [LICENSING.md](LICENSING.md) for the licences of the components it uses.
 
@@ -369,6 +370,28 @@ open source under the BSD 3-Clause License, as BayesTS is; see
     and Primiceri's (2022) data for the horse race. The papers the studio
     cannot yet implement step by step -- ESRB (2026), Lenza and Primiceri's
     hierarchical prior and scenarios -- are listed with what they need.
+
+- **Factor models** (Application › Factors, for the four `Dfm*` models and
+  `FavarNormalWishart`): each unobserved factor's path with 68 % / 90 %
+  bands; the loadings, posterior median and 90 % interval; the share of each
+  series' variance the factors explain, R² of its common component over the
+  sample; and the impulse responses of the panel -- and a FAVAR's observed
+  factors -- to the state equation's shocks: one standard deviation of a
+  DFM's independent factor innovations, or a FAVAR's Choleski shocks with
+  the observed factors ordered last (Bernanke, Boivin and Eliasz 2005). A
+  model whose loadings, transition or factor variances move is read at a
+  period chosen by its date. A FAVAR's forecast shows its observed factors
+  too.
+- **Trend and cycle** (Application › Trend and cycle, for the four `Uc*`
+  models): each series with its trend, and its cycle -- the output gap of a
+  GDP series -- with bands over the sample, and both at a chosen period in a
+  table. The cycle is the model's own draws beside an irregular component,
+  and the data less the trend otherwise.
+
+  The VAR and VEC analyses are hidden for these models, and the workbench
+  folds the panes that do not apply to the model selected.
+  `test/factor_test.cpp` checks every number on files whose draws are chosen
+  by hand.
 
 ## Roadmap
 

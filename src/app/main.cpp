@@ -658,6 +658,20 @@ int main(int argc, char *argv[])
         return app.exec();
     }
 
+    // Development aid: STUDIO_SMOKE_GRAB=<png> shows the model given on the
+    // command line in the workbench on a wide screen, saves a capture once its
+    // panes have computed, and quits -- which panes a model's family folds.
+    if (const QByteArray grab = qgetenv("STUDIO_SMOKE_GRAB"); !grab.isEmpty())
+    {
+        window.resize(2560, 1300);
+        window.setWorkbench(true);
+        QTimer::singleShot(10000, &window, [&window, grab]() {
+            window.grab().save(QString::fromLocal8Bit(grab));
+            QCoreApplication::exit(0);
+        });
+        return app.exec();
+    }
+
     // Development aid, not a feature: STUDIO_SMOKE_CAPTURE=<prefix> runs every
     // stage of the file given and saves window captures during and after the
     // run as <prefix>-<n>.png, then quits with the run's status. Works under
@@ -742,6 +756,30 @@ int main(int argc, char *argv[])
                     window.grab().save(QStringLiteral("%1-volatility.png").arg(QString::fromLocal8Bit(prefix)));
                 }
                 window.showStage(studio::StageId::Application);
+            }
+            // A factor or UC model's analysis, each of its tabs once computed.
+            if (auto *app = stageTabs(window, QStringLiteral("applicationTabs")))
+            {
+                window.showStage(studio::StageId::Application);
+                for (int i = 0; i < app->count(); ++i)
+                {
+                    const QString name = app->tabText(i) == QObject::tr("Factors")           ? QStringLiteral("factor")
+                                         : app->tabText(i) == QObject::tr("Trend and cycle") ? QStringLiteral("trendcycle")
+                                                                                              : QString();
+                    if (name.isEmpty() || !app->isTabVisible(i))
+                    {
+                        continue;
+                    }
+                    app->setCurrentIndex(i);
+                    settle(6000);
+                    auto *inner = app->widget(i)->findChild<QTabWidget *>();
+                    for (int j = 0; inner != nullptr && j < inner->count(); ++j)
+                    {
+                        inner->setCurrentIndex(j);
+                        settle(1500);
+                        window.grab().save(QStringLiteral("%1-%2-%3.png").arg(QString::fromLocal8Bit(prefix), name).arg(j + 1));
+                    }
+                }
             }
             if (auto *app = stageTabs(window, QStringLiteral("applicationTabs")))
             {

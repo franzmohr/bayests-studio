@@ -174,7 +174,9 @@ private:
     QString raceFolder_;
 };
 
-/// 5. Application: forecasting, structural analysis and spillovers.
+/// 5. Application: forecasting, structural analysis and spillovers for a VAR
+/// or VEC; the factors for a factor model; trend and cycle for an unobserved
+/// components model. The tabs that do not apply to the model are hidden.
 class ApplicationPage : public StagePage
 {
     Q_OBJECT
@@ -187,7 +189,7 @@ public:
     /// One of the page's tabs alone, without the title or the tab bar: a
     /// panel of the workbench. Only that panel is computed then -- the
     /// workbench holds a page per panel, and the others' work would be lost.
-    enum class Panel { Forecasting, Structural, Historical, Spillover, Multipliers };
+    enum class Panel { Forecasting, Structural, Historical, Spillover, Multipliers, Factors, TrendCycle };
     void showOnly(Panel panel);
 
 signals:
@@ -209,6 +211,8 @@ private:
     SpilloverView *spillover_;
     MultipliersView *multipliers_;
     HistoricalDecompositionView *historical_;
+    class FactorView *factor_;
+    class TrendCycleView *trendCycle_;
     bool only_ = false;
     Panel panel_ = Panel::Forecasting;
 };
