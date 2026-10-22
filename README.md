@@ -1,5 +1,8 @@
 # BayesTS Studio
 
+**Homepage, screenshots and downloads:
+<https://franzmohr.github.io/bayests-studio/>**
+
 A desktop application for specifying, estimating and analysing the Bayesian
 time series models of [BayesTS](https://github.com/franzmohr/BayesTS): VARs,
 VECs, dynamic factor models, FAVARs and unobserved components models, with
