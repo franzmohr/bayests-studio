@@ -6,10 +6,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BayesTS Studio</title>
-<meta name="description" content="A desktop application for Bayesian VAR and VEC models along the bvartools workflow: data, model, priors, posterior draws and their application, without writing code.">
+<meta name="description" content="A desktop application for Bayesian VAR, VEC, dynamic factor, FAVAR and unobserved components models along the bvartools workflow: data, model, priors, posterior draws and their application, without writing code.">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta property="og:title" content="BayesTS Studio">
-<meta property="og:description" content="Bayesian VAR and VEC models, from data to impulse responses, without writing code.">
+<meta property="og:description" content="Bayesian VARs, VECs, factor models and unobserved components, from data to impulse responses, without writing code.">
 <meta property="og:image" content="https://franzmohr.github.io/bayests-studio/screenshots/workbench.jpg">
 <style>
   :root {
@@ -127,8 +127,9 @@
 
 <main>
   <div class="wrap hero">
-    <h1>Bayesian VAR and VEC models,<br>from data to impulse responses.</h1>
-    <p class="lead">A desktop application that follows the bvartools workflow — data, model,
+    <h1>Bayesian time series models,<br>from data to impulse responses.</h1>
+    <p class="lead">A desktop application for VARs, VECs, dynamic factor models, FAVARs and
+      unobserved components models that follows the bvartools workflow — data, model,
       priors, posterior draws and their application — without writing code. Every
       draw comes from <a href="https://github.com/franzmohr/BayesTS">BayesTS</a>, a C++ library
       of Gibbs samplers.</p>
@@ -152,7 +153,8 @@
           <h3>Build a model</h3>
           <p>The six Gaussian VARs and the six Gaussian VECs, with weakly exogenous variables,
             deterministic terms, BVS and SSVS variable selection, and the volatility break of
-            Lenza and Primiceri (2022).</p>
+            Lenza and Primiceri (2022). Factor and unobserved components models are opened
+            from a BayesTS model file.</p>
         </div>
         <div class="card">
           <h3>Identify shocks</h3>
@@ -169,6 +171,17 @@
           <h3>Time-varying models</h3>
           <p>Coefficients, covariances, responses and decompositions at any period, chosen by
             its date, and a state variance explorer that shows what the setting does.</p>
+        </div>
+        <div class="card">
+          <h3>Factor models</h3>
+          <p>For dynamic factor models and FAVARs: the factors' paths, the loadings, the share
+            of each series the factors explain, and impulse responses of the whole panel —
+            a FAVAR's identified as in Bernanke, Boivin and Eliasz (2005).</p>
+        </div>
+        <div class="card">
+          <h3>Trend and cycle</h3>
+          <p>For unobserved components models: each series with its trend, and its cycle —
+            the output gap of a GDP series — with bands over the sample.</p>
         </div>
         <div class="card">
           <h3>Take the results with you</h3>
