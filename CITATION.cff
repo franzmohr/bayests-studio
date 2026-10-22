@@ -27,8 +27,8 @@ identifiers:
     value: 10.5281/zenodo.23388738
     description: Concept DOI, resolving to the latest release
   - type: doi
-    value: 10.5281/zenodo.23388739
-    description: Version DOI for 0.1.0
+    value: 10.5281/zenodo.23575469
+    description: Version DOI for 0.2.0
 references:
   - type: software
     title: "BayesTS: Bayesian time series estimation in C++"
