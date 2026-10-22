@@ -13,6 +13,8 @@ add_library(studio_engine STATIC
     engine/Criteria.h
     engine/DataSet.cpp
     engine/DataSet.h
+    engine/FactorAnalysis.cpp
+    engine/FactorAnalysis.h
     engine/HistoricalDecomposition.cpp
     engine/HistoricalDecomposition.h
     engine/Examples.cpp
@@ -42,6 +44,8 @@ add_library(studio_engine STATIC
     engine/Structural.h
     engine/TableFormat.cpp
     engine/TableFormat.h
+    engine/TrendCycle.cpp
+    engine/TrendCycle.h
     engine/VarBuilder.cpp
     engine/VarBuilder.h
     engine/Workflow.cpp
@@ -80,10 +84,14 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/AssistantDialogs.h
     views/AssistantPanel.cpp
     views/AssistantPanel.h
+    views/BandPlot.cpp
+    views/BandPlot.h
     views/BuilderDialog.cpp
     views/BuilderDialog.h
     views/DiagnosticsView.cpp
     views/DiagnosticsView.h
+    views/FactorView.cpp
+    views/FactorView.h
     views/FigureExport.cpp
     views/FigureExport.h
     views/HistoricalDecompositionView.cpp
@@ -132,6 +140,8 @@ qt_add_executable(bayests-studio WIN32 MACOSX_BUNDLE
     views/SpilloverView.h
     views/SummaryPlotView.cpp
     views/SummaryPlotView.h
+    views/TrendCycleView.cpp
+    views/TrendCycleView.h
     views/StructuralView.cpp
     views/StructuralView.h
     views/StagePages.h

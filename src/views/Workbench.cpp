@@ -4,6 +4,7 @@
 #include "views/Workbench.h"
 
 #include "views/BuilderDialog.h"
+#include "engine/FactorAnalysis.h"
 #include "engine/ModelFileTree.h"
 #include "views/FoldablePanes.h"
 #include "views/SeriesPlot.h"
@@ -12,6 +13,7 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QGuiApplication>
+#include <QHash>
 #include <QScreen>
 #include <QSettings>
 #include <QLabel>
@@ -151,6 +153,14 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
         multiplierPane->setContentLimit(height);
         relayoutColumns();
     });
+    // A factor model's and an unobserved components model's analyses, in the
+    // column of the VAR's structural analysis: a model has one or the other.
+    factors_ = new ApplicationPage;
+    factors_->showOnly(ApplicationPage::Panel::Factors);
+    auto *factorsPane = new FoldPane(QStringLiteral("factors"), tr("Factors"), factors_);
+    trendCycle_ = new ApplicationPage;
+    trendCycle_->showOnly(ApplicationPage::Panel::TrendCycle);
+    auto *trendCyclePane = new FoldPane(QStringLiteral("trendcycle"), tr("Trend and cycle"), trendCycle_);
     // Settings only, never draws: the state variance view, whose runs are
     // posteriors, stays a tab of the posterior column.
     auto *priorPane = new FoldPane(QStringLiteral("priors"), tr("Priors"), priorScroll);
@@ -167,7 +177,7 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
     // and forecasts.
     columns_ = {new FoldColumn({modPane, dataPane}, 2, 440, {3, 2}), new FoldColumn({priorPane}, 2, 440, {1}),
                 new FoldColumn({posteriorPane}, 3, 0, {1}),
-                new FoldColumn({responsesPane, historicalPane}, 3, 0, {1, 1}),
+                new FoldColumn({responsesPane, historicalPane, factorsPane, trendCyclePane}, 3, 0, {1, 1, 2, 2}),
                 new FoldColumn({spilloverPane, multiplierPane, forecastsPane}, 3, 0, {1, 1, 1})};
     for (FoldColumn *c : columns_)
     {
@@ -180,14 +190,12 @@ Workbench::Workbench(QtReporter *reporter, QWidget *parent) : QWidget(parent)
         {
             panes_.push_back(pane);
             connect(pane, &FoldPane::focusRequested, this, [this, pane]() { focusPane(pane); });
-            if (pane->id() == QLatin1String("multipliers"))
-            {
-                // Folded or unfolded by hand: the user's, from now on.
-                connect(pane, &FoldPane::foldToggled, this, [this]() { multipliersAutoFolded_ = false; });
-            }
+            // Folded or unfolded by hand: the user's, from now on.
+            connect(pane, &FoldPane::foldToggled, this, [this, pane]() { autoFolded_.remove(pane->id()); });
         }
     }
     restoreFolds();
+    foldForModel(QString());
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -275,39 +283,56 @@ void Workbench::setFoldedPanes(const QStringList &ids)
     saveFolds();
 }
 
-void Workbench::foldMultipliersFor(const QString &file)
+void Workbench::foldForModel(const QString &file)
 {
-    FoldPane *pane = nullptr;
-    for (FoldPane *p : panes_)
-    {
-        if (p->id() == QLatin1String("multipliers"))
-        {
-            pane = p;
-        }
-    }
     // Once per model: a run ending refreshes the same one, and a pane the
-    // user unfolded stays so.
-    if (pane == nullptr || file == multipliersFile_)
+    // user folded or unfolded stays so.
+    if (foldsDecided_ && file == foldedFor_)
     {
         return;
     }
-    multipliersFile_ = file;
+    foldsDecided_ = true;
+    foldedFor_ = file;
+    // No model yet counts as a VAR without exogenous variables: the factor
+    // and UC panes folded until a model needs them.
+    const QString algorithm = file.isEmpty() ? QString() : modelAlgorithm(file);
+    const bool factor = algorithm.startsWith(QLatin1String("Dfm")) || algorithm.startsWith(QLatin1String("Favar"));
+    const bool uc = algorithm.startsWith(QLatin1String("Uc"));
+    const bool var = !factor && !uc;
     // Dynamic multipliers need weakly exogenous variables, /model/m of them.
     const bool exogenous = !file.isEmpty() && readGroupInt(file, QStringLiteral("/model"), QStringLiteral("m"), 0) > 0;
-    if (!exogenous && !pane->isFolded())
+    const QHash<QString, bool> applies = {
+        {QStringLiteral("responses"), var},  {QStringLiteral("historical"), var},
+        {QStringLiteral("spillovers"), var}, {QStringLiteral("multipliers"), var && exogenous},
+        {QStringLiteral("factors"), factor}, {QStringLiteral("trendcycle"), uc},
+    };
+    bool changed = false;
+    for (FoldPane *pane : panes_)
     {
-        pane->setFolded(true);
-        multipliersAutoFolded_ = true;
-        relayoutColumns();
-    }
-    else if (exogenous && multipliersAutoFolded_)
-    {
-        multipliersAutoFolded_ = false;
-        if (pane->isFolded())
+        const auto it = applies.constFind(pane->id());
+        if (it == applies.constEnd())
         {
-            pane->setFolded(false);
-            relayoutColumns();
+            continue;
         }
+        if (!it.value() && !pane->isFolded())
+        {
+            pane->setFolded(true);
+            autoFolded_.insert(pane->id());
+            changed = true;
+        }
+        else if (it.value() && autoFolded_.contains(pane->id()))
+        {
+            autoFolded_.remove(pane->id());
+            if (pane->isFolded())
+            {
+                pane->setFolded(false);
+                changed = true;
+            }
+        }
+    }
+    if (changed)
+    {
+        relayoutColumns();
     }
 }
 
@@ -316,7 +341,7 @@ void Workbench::saveFolds()
     QStringList folded;
     for (const FoldPane *p : panes_)
     {
-        if (p->isFolded() && !(multipliersAutoFolded_ && p->id() == QLatin1String("multipliers")))
+        if (p->isFolded() && !autoFolded_.contains(p->id()))
         {
             folded << p->id();
         }
@@ -457,10 +482,12 @@ void Workbench::showModel(const ModelContext &context)
     posterior_->showModel(context);
     responses_->showModel(context);
     forecasts_->showModel(context);
-    foldMultipliersFor(context.file);
+    foldForModel(context.file);
     historical_->showModel(context);
     spillovers_->showModel(context);
     multipliers_->showModel(context);
+    factors_->showModel(context);
+    trendCycle_->showModel(context);
 
     // The form follows the selected model when the builder wrote it: its own
     // data, its own settings. Only on a change of model -- a run ending

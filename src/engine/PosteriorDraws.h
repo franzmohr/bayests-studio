@@ -48,11 +48,17 @@ public:
             throw std::runtime_error(QObject::tr("The model has no posterior draws yet.").toStdString());
         }
         algorithm_ = report.algorithm;
-        if (report.factors > 0 || algorithm_.startsWith(QLatin1String("Uc")))
+        if (report.factors > 0)
         {
             throw std::runtime_error(
-                QObject::tr("Impulse responses of factor and unobserved components models are not "
-                            "available yet.").toStdString());
+                QObject::tr("This is a VAR or VEC analysis; a factor model's factors, loadings and impulse "
+                            "responses are under Factors.").toStdString());
+        }
+        if (algorithm_.startsWith(QLatin1String("Uc")))
+        {
+            throw std::runtime_error(
+                QObject::tr("This is a VAR or VEC analysis; an unobserved components model's trend and cycle "
+                            "are under Trend and cycle.").toStdString());
         }
         if (algorithm_.endsWith(QLatin1String("Ald")))
         {

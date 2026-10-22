@@ -49,6 +49,12 @@ target_link_libraries(studio_state_variance_test PRIVATE studio_engine BayesTS::
 add_test(NAME state_variance.variants COMMAND studio_state_variance_test)
 set_tests_properties(state_variance.variants PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
 
+# The factor and unobserved components models' analysis, on files written by
+# the test with draws chosen by hand.
+add_executable(studio_factor_test factor_test.cpp)
+target_link_libraries(studio_factor_test PRIVATE studio_engine BayesTS::openblas)
+add_test(NAME factor.analysis COMMAND studio_factor_test)
+
 # The assistant's workflows, specifications, variants and methods paragraph.
 add_executable(studio_workflow_test workflow_test.cpp)
 target_link_libraries(studio_workflow_test PRIVATE studio_engine BayesTS::openblas)

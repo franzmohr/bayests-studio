@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <QSet>
 #include <QWidget>
 
 #include <optional>
@@ -87,12 +88,14 @@ private:
     std::vector<FoldColumn *> columns_;
     std::vector<FoldPane *> panes_;
     bool arranged_ = false;
-    /// The multipliers pane folded because the model has no exogenous
-    /// variables, not by the user: unfolded again by a model with some, and
-    /// not remembered as the user's fold.
-    bool multipliersAutoFolded_ = false;
-    QString multipliersFile_;   ///< the model the fold was decided for
-    void foldMultipliersFor(const QString &file);
+    /// The panes folded because they do not apply to the model -- a VAR's
+    /// analyses for a factor or UC model, the factors for a VAR, the
+    /// multipliers without exogenous variables -- not by the user: unfolded
+    /// again by a model they apply to, and not remembered as the user's folds.
+    QSet<QString> autoFolded_;
+    QString foldedFor_;   ///< the model the folds were decided for
+    bool foldsDecided_ = false;
+    void foldForModel(const QString &file);
 
     /// The form on `data`, filled in from `spec` when there is one.
     void rebuildBuilder(const DataSet &data, const std::optional<VarBuilderSpec> &spec);
@@ -123,6 +126,8 @@ private:
     ApplicationPage *historical_;
     ApplicationPage *spillovers_;
     ApplicationPage *multipliers_;
+    ApplicationPage *factors_;
+    ApplicationPage *trendCycle_;
 };
 
 } // namespace studio

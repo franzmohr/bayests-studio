@@ -18,6 +18,35 @@ Dates are ISO. Versions follow the `project(VERSION)` in `CMakeLists.txt`.
 New entries go here, under an `### Added`, `### Changed` or `### Fixed`
 heading, and move down into a version section when one is cut.
 
+### Added
+
+- **An analysis of the factor models** (Application › Factors) for the four
+  DFMs and the FAVAR: the factors' paths with bands, the loadings, the share
+  of each series' variance the factors explain, and impulse responses of the
+  panel -- and a FAVAR's observed factors -- to the state equation's shocks,
+  a FAVAR's identified by a Choleski ordering with the observed factors last.
+  Moving loadings, transitions and factor variances are read at a chosen
+  period. New numbers, none of which the studio computed before;
+  `test/factor_test.cpp` checks each against arithmetic on draws chosen by
+  hand.
+- **Trend and cycle** (Application › Trend and cycle) for the four
+  unobserved components models: each series with its trend and its cycle,
+  with bands, and both at a chosen period in a table.
+- **The workbench folds the panes that do not apply to the model**: the VAR
+  analyses for a factor or UC model, the new panes for a VAR or VEC, the
+  multipliers without exogenous variables as before. The application stage
+  hides the same tabs.
+- **Linux**: CI builds and tests on Ubuntu 26.04, and the studio is packaged
+  as a snap, which the release workflow attaches to a release.
+- **A homepage**, <https://franzmohr.github.io/bayests-studio/>.
+
+### Fixed
+
+- **A FAVAR's forecast is read at its own width.** Its forecasts carry the
+  observed factors after the panel, k + n_obs_factors per horizon; the view
+  read k per horizon, so every horizon after the first showed the wrong
+  series. The observed factors can now be chosen as well.
+
 ## 0.1.0 — 2026-10-15
 
 The first release, built against BayesTS v0.4.0.
