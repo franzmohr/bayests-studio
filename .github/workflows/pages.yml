@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Franz X. Mohr
+
+# Publish the homepage, https://franzmohr.github.io/bayests-studio/.
+#
+# One static page, site/index.html, with the application icon and the
+# screenshots under docs/screenshots/ beside it; nothing is built. Its download
+# buttons ask the GitHub API for the latest release when the page is opened,
+# so a release needs no edit here.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'docs/screenshots/**'
+      - 'src/app/icons/bayests-studio.svg'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/screenshots
+          cp site/index.html _site/
+          cp src/app/icons/bayests-studio.svg _site/icon.svg
+          cp docs/screenshots/*.png docs/screenshots/*.jpg _site/screenshots/
+          # Every image the page names has to be there.
+          for f in $(grep -o 'src="[^"]*"' _site/index.html | sed 's/src="\(.*\)"/\1/'); do
+            test -f "_site/$f" || { echo "::error::site/index.html names $f, which is not in the site"; exit 1; }
+          done
+          ls -R _site
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,279 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: BSD-3-Clause -->
+<!-- Copyright (c) 2026 Franz X. Mohr -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BayesTS Studio</title>
+<meta name="description" content="A desktop application for Bayesian VAR and VEC models along the bvartools workflow: data, model, priors, posterior draws and their application, without writing code.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta property="og:title" content="BayesTS Studio">
+<meta property="og:description" content="Bayesian VAR and VEC models, from data to impulse responses, without writing code.">
+<meta property="og:image" content="https://franzmohr.github.io/bayests-studio/screenshots/workbench.jpg">
+<style>
+  :root {
+    --bg: #fbfbfa;
+    --surface: #ffffff;
+    --text: #1c1f24;
+    --muted: #5b6370;
+    --line: #e3e5e8;
+    --accent: #2f6db5;
+    --accent-text: #ffffff;
+    --code: #f1f3f5;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --surface: #1b1e23;
+      --text: #e6e8eb;
+      --muted: #a0a7b2;
+      --line: #2c3037;
+      --accent: #6aa5ec;
+      --accent-text: #0e1116;
+      --code: #22262c;
+      --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  header.top {
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+  header.top .wrap { display: flex; align-items: center; gap: 12px; height: 56px; }
+  header.top img { width: 28px; height: 28px; }
+  header.top strong { font-size: 17px; }
+  header.top nav { margin-left: auto; display: flex; gap: 18px; font-size: 15px; }
+  header.top nav a { color: var(--muted); text-decoration: none; }
+  header.top nav a:hover { color: var(--text); }
+
+  .hero { padding-top: 56px; padding-bottom: 24px; }
+  .hero h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.02em; }
+  .hero p.lead { font-size: 19px; color: var(--muted); max-width: 720px; margin: 0 0 26px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-block; padding: 11px 18px; border-radius: 8px; font-weight: 600;
+    text-decoration: none; border: 1px solid var(--line); color: var(--text); background: var(--surface);
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .version { color: var(--muted); font-size: 14px; }
+
+  figure.shot { margin: 36px 0 0; }
+  figure.shot img {
+    width: 100%; height: auto; display: block; border-radius: 10px;
+    border: 1px solid var(--line); box-shadow: var(--shadow); background: #fff;
+  }
+  figure.shot figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+  section { padding: 56px 0 8px; }
+  section h2 { font-size: 26px; margin: 0 0 18px; letter-spacing: -0.01em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px;
+  }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .gallery figure { margin: 0; }
+  .gallery img {
+    width: 100%; height: auto; display: block; border-radius: 8px; border: 1px solid var(--line); background: #fff;
+  }
+  .gallery figcaption { font-size: 14px; color: var(--muted); margin-top: 6px; }
+
+  .install { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  pre, code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 14px; }
+  pre {
+    background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+    overflow-x: auto; margin: 10px 0 0;
+  }
+  blockquote {
+    margin: 0; padding: 14px 18px; border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0;
+  }
+  footer { border-top: 1px solid var(--line); margin-top: 64px; padding: 24px 0 40px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+  @media (max-width: 560px) {
+    header.top nav { gap: 12px; font-size: 14px; }
+    header.top nav .wide { display: none; }
+    .hero { padding-top: 36px; }
+    .hero h1 br { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <img src="icon.svg" alt="">
+    <strong>BayesTS Studio</strong>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a href="#cite" class="wide">Cite</a>
+      <a href="https://github.com/franzmohr/bayests-studio">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <h1>Bayesian VAR and VEC models,<br>from data to impulse responses.</h1>
+    <p class="lead">A desktop application that follows the bvartools workflow — data, model,
+      priors, posterior draws and their application — without writing code. Every
+      draw comes from <a href="https://github.com/franzmohr/BayesTS">BayesTS</a>, a C++ library
+      of Gibbs samplers.</p>
+    <div class="actions">
+      <a class="btn primary" id="dl-primary" href="https://github.com/franzmohr/bayests-studio/releases/latest">Download for Windows</a>
+      <a class="btn" href="#download">Linux (snap) and other options</a>
+      <span class="version" id="version"></span>
+    </div>
+    <figure class="shot">
+      <img src="screenshots/workbench.jpg" width="2400" height="1269"
+           alt="The workbench: data and priors on the left, posterior draws in the middle, impulse responses, a historical decomposition, spillovers and a forecast fan on the right.">
+      <figcaption>The workbench: every stage side by side. Its panes fold away one at a time on a smaller screen.</figcaption>
+    </figure>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>What it does</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Build a model</h3>
+          <p>The six Gaussian VARs and the six Gaussian VECs, with weakly exogenous variables,
+            deterministic terms, BVS and SSVS variable selection, and the volatility break of
+            Lenza and Primiceri (2022).</p>
+        </div>
+        <div class="card">
+          <h3>Identify shocks</h3>
+          <p>Impulse responses and variance decompositions, orthogonalised or generalised, or
+            identified by sign restrictions and by sign and zero restrictions (Arias,
+            Rubio-Ramírez and Waggoner 2018). Checked draw by draw against bvartools.</p>
+        </div>
+        <div class="card">
+          <h3>Decompose and connect</h3>
+          <p>Historical decompositions, Diebold–Yilmaz spillovers, dynamic multipliers of
+            exogenous variables, and inclusion probabilities.</p>
+        </div>
+        <div class="card">
+          <h3>Time-varying models</h3>
+          <p>Coefficients, covariances, responses and decompositions at any period, chosen by
+            its date, and a state variance explorer that shows what the setting does.</p>
+        </div>
+        <div class="card">
+          <h3>Take the results with you</h3>
+          <p>Every table as CSV, LaTeX, Markdown or to the clipboard; every figure as PDF, SVG
+            or PNG.</p>
+        </div>
+        <div class="card">
+          <h3>Learn as you go</h3>
+          <p>An optional assistant through a master thesis or a forecasting horse race, with
+            worked examples and two papers reproduced step by step.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>A closer look</h2>
+      <div class="gallery">
+        <figure>
+          <img src="screenshots/signzero-irf.png" alt="Impulse responses identified by sign and zero restrictions, with bands." loading="lazy">
+          <figcaption>Responses identified by sign and zero restrictions.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/historical-decomposition.png" alt="A historical decomposition: each shock's contribution to a variable over the sample." loading="lazy">
+          <figcaption>A historical decomposition over the sample.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/spillover-path.png" alt="The total spillover index over time, with bands." loading="lazy">
+          <figcaption>Diebold–Yilmaz spillovers over time.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/builder.png" alt="The model builder: variables, lags, deterministic terms and the error specification." loading="lazy">
+          <figcaption>The model builder.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <h2>Download</h2>
+      <div class="install">
+        <div class="card">
+          <h3>Windows</h3>
+          <p>A setup that installs for the current user or for all users.</p>
+          <p style="margin-top:10px"><a id="dl-windows" href="https://github.com/franzmohr/bayests-studio/releases/latest">Latest setup.exe</a></p>
+          <p style="margin-top:10px">Not code-signed yet: Windows SmartScreen asks once before the first start.</p>
+        </div>
+        <div class="card">
+          <h3>Linux</h3>
+          <p>A snap, built with every release from the next one on:</p>
+          <pre>sudo snap install --dangerous ./bayests-studio_*.snap</pre>
+          <p style="margin-top:10px">Or build from source; the
+            <a href="https://github.com/franzmohr/bayests-studio#linux">README</a> has the steps.</p>
+        </div>
+      </div>
+      <p style="color:var(--muted);margin-top:16px">Every release, with its notes and checksums, is on
+        <a href="https://github.com/franzmohr/bayests-studio/releases">GitHub</a>.
+        Open source under the <a href="https://github.com/franzmohr/bayests-studio/blob/main/LICENSE">BSD 3-Clause License</a>.</p>
+    </div>
+  </section>
+
+  <section id="cite">
+    <div class="wrap">
+      <h2>Cite</h2>
+      <blockquote>Mohr, F. X. (2026). <em>BayesTS Studio</em>. Version 0.1.0. Zenodo.
+        <a href="https://doi.org/10.5281/zenodo.23388739">https://doi.org/10.5281/zenodo.23388739</a></blockquote>
+      <p style="color:var(--muted)">The numbers come from BayesTS, so cite the release the studio builds on as
+        well — <a href="https://doi.org/10.5281/zenodo.23360540">BayesTS 0.4.0</a> for Studio 0.1.0 — and the
+        methods behind the models you estimated. The concept DOI
+        <a href="https://doi.org/10.5281/zenodo.23388738">10.5281/zenodo.23388738</a> always resolves to
+        the newest release.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Franz X. Mohr</span>
+    <a href="https://github.com/franzmohr/bayests-studio">Source</a>
+    <a href="https://github.com/franzmohr/bayests-studio/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/franzmohr/BayesTS">BayesTS</a>
+  </div>
+</footer>
+
+<script>
+  // The newest release's assets, so the buttons name the current version. The
+  // links already point at the releases page, which is where they stay if the
+  // API cannot be reached.
+  (async () => {
+    try {
+      const r = await fetch("https://api.github.com/repos/franzmohr/bayests-studio/releases/latest");
+      if (!r.ok) return;
+      const release = await r.json();
+      document.getElementById("version").textContent = "Version " + release.tag_name.replace(/^v/, "");
+      const setup = (release.assets || []).find(a => /-setup\.exe$/.test(a.name));
+      if (setup) {
+        for (const id of ["dl-primary", "dl-windows"]) {
+          document.getElementById(id).href = setup.browser_download_url;
+        }
+        document.getElementById("dl-windows").textContent = setup.name;
+      }
+    } catch (e) { /* keep the releases page */ }
+  })();
+</script>
+</body>
+</html>
