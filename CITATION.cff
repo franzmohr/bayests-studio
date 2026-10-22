@@ -5,18 +5,20 @@ message: "If you use this software, please cite it as below."
 title: "BayesTS Studio"
 abstract: >-
   A desktop application for Bayesian vector autoregressive and vector error
-  correction models along the bvartools workflow: data, model, priors,
-  posterior draws and their application, without writing code. Impulse
-  responses, variance decompositions, sign and zero restrictions, historical
-  decompositions, spillovers and dynamic multipliers, for constant and
-  time-varying models. All estimation is done by BayesTS.
+  correction models, dynamic factor models, FAVARs and unobserved components
+  models along the bvartools workflow: data, model, priors, posterior draws
+  and their application, without writing code. Impulse responses, variance
+  decompositions, sign and zero restrictions, historical decompositions,
+  spillovers and dynamic multipliers, for constant and time-varying models;
+  factors, loadings and panel impulse responses for factor models; trend and
+  cycle for unobserved components models. All estimation is done by BayesTS.
 type: software
 authors:
   - family-names: Mohr
     given-names: Franz X.
     orcid: "https://orcid.org/0009-0003-8890-7781"
-version: 0.1.0
-date-released: "2026-10-15"
+version: 0.2.0
+date-released: "2026-10-22"
 doi: 10.5281/zenodo.23388738
 license: BSD-3-Clause
 repository-code: "https://github.com/franzmohr/bayests-studio"
@@ -44,5 +46,8 @@ keywords:
   - impulse responses
   - sign restrictions
   - time-varying parameters
+  - dynamic factor model
+  - FAVAR
+  - unobserved components
   - graphical user interface
   - Qt

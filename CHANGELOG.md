@@ -18,6 +18,10 @@ Dates are ISO. Versions follow the `project(VERSION)` in `CMakeLists.txt`.
 New entries go here, under an `### Added`, `### Changed` or `### Fixed`
 heading, and move down into a version section when one is cut.
 
+## 0.2.0 — 2026-10-22
+
+Built against BayesTS v0.4.0, as 0.1.0 was.
+
 ### Added
 
 - **An analysis of the factor models** (Application › Factors) for the four

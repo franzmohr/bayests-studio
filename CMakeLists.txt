@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.25)
 # BayesTS's top level declares Fortran (for the BLAS it finds), so this project
 # has to enable it too: languages are enabled per top-level project.
 project(BayesTSStudio
-    VERSION 0.1.0
+    VERSION 0.2.0
     LANGUAGES C CXX Fortran
     DESCRIPTION "Desktop application for specifying, estimating and analysing BayesTS models"
 )
